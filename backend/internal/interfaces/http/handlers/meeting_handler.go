@@ -1,0 +1,311 @@
+package handlers
+
+import (
+	"context"
+	"fmt"
+	"net/http"
+
+	"github.com/gin-gonic/gin"
+	"github.com/google/uuid"
+	"github.com/gorilla/websocket"
+	"github.com/rekall/backend/internal/application/services"
+	"github.com/rekall/backend/internal/domain/entities"
+	"github.com/rekall/backend/internal/interfaces/http/dto"
+	handlerhelpers "github.com/rekall/backend/internal/interfaces/http/helpers"
+	"github.com/rekall/backend/internal/interfaces/http/middleware"
+	wsHub "github.com/rekall/backend/internal/interfaces/http/ws"
+	infraauth "github.com/rekall/backend/internal/infrastructure/auth"
+	apperr "github.com/rekall/backend/pkg/errors"
+	"go.uber.org/zap"
+)
+
+var wsUpgrader = websocket.Upgrader{
+	ReadBufferSize:  1024,
+	WriteBufferSize: 1024,
+	CheckOrigin:     func(r *http.Request) bool { return true },
+}
+
+// MeetingHandler handles HTTP and WebSocket requests for the /meetings resource.
+type MeetingHandler struct {
+	service    *services.MeetingService
+	hubManager *wsHub.HubManager
+	baseURL    string
+	jwtSecret  string
+	jwtIssuer  string
+	logger     *zap.Logger
+}
+
+// NewMeetingHandler creates a MeetingHandler with its required dependencies.
+func NewMeetingHandler(
+	service *services.MeetingService,
+	hubManager *wsHub.HubManager,
+	baseURL string,
+	jwtSecret string,
+	jwtIssuer string,
+	logger *zap.Logger,
+) *MeetingHandler {
+	return &MeetingHandler{
+		service:    service,
+		hubManager: hubManager,
+		baseURL:    baseURL,
+		jwtSecret:  jwtSecret,
+		jwtIssuer:  jwtIssuer,
+		logger:     logger,
+	}
+}
+
+// Create handles POST /api/v1/meetings.
+//
+// @Summary      Create a meeting
+// @Description  Creates a new meeting room. Open meetings allow any authenticated user to join directly; private meetings restrict access to org/department members.
+// @Tags         Meetings
+// @Accept       json
+// @Produce      json
+// @Security     BearerAuth
+// @Param        body  body      dto.CreateMeetingRequest          true  "Meeting creation parameters"
+// @Success      201   {object}  dto.MeetingResponseEnvelope       "Meeting created"
+// @Failure      400   {object}  dto.ErrorResponse                 "Invalid request body or host meeting limit reached"
+// @Failure      401   {object}  dto.ErrorResponse                 "Missing or invalid token"
+// @Failure      500   {object}  dto.ErrorResponse                 "Internal server error"
+// @Router       /api/v1/meetings [post]
+func (h *MeetingHandler) Create(c *gin.Context) {
+	claims := middleware.ClaimsFromContext(c)
+	if claims == nil {
+		handlerhelpers.RespondError(c, h.logger, apperr.Unauthorized("authentication required"))
+		return
+	}
+	hostID, err := claims.SubjectAsUUID()
+	if err != nil {
+		handlerhelpers.RespondError(c, h.logger, apperr.Unauthorized("invalid token subject"))
+		return
+	}
+
+	var req dto.CreateMeetingRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		handlerhelpers.RespondError(c, h.logger, apperr.BadRequest(err.Error()))
+		return
+	}
+
+	input := services.CreateMeetingInput{
+		HostID:    hostID,
+		Title:     req.Title,
+		Type:      req.Type,
+		ScopeType: req.ScopeType,
+		ScopeID:   req.ScopeID,
+	}
+
+	meeting, err := h.service.CreateMeeting(c.Request.Context(), input)
+	if err != nil {
+		handlerhelpers.RespondError(c, h.logger, err)
+		return
+	}
+
+	c.JSON(http.StatusCreated, dto.OK(dto.MeetingFromEntity(meeting, h.baseURL)))
+}
+
+// GetByCode handles GET /api/v1/meetings/:code.
+//
+// @Summary      Get a meeting
+// @Description  Returns a single meeting by its short code (e.g. abc-defg-hij). Does not require authentication.
+// @Tags         Meetings
+// @Produce      json
+// @Param        code  path      string                      true  "Meeting code"  example(abc-defg-hij)
+// @Success      200   {object}  dto.MeetingResponseEnvelope "Meeting record"
+// @Failure      404   {object}  dto.ErrorResponse           "Meeting not found"
+// @Failure      500   {object}  dto.ErrorResponse           "Internal server error"
+// @Router       /api/v1/meetings/{code} [get]
+func (h *MeetingHandler) GetByCode(c *gin.Context) {
+	meeting, err := h.service.GetMeetingByCode(c.Request.Context(), c.Param("code"))
+	if err != nil {
+		handlerhelpers.RespondError(c, h.logger, err)
+		return
+	}
+	c.JSON(http.StatusOK, dto.OK(dto.MeetingFromEntity(meeting, h.baseURL)))
+}
+
+// ListMine handles GET /api/v1/meetings/mine.
+//
+// @Summary      List my meetings
+// @Description  Returns all meetings the authenticated user hosted or participated in, enriched with computed duration and up to 3 participant previews. Supports filtering by status and sorting by multiple criteria.
+// @Tags         Meetings
+// @Produce      json
+// @Security     BearerAuth
+// @Param        filter[status]  query     string  false  "Filter by status"  Enums(in_progress,complete,processing,failed)
+// @Param        sort            query     string  false  "Sort order"        Enums(created_at_desc,created_at_asc,duration_desc,duration_asc,title_asc,title_desc)  default(created_at_desc)
+// @Success      200  {object}  dto.MeetingListResponse  "List of meetings"
+// @Failure      401  {object}  dto.ErrorResponse        "Missing or invalid token"
+// @Failure      500  {object}  dto.ErrorResponse        "Internal server error"
+// @Router       /api/v1/meetings/mine [get]
+func (h *MeetingHandler) ListMine(c *gin.Context) {
+	claims := middleware.ClaimsFromContext(c)
+	if claims == nil {
+		handlerhelpers.RespondError(c, h.logger, apperr.Unauthorized("authentication required"))
+		return
+	}
+	userID, err := claims.SubjectAsUUID()
+	if err != nil {
+		handlerhelpers.RespondError(c, h.logger, apperr.Unauthorized("invalid token subject"))
+		return
+	}
+
+	statusFilter := c.Query("filter[status]")
+	sort := c.DefaultQuery("sort", "created_at_desc")
+
+	items, err := h.service.ListMeetingsWithMeta(c.Request.Context(), userID, statusFilter, sort)
+	if err != nil {
+		handlerhelpers.RespondError(c, h.logger, err)
+		return
+	}
+
+	resp := make([]dto.MeetingResponse, 0, len(items))
+	for _, item := range items {
+		resp = append(resp, dto.MeetingFromListItem(item, h.baseURL))
+	}
+	c.JSON(http.StatusOK, dto.OK(resp))
+}
+
+// End handles DELETE /api/v1/meetings/:code (host ends meeting).
+//
+// @Summary      End a meeting
+// @Description  Ends an active meeting. Only the host may call this. Marks all participants as left and sets ended_at.
+// @Tags         Meetings
+// @Produce      json
+// @Security     BearerAuth
+// @Param        code  path      string             true  "Meeting code"  example(abc-defg-hij)
+// @Success      200   {object}  dto.MessageResponse  "Meeting ended"
+// @Failure      401   {object}  dto.ErrorResponse  "Missing or invalid token"
+// @Failure      403   {object}  dto.ErrorResponse  "Caller is not the host"
+// @Failure      404   {object}  dto.ErrorResponse  "Meeting not found"
+// @Failure      500   {object}  dto.ErrorResponse  "Internal server error"
+// @Router       /api/v1/meetings/{code} [delete]
+func (h *MeetingHandler) End(c *gin.Context) {
+	claims := middleware.ClaimsFromContext(c)
+	if claims == nil {
+		handlerhelpers.RespondError(c, h.logger, apperr.Unauthorized("authentication required"))
+		return
+	}
+	callerID, err := claims.SubjectAsUUID()
+	if err != nil {
+		handlerhelpers.RespondError(c, h.logger, apperr.Unauthorized("invalid token subject"))
+		return
+	}
+
+	meeting, err := h.service.GetMeetingByCode(c.Request.Context(), c.Param("code"))
+	if err != nil {
+		handlerhelpers.RespondError(c, h.logger, err)
+		return
+	}
+	if meeting.HostID != callerID {
+		handlerhelpers.RespondError(c, h.logger, apperr.Forbidden("only the host can end the meeting"))
+		return
+	}
+
+	if err := h.service.EndMeeting(c.Request.Context(), meeting); err != nil {
+		handlerhelpers.RespondError(c, h.logger, err)
+		return
+	}
+
+	c.JSON(http.StatusOK, dto.OK(map[string]string{"message": "meeting ended"}))
+}
+
+// Connect handles GET /api/v1/meetings/:code/ws — upgrades to WebSocket.
+//
+// @Summary      Join meeting via WebSocket
+// @Description  Upgrades the connection to WebSocket and places the caller into the meeting hub. The JWT access token must be passed as the `token` query parameter because WebSocket clients cannot send custom headers during the handshake. Callers who are scope members join directly; others enter the waiting room (knock flow).
+// @Tags         Meetings
+// @Produce      json
+// @Param        code   path      string             true  "Meeting code"   example(abc-defg-hij)
+// @Param        token  query     string             true  "JWT access token"
+// @Success      101    {string}  string             "Switching Protocols — WebSocket connection established"
+// @Failure      401    {object}  dto.ErrorResponse  "Missing or invalid token"
+// @Failure      403    {object}  dto.ErrorResponse  "Access denied (meeting ended or at capacity)"
+// @Failure      404    {object}  dto.ErrorResponse  "Meeting not found"
+// @Failure      500    {object}  dto.ErrorResponse  "Internal server error"
+// @Router       /api/v1/meetings/{code}/ws [get]
+//
+// Authentication: the access token is passed as a query parameter (?token=...)
+// because WebSocket clients cannot send custom headers during the handshake.
+func (h *MeetingHandler) Connect(c *gin.Context) {
+	tokenStr := c.Query("token")
+	if tokenStr == "" {
+		c.JSON(http.StatusUnauthorized, apperr.Unauthorized("token query parameter required"))
+		return
+	}
+
+	jwtClaims, err := infraauth.ParseAccessToken(tokenStr, h.jwtSecret, h.jwtIssuer)
+	if err != nil {
+		c.JSON(http.StatusUnauthorized, apperr.Unauthorized("invalid or expired token"))
+		return
+	}
+	callerID, err := jwtClaims.SubjectAsUUID()
+	if err != nil {
+		c.JSON(http.StatusUnauthorized, apperr.Unauthorized("invalid token subject"))
+		return
+	}
+
+	meeting, err := h.service.GetMeetingByCode(c.Request.Context(), c.Param("code"))
+	if err != nil {
+		handlerhelpers.RespondError(c, h.logger, err)
+		return
+	}
+
+	result, err := h.service.CanJoin(c.Request.Context(), meeting, callerID)
+	if err != nil {
+		handlerhelpers.RespondError(c, h.logger, err)
+		return
+	}
+	if result == services.CanJoinDenied {
+		c.JSON(http.StatusForbidden, apperr.Forbidden("access denied"))
+		return
+	}
+
+	conn, err := wsUpgrader.Upgrade(c.Writer, c.Request, nil)
+	if err != nil {
+		h.logger.Error("ws upgrade failed", zap.Error(err))
+		return
+	}
+
+	hub := h.hubManager.GetOrCreate(c.Request.Context(), meeting.ID, meeting.HostID, h.onMeetingEmpty)
+
+	isDirect := result == services.CanJoinDirect
+	knockID := ""
+	if !isDirect {
+		knockID = fmt.Sprintf("knock-%s", uuid.New().String())
+	}
+
+	// Persist the join record for directly admitted users.
+	if isDirect {
+		role := entities.ParticipantRoleParticipant
+		if meeting.HostID == callerID {
+			role = entities.ParticipantRoleHost
+		}
+		if err := h.service.RecordJoin(c.Request.Context(), meeting, callerID, role); err != nil {
+			conn.Close()
+			return
+		}
+	}
+
+	client := wsHub.NewClient(hub, conn, callerID)
+	hub.Register(client, isDirect, knockID)
+	client.Start()
+}
+
+// onMeetingEmpty is called by the hub when the last participant leaves.
+// It ends the meeting in the database.
+func (h *MeetingHandler) onMeetingEmpty(meetingID uuid.UUID) {
+	ctx := context.Background()
+	m, err := h.service.GetMeeting(ctx, meetingID)
+	if err != nil {
+		h.logger.Error("onMeetingEmpty: failed to load meeting",
+			zap.Error(err),
+			zap.String("meeting_id", meetingID.String()),
+		)
+		return
+	}
+	if err := h.service.EndMeeting(ctx, m); err != nil {
+		h.logger.Error("onMeetingEmpty: failed to end meeting",
+			zap.Error(err),
+			zap.String("meeting_id", meetingID.String()),
+		)
+	}
+}
