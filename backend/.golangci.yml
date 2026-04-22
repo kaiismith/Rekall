@@ -1,0 +1,48 @@
+run:
+  timeout: 5m
+  go: "1.22"
+
+linters:
+  enable:
+    - gofmt
+    - govet
+    - errcheck
+    - staticcheck
+    - revive
+    - gosimple
+    - ineffassign
+    - unused
+    - misspell
+    - goimports
+    - godot
+    - exhaustive
+    - noctx
+    - bodyclose
+
+linters-settings:
+  gofmt:
+    simplify: true
+  goimports:
+    local-prefixes: github.com/rekall/backend
+  revive:
+    rules:
+      - name: exported
+      - name: var-naming
+      - name: indent-error-flow
+      - name: error-strings
+  godot:
+    scope: declarations
+    capital: true
+  exhaustive:
+    default-signifies-exhaustive: true
+
+issues:
+  exclude-rules:
+    # Test files may use unexported identifiers.
+    - path: "_test.go"
+      linters:
+        - revive
+    # Generated files.
+    - path: "vendor/"
+      linters:
+        - all
