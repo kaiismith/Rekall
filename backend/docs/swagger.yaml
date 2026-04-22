@@ -1,0 +1,2458 @@
+basePath: /
+definitions:
+  dto.AcceptInvitationRequest:
+    properties:
+      token:
+        example: a3f2c1d4e5b6c7d8e9f0a1b2c3d4e5f6...
+        type: string
+    required:
+    - token
+    type: object
+  dto.AccessTokenResponse:
+    properties:
+      data:
+        $ref: '#/definitions/dto.TokenObj'
+      success:
+        example: true
+        type: boolean
+    type: object
+  dto.AddDeptMemberRequest:
+    properties:
+      role:
+        enum:
+        - head
+        - member
+        example: member
+        type: string
+      user_id:
+        example: 00000000-0000-0000-0000-000000000001
+        type: string
+    required:
+    - user_id
+    type: object
+  dto.CallListResponse:
+    properties:
+      data:
+        items:
+          $ref: '#/definitions/dto.CallResponse'
+        type: array
+      meta:
+        $ref: '#/definitions/dto.Meta'
+      success:
+        example: true
+        type: boolean
+    type: object
+  dto.CallResponse:
+    properties:
+      created_at:
+        example: "2026-01-15T09:00:00Z"
+        type: string
+      duration_sec:
+        example: 1823
+        type: integer
+      ended_at:
+        example: "2026-01-15T09:30:23Z"
+        type: string
+      id:
+        example: 00000000-0000-0000-0000-000000000002
+        type: string
+      metadata:
+        type: object
+      recording_url:
+        example: https://storage.example.com/calls/rec-001.mp4
+        type: string
+      started_at:
+        example: "2026-01-15T09:00:00Z"
+        type: string
+      status:
+        enum:
+        - pending
+        - processing
+        - done
+        - failed
+        example: done
+        type: string
+      title:
+        example: Q1 Sales Call — ACME Corp
+        type: string
+      transcript:
+        type: string
+      updated_at:
+        example: "2026-01-15T09:30:23Z"
+        type: string
+      user_id:
+        example: 00000000-0000-0000-0000-000000000001
+        type: string
+    type: object
+  dto.CallResponseEnvelope:
+    properties:
+      data:
+        $ref: '#/definitions/dto.CallResponse'
+      success:
+        example: true
+        type: boolean
+    type: object
+  dto.CreateCallRequest:
+    properties:
+      metadata:
+        type: object
+      title:
+        example: Q1 Sales Call — ACME Corp
+        maxLength: 255
+        minLength: 1
+        type: string
+      user_id:
+        example: 00000000-0000-0000-0000-000000000001
+        type: string
+    required:
+    - title
+    - user_id
+    type: object
+  dto.CreateDeptRequest:
+    properties:
+      description:
+        example: Backend and frontend engineers
+        type: string
+      name:
+        example: Engineering
+        type: string
+    required:
+    - name
+    type: object
+  dto.CreateMeetingRequest:
+    properties:
+      scope_id:
+        type: string
+      scope_type:
+        type: string
+      title:
+        type: string
+      type:
+        enum:
+        - open
+        - private
+        type: string
+    required:
+    - type
+    type: object
+  dto.CreateOrgRequest:
+    properties:
+      name:
+        example: Acme Corp
+        type: string
+    required:
+    - name
+    type: object
+  dto.DeptListResponse:
+    properties:
+      data:
+        items:
+          $ref: '#/definitions/dto.DeptResponse'
+        type: array
+      success:
+        example: true
+        type: boolean
+    type: object
+  dto.DeptMemberListResponse:
+    properties:
+      data:
+        items:
+          $ref: '#/definitions/dto.DeptMemberResponse'
+        type: array
+      success:
+        example: true
+        type: boolean
+    type: object
+  dto.DeptMemberResponse:
+    properties:
+      department_id:
+        example: 00000000-0000-0000-0000-000000000020
+        type: string
+      joined_at:
+        example: "2026-01-15T09:00:00Z"
+        type: string
+      role:
+        enum:
+        - head
+        - member
+        example: member
+        type: string
+      user_id:
+        example: 00000000-0000-0000-0000-000000000001
+        type: string
+    type: object
+  dto.DeptResponse:
+    properties:
+      created_at:
+        example: "2026-01-15T09:00:00Z"
+        type: string
+      created_by:
+        example: 00000000-0000-0000-0000-000000000001
+        type: string
+      description:
+        example: Backend and frontend engineers
+        type: string
+      id:
+        example: 00000000-0000-0000-0000-000000000020
+        type: string
+      name:
+        example: Engineering
+        type: string
+      org_id:
+        example: 00000000-0000-0000-0000-000000000010
+        type: string
+      updated_at:
+        example: "2026-01-15T09:00:00Z"
+        type: string
+    type: object
+  dto.DeptResponseEnvelope:
+    properties:
+      data:
+        $ref: '#/definitions/dto.DeptResponse'
+      success:
+        example: true
+        type: boolean
+    type: object
+  dto.ErrorBody:
+    properties:
+      code:
+        example: CALL_NOT_FOUND
+        type: string
+      details: {}
+      message:
+        example: call with the given ID was not found
+        type: string
+    type: object
+  dto.ErrorResponse:
+    properties:
+      error:
+        $ref: '#/definitions/dto.ErrorBody'
+      success:
+        example: false
+        type: boolean
+    type: object
+  dto.ForgotPasswordRequest:
+    properties:
+      email:
+        example: alice@example.com
+        type: string
+    required:
+    - email
+    type: object
+  dto.InviteUserRequest:
+    properties:
+      email:
+        example: bob@example.com
+        type: string
+      role:
+        enum:
+        - admin
+        - member
+        example: member
+        type: string
+    required:
+    - email
+    type: object
+  dto.LoginRequest:
+    properties:
+      email:
+        example: alice@example.com
+        type: string
+      password:
+        example: P@ssw0rd123
+        type: string
+    required:
+    - email
+    - password
+    type: object
+  dto.LoginResponse:
+    properties:
+      access_token:
+        example: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIwMDAwMDAwMC0wMDAwLTAwMDAtMDAwMC0wMDAwMDAwMDAwMDEifQ.signature
+        type: string
+      user:
+        $ref: '#/definitions/dto.UserResponse'
+    type: object
+  dto.LoginResponseEnvelope:
+    properties:
+      data:
+        $ref: '#/definitions/dto.LoginResponse'
+      success:
+        example: true
+        type: boolean
+    type: object
+  dto.MeetingListResponse:
+    properties:
+      data:
+        items:
+          $ref: '#/definitions/dto.MeetingResponse'
+        type: array
+      success:
+        example: true
+        type: boolean
+    type: object
+  dto.MeetingResponse:
+    properties:
+      code:
+        type: string
+      created_at:
+        type: string
+      duration_seconds:
+        type: integer
+      ended_at:
+        type: string
+      host_id:
+        type: string
+      id:
+        type: string
+      join_url:
+        type: string
+      max_participants:
+        type: integer
+      participant_previews:
+        items:
+          $ref: '#/definitions/dto.ParticipantPreview'
+        type: array
+      scope_id:
+        type: string
+      scope_type:
+        type: string
+      started_at:
+        type: string
+      status:
+        type: string
+      title:
+        type: string
+      type:
+        type: string
+    type: object
+  dto.MeetingResponseEnvelope:
+    properties:
+      data:
+        $ref: '#/definitions/dto.MeetingResponse'
+      success:
+        example: true
+        type: boolean
+    type: object
+  dto.MemberListResponse:
+    properties:
+      data:
+        items:
+          $ref: '#/definitions/dto.MemberResponse'
+        type: array
+      success:
+        example: true
+        type: boolean
+    type: object
+  dto.MemberResponse:
+    properties:
+      joined_at:
+        example: "2026-01-15T09:00:00Z"
+        type: string
+      org_id:
+        example: 00000000-0000-0000-0000-000000000010
+        type: string
+      role:
+        enum:
+        - owner
+        - admin
+        - member
+        example: member
+        type: string
+      user_id:
+        example: 00000000-0000-0000-0000-000000000001
+        type: string
+    type: object
+  dto.MessageResponse:
+    properties:
+      data:
+        $ref: '#/definitions/dto.MsgObj'
+      success:
+        example: true
+        type: boolean
+    type: object
+  dto.Meta:
+    properties:
+      page:
+        example: 1
+        type: integer
+      per_page:
+        example: 20
+        type: integer
+      total:
+        example: 150
+        type: integer
+    type: object
+  dto.MsgObj:
+    properties:
+      message:
+        example: operation completed successfully
+        type: string
+    type: object
+  dto.OrgListResponse:
+    properties:
+      data:
+        items:
+          $ref: '#/definitions/dto.OrgResponse'
+        type: array
+      success:
+        example: true
+        type: boolean
+    type: object
+  dto.OrgResponse:
+    properties:
+      created_at:
+        example: "2026-01-15T09:00:00Z"
+        type: string
+      id:
+        example: 00000000-0000-0000-0000-000000000010
+        type: string
+      name:
+        example: Acme Corp
+        type: string
+      owner_id:
+        example: 00000000-0000-0000-0000-000000000001
+        type: string
+      slug:
+        example: acme-corp
+        type: string
+      updated_at:
+        example: "2026-01-15T09:00:00Z"
+        type: string
+    type: object
+  dto.OrgResponseEnvelope:
+    properties:
+      data:
+        $ref: '#/definitions/dto.OrgResponse'
+      success:
+        example: true
+        type: boolean
+    type: object
+  dto.ParticipantPreview:
+    properties:
+      full_name:
+        type: string
+      initials:
+        type: string
+      user_id:
+        type: string
+    type: object
+  dto.RegisterRequest:
+    properties:
+      email:
+        example: alice@example.com
+        type: string
+      full_name:
+        example: Alice Nguyen
+        type: string
+      password:
+        example: P@ssw0rd123
+        type: string
+    required:
+    - email
+    - full_name
+    - password
+    type: object
+  dto.ResendVerificationRequest:
+    properties:
+      email:
+        example: alice@example.com
+        type: string
+    required:
+    - email
+    type: object
+  dto.ResetPasswordRequest:
+    properties:
+      password:
+        example: NewP@ssw0rd123
+        type: string
+      token:
+        example: a3f2c1d4e5b6...
+        type: string
+    required:
+    - password
+    - token
+    type: object
+  dto.TokenObj:
+    properties:
+      access_token:
+        example: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...
+        type: string
+    type: object
+  dto.UpdateCallRequest:
+    properties:
+      ended_at:
+        example: "2026-01-15T09:30:23Z"
+        type: string
+      metadata:
+        type: object
+      recording_url:
+        example: https://storage.example.com/calls/rec-001.mp4
+        type: string
+      started_at:
+        example: "2026-01-15T09:00:00Z"
+        type: string
+      status:
+        enum:
+        - pending
+        - processing
+        - done
+        - failed
+        example: done
+        type: string
+      title:
+        example: Q1 Sales Call — ACME Corp (updated)
+        maxLength: 255
+        minLength: 1
+        type: string
+      transcript:
+        example: 'Alice: Hello, this is Alice from Rekall...'
+        type: string
+    type: object
+  dto.UpdateDeptMemberRoleRequest:
+    properties:
+      role:
+        enum:
+        - head
+        - member
+        example: head
+        type: string
+    required:
+    - role
+    type: object
+  dto.UpdateDeptRequest:
+    properties:
+      description:
+        example: Backend, frontend, and platform engineers
+        type: string
+      name:
+        example: Engineering (updated)
+        type: string
+    required:
+    - name
+    type: object
+  dto.UpdateMemberRoleRequest:
+    properties:
+      role:
+        enum:
+        - admin
+        - member
+        example: admin
+        type: string
+    required:
+    - role
+    type: object
+  dto.UpdateOrgRequest:
+    properties:
+      name:
+        example: Acme Corp (renamed)
+        type: string
+    required:
+    - name
+    type: object
+  dto.UserListResponse:
+    properties:
+      data:
+        items:
+          $ref: '#/definitions/dto.UserResponse'
+        type: array
+      meta:
+        $ref: '#/definitions/dto.Meta'
+      success:
+        example: true
+        type: boolean
+    type: object
+  dto.UserResponse:
+    properties:
+      created_at:
+        example: "2026-01-15T09:00:00Z"
+        type: string
+      email:
+        example: alice@example.com
+        type: string
+      email_verified:
+        example: true
+        type: boolean
+      full_name:
+        example: Alice Nguyen
+        type: string
+      id:
+        example: 00000000-0000-0000-0000-000000000001
+        type: string
+      role:
+        enum:
+        - admin
+        - member
+        example: member
+        type: string
+    type: object
+  dto.UserResponseEnvelope:
+    properties:
+      data:
+        $ref: '#/definitions/dto.UserResponse'
+      success:
+        example: true
+        type: boolean
+    type: object
+  handlers.CreateUserRequest:
+    properties:
+      email:
+        example: bob@example.com
+        type: string
+      full_name:
+        example: Bob Smith
+        maxLength: 255
+        minLength: 1
+        type: string
+      role:
+        enum:
+        - admin
+        - member
+        example: member
+        type: string
+    required:
+    - email
+    - full_name
+    type: object
+host: localhost:8080
+info:
+  contact:
+    email: engineering@rekall.io
+    name: Rekall Engineering
+  description: |-
+    Rekall is a call intelligence platform. Record, transcribe, and analyse voice and video calls.
+    This API powers the Rekall web application and is available for direct integration.
+
+    ## Authentication
+    Protected endpoints require a JWT access token obtained from `POST /api/v1/auth/login`.
+    Pass the token in the `Authorization` header as `Bearer <token>`.
+    The refresh token is transported exclusively via an `HttpOnly` cookie set by the server.
+
+    ## Response Envelope
+    All responses are wrapped in a standard envelope:
+    - Success: `{ "success": true, "data": <T>, "meta": <pagination|null> }`
+    - Error:   `{ "success": false, "error": { "code": "ERROR_CODE", "message": "Human readable message", "details": <null|object> } }`
+
+    ## Error Codes
+    Every error response includes a machine-readable `code` field. Common codes:
+    `INVALID_CREDENTIALS`, `EMAIL_NOT_VERIFIED`, `EMAIL_ALREADY_REGISTERED`,
+    `INVALID_OR_EXPIRED_TOKEN`, `INVALID_REFRESH_TOKEN`, `MISSING_TOKEN`, `INVALID_TOKEN`,
+    `CALL_NOT_FOUND`, `USER_NOT_FOUND`, `SLUG_ALREADY_TAKEN`, `ALREADY_A_MEMBER`,
+    `CANNOT_REMOVE_OWNER`, `INVITATION_EMAIL_MISMATCH`, `DEPARTMENT_NOT_FOUND`, `FORBIDDEN`
+  license:
+    name: MIT
+    url: https://opensource.org/licenses/MIT
+  title: Rekall API
+  version: 1.0.0
+paths:
+  /api/v1/auth/login:
+    post:
+      consumes:
+      - application/json
+      description: Authenticates a user with email and password. On success returns
+        a short-lived JWT **access_token** (15 min) and sets an `HttpOnly Secure SameSite=Strict`
+        **refresh_token** cookie (7 days).
+      parameters:
+      - description: Login credentials
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/dto.LoginRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Authenticated successfully
+          schema:
+            $ref: '#/definitions/dto.LoginResponseEnvelope'
+        "401":
+          description: Invalid credentials (INVALID_CREDENTIALS)
+          schema:
+            $ref: '#/definitions/dto.ErrorResponse'
+        "403":
+          description: Email address not yet verified (EMAIL_NOT_VERIFIED)
+          schema:
+            $ref: '#/definitions/dto.ErrorResponse'
+        "422":
+          description: Validation error
+          schema:
+            $ref: '#/definitions/dto.ErrorResponse'
+        "500":
+          description: Internal server error
+          schema:
+            $ref: '#/definitions/dto.ErrorResponse'
+      summary: Sign in
+      tags:
+      - Auth
+  /api/v1/auth/logout:
+    post:
+      description: Revokes the refresh token stored in the `HttpOnly` cookie and clears
+        the cookie. Access tokens are stateless and expire naturally — no server-side
+        invalidation is needed.
+      produces:
+      - application/json
+      responses:
+        "204":
+          description: Signed out — refresh token revoked and cookie cleared
+        "500":
+          description: Internal server error
+          schema:
+            $ref: '#/definitions/dto.ErrorResponse'
+      summary: Sign out
+      tags:
+      - Auth
+  /api/v1/auth/me:
+    get:
+      description: 'Returns the full profile of the authenticated user. Requires a
+        valid JWT access token in the `Authorization: Bearer <token>` header.'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Authenticated user profile
+          schema:
+            $ref: '#/definitions/dto.UserResponseEnvelope'
+        "401":
+          description: Missing or invalid token (MISSING_TOKEN / INVALID_TOKEN)
+          schema:
+            $ref: '#/definitions/dto.ErrorResponse'
+        "403":
+          description: Email address not verified (EMAIL_NOT_VERIFIED)
+          schema:
+            $ref: '#/definitions/dto.ErrorResponse'
+        "500":
+          description: Internal server error
+          schema:
+            $ref: '#/definitions/dto.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Get current user
+      tags:
+      - Auth
+  /api/v1/auth/password/forgot:
+    post:
+      consumes:
+      - application/json
+      description: Sends a password reset link to the given email address. **Always
+        returns 200 regardless of whether the email is registered** to prevent user
+        enumeration. The reset link is valid for 1 hour.
+      parameters:
+      - description: Email address
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/dto.ForgotPasswordRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Reset email dispatched (if account exists)
+          schema:
+            $ref: '#/definitions/dto.MessageResponse'
+        "422":
+          description: Validation error
+          schema:
+            $ref: '#/definitions/dto.ErrorResponse'
+        "500":
+          description: Internal server error
+          schema:
+            $ref: '#/definitions/dto.ErrorResponse'
+      summary: Request password reset
+      tags:
+      - Auth
+  /api/v1/auth/password/reset:
+    post:
+      consumes:
+      - application/json
+      description: Sets a new password using a valid, unexpired password reset token.
+        On success all active refresh tokens for the user are revoked, forcing re-login
+        on all devices. Password must be 8+ characters with at least one letter and
+        one digit.
+      parameters:
+      - description: Reset token and new password
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/dto.ResetPasswordRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Password updated — all sessions terminated
+          schema:
+            $ref: '#/definitions/dto.MessageResponse'
+        "400":
+          description: Token invalid, expired, or already used (INVALID_OR_EXPIRED_TOKEN)
+          schema:
+            $ref: '#/definitions/dto.ErrorResponse'
+        "422":
+          description: Validation error — password complexity requirements not met
+          schema:
+            $ref: '#/definitions/dto.ErrorResponse'
+        "500":
+          description: Internal server error
+          schema:
+            $ref: '#/definitions/dto.ErrorResponse'
+      summary: Reset password
+      tags:
+      - Auth
+  /api/v1/auth/refresh:
+    post:
+      description: Exchanges the `refresh_token` cookie for a new JWT access token.
+        The refresh token is **rotated** — the old one is revoked and a new cookie
+        is issued atomically.
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: New access token issued
+          schema:
+            $ref: '#/definitions/dto.AccessTokenResponse'
+        "401":
+          description: Refresh token invalid, expired, or revoked (INVALID_REFRESH_TOKEN)
+          schema:
+            $ref: '#/definitions/dto.ErrorResponse'
+        "500":
+          description: Internal server error
+          schema:
+            $ref: '#/definitions/dto.ErrorResponse'
+      summary: Refresh access token
+      tags:
+      - Auth
+  /api/v1/auth/register:
+    post:
+      consumes:
+      - application/json
+      description: Creates a new user account with email and password. The user receives
+        a verification email and **cannot sign in until their email is confirmed**.
+      parameters:
+      - description: Registration payload
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/dto.RegisterRequest'
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: Account created — check email for a verification link
+          schema:
+            $ref: '#/definitions/dto.UserResponseEnvelope'
+        "409":
+          description: Email already registered (EMAIL_ALREADY_REGISTERED)
+          schema:
+            $ref: '#/definitions/dto.ErrorResponse'
+        "422":
+          description: Validation error — see details for field-level errors
+          schema:
+            $ref: '#/definitions/dto.ErrorResponse'
+        "500":
+          description: Internal server error
+          schema:
+            $ref: '#/definitions/dto.ErrorResponse'
+      summary: Register a new user
+      tags:
+      - Auth
+  /api/v1/auth/verify:
+    get:
+      description: Marks the user's email as verified using the single-use token delivered
+        in the verification email. The token is valid for 24 hours.
+      parameters:
+      - description: Raw verification token from the email link
+        in: query
+        name: token
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Email verified successfully
+          schema:
+            $ref: '#/definitions/dto.MessageResponse'
+        "400":
+          description: Token missing, invalid, expired, or already used (INVALID_OR_EXPIRED_TOKEN)
+          schema:
+            $ref: '#/definitions/dto.ErrorResponse'
+        "500":
+          description: Internal server error
+          schema:
+            $ref: '#/definitions/dto.ErrorResponse'
+      summary: Verify email address
+      tags:
+      - Auth
+  /api/v1/auth/verify/resend:
+    post:
+      consumes:
+      - application/json
+      description: Generates a new verification token, invalidates any prior pending
+        token, and resends the verification email to the given address.
+      parameters:
+      - description: Email address to resend verification to
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/dto.ResendVerificationRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Verification email sent (if the address is registered and unverified)
+          schema:
+            $ref: '#/definitions/dto.MessageResponse'
+        "400":
+          description: Email is already verified (EMAIL_ALREADY_VERIFIED)
+          schema:
+            $ref: '#/definitions/dto.ErrorResponse'
+        "422":
+          description: Validation error
+          schema:
+            $ref: '#/definitions/dto.ErrorResponse'
+        "500":
+          description: Internal server error
+          schema:
+            $ref: '#/definitions/dto.ErrorResponse'
+      summary: Resend verification email
+      tags:
+      - Auth
+  /api/v1/calls:
+    get:
+      description: Returns a paginated list of call records sorted by creation date
+        descending. Optionally filter by status or user ID.
+      parameters:
+      - default: 1
+        description: Page number (1-based)
+        in: query
+        minimum: 1
+        name: page
+        type: integer
+      - default: 20
+        description: Number of items per page
+        in: query
+        maximum: 100
+        minimum: 1
+        name: per_page
+        type: integer
+      - description: Filter by call status
+        enum:
+        - pending
+        - processing
+        - done
+        - failed
+        in: query
+        name: status
+        type: string
+      - description: Filter by user UUID
+        format: uuid
+        in: query
+        name: user_id
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Paginated list of calls
+          schema:
+            $ref: '#/definitions/dto.CallListResponse'
+        "400":
+          description: Invalid query parameter (e.g. malformed UUID)
+          schema:
+            $ref: '#/definitions/dto.ErrorResponse'
+        "401":
+          description: Missing or invalid token
+          schema:
+            $ref: '#/definitions/dto.ErrorResponse'
+        "500":
+          description: Internal server error
+          schema:
+            $ref: '#/definitions/dto.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: List calls
+      tags:
+      - Calls
+    post:
+      consumes:
+      - application/json
+      description: Creates a new call record in `pending` status. The call can be
+        updated later with a recording URL, transcript, and timing once processing
+        completes.
+      parameters:
+      - description: Call payload
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/dto.CreateCallRequest'
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: Call created
+          schema:
+            $ref: '#/definitions/dto.CallResponseEnvelope'
+        "401":
+          description: Missing or invalid token
+          schema:
+            $ref: '#/definitions/dto.ErrorResponse'
+        "422":
+          description: Validation error
+          schema:
+            $ref: '#/definitions/dto.ErrorResponse'
+        "500":
+          description: Internal server error
+          schema:
+            $ref: '#/definitions/dto.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Create a call
+      tags:
+      - Calls
+  /api/v1/calls/{id}:
+    delete:
+      description: Soft-deletes a call record. The record is retained in the database
+        but excluded from all future list and get queries.
+      parameters:
+      - description: Call UUID
+        example: 00000000-0000-0000-0000-000000000002
+        format: uuid
+        in: path
+        name: id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "204":
+          description: Call deleted
+        "400":
+          description: Invalid UUID format
+          schema:
+            $ref: '#/definitions/dto.ErrorResponse'
+        "401":
+          description: Missing or invalid token
+          schema:
+            $ref: '#/definitions/dto.ErrorResponse'
+        "404":
+          description: Call not found (CALL_NOT_FOUND)
+          schema:
+            $ref: '#/definitions/dto.ErrorResponse'
+        "500":
+          description: Internal server error
+          schema:
+            $ref: '#/definitions/dto.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Delete a call
+      tags:
+      - Calls
+    get:
+      description: Returns a single call record by its UUID.
+      parameters:
+      - description: Call UUID
+        example: 00000000-0000-0000-0000-000000000002
+        format: uuid
+        in: path
+        name: id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Call record
+          schema:
+            $ref: '#/definitions/dto.CallResponseEnvelope'
+        "400":
+          description: Invalid UUID format
+          schema:
+            $ref: '#/definitions/dto.ErrorResponse'
+        "401":
+          description: Missing or invalid token
+          schema:
+            $ref: '#/definitions/dto.ErrorResponse'
+        "404":
+          description: Call not found (CALL_NOT_FOUND)
+          schema:
+            $ref: '#/definitions/dto.ErrorResponse'
+        "500":
+          description: Internal server error
+          schema:
+            $ref: '#/definitions/dto.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Get a call
+      tags:
+      - Calls
+    patch:
+      consumes:
+      - application/json
+      description: Partially updates a call record. All fields are optional — only
+        the fields present in the request body are modified.
+      parameters:
+      - description: Call UUID
+        example: 00000000-0000-0000-0000-000000000002
+        format: uuid
+        in: path
+        name: id
+        required: true
+        type: string
+      - description: Fields to update (all optional)
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/dto.UpdateCallRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Updated call record
+          schema:
+            $ref: '#/definitions/dto.CallResponseEnvelope'
+        "400":
+          description: Invalid UUID format
+          schema:
+            $ref: '#/definitions/dto.ErrorResponse'
+        "401":
+          description: Missing or invalid token
+          schema:
+            $ref: '#/definitions/dto.ErrorResponse'
+        "404":
+          description: Call not found (CALL_NOT_FOUND)
+          schema:
+            $ref: '#/definitions/dto.ErrorResponse'
+        "422":
+          description: Validation error
+          schema:
+            $ref: '#/definitions/dto.ErrorResponse'
+        "500":
+          description: Internal server error
+          schema:
+            $ref: '#/definitions/dto.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Update a call
+      tags:
+      - Calls
+  /api/v1/departments/{deptID}:
+    delete:
+      description: Soft-deletes a department and removes all its memberships. Restricted
+        to `owner` or `admin` members of the parent organization.
+      parameters:
+      - description: Department UUID
+        example: 00000000-0000-0000-0000-000000000020
+        format: uuid
+        in: path
+        name: deptID
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "204":
+          description: Department deleted
+        "400":
+          description: Invalid UUID format
+          schema:
+            $ref: '#/definitions/dto.ErrorResponse'
+        "401":
+          description: Missing or invalid token
+          schema:
+            $ref: '#/definitions/dto.ErrorResponse'
+        "403":
+          description: Insufficient role (FORBIDDEN)
+          schema:
+            $ref: '#/definitions/dto.ErrorResponse'
+        "404":
+          description: Department not found (DEPARTMENT_NOT_FOUND)
+          schema:
+            $ref: '#/definitions/dto.ErrorResponse'
+        "500":
+          description: Internal server error
+          schema:
+            $ref: '#/definitions/dto.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Delete a department
+      tags:
+      - Departments
+    get:
+      description: Returns a single department by its UUID. Restricted to members
+        of the parent organization.
+      parameters:
+      - description: Department UUID
+        example: 00000000-0000-0000-0000-000000000020
+        format: uuid
+        in: path
+        name: deptID
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Department details
+          schema:
+            $ref: '#/definitions/dto.DeptResponseEnvelope'
+        "400":
+          description: Invalid UUID format
+          schema:
+            $ref: '#/definitions/dto.ErrorResponse'
+        "401":
+          description: Missing or invalid token
+          schema:
+            $ref: '#/definitions/dto.ErrorResponse'
+        "404":
+          description: Department not found (DEPARTMENT_NOT_FOUND)
+          schema:
+            $ref: '#/definitions/dto.ErrorResponse'
+        "500":
+          description: Internal server error
+          schema:
+            $ref: '#/definitions/dto.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Get a department
+      tags:
+      - Departments
+    patch:
+      consumes:
+      - application/json
+      description: Updates a department's name and/or description. Restricted to `owner`
+        or `admin` members of the parent organization.
+      parameters:
+      - description: Department UUID
+        example: 00000000-0000-0000-0000-000000000020
+        format: uuid
+        in: path
+        name: deptID
+        required: true
+        type: string
+      - description: Fields to update
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/dto.UpdateDeptRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Updated department
+          schema:
+            $ref: '#/definitions/dto.DeptResponseEnvelope'
+        "400":
+          description: Invalid UUID format
+          schema:
+            $ref: '#/definitions/dto.ErrorResponse'
+        "401":
+          description: Missing or invalid token
+          schema:
+            $ref: '#/definitions/dto.ErrorResponse'
+        "403":
+          description: Insufficient role (FORBIDDEN)
+          schema:
+            $ref: '#/definitions/dto.ErrorResponse'
+        "404":
+          description: Department not found (DEPARTMENT_NOT_FOUND)
+          schema:
+            $ref: '#/definitions/dto.ErrorResponse'
+        "422":
+          description: Validation error
+          schema:
+            $ref: '#/definitions/dto.ErrorResponse'
+        "500":
+          description: Internal server error
+          schema:
+            $ref: '#/definitions/dto.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Update a department
+      tags:
+      - Departments
+  /api/v1/departments/{deptID}/members:
+    get:
+      description: Returns all members of the specified department with their roles.
+      parameters:
+      - description: Department UUID
+        example: 00000000-0000-0000-0000-000000000020
+        format: uuid
+        in: path
+        name: deptID
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: List of department members
+          schema:
+            $ref: '#/definitions/dto.DeptMemberListResponse'
+        "400":
+          description: Invalid UUID format
+          schema:
+            $ref: '#/definitions/dto.ErrorResponse'
+        "401":
+          description: Missing or invalid token
+          schema:
+            $ref: '#/definitions/dto.ErrorResponse'
+        "404":
+          description: Department not found (DEPARTMENT_NOT_FOUND)
+          schema:
+            $ref: '#/definitions/dto.ErrorResponse'
+        "500":
+          description: Internal server error
+          schema:
+            $ref: '#/definitions/dto.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: List department members
+      tags:
+      - Departments
+    post:
+      consumes:
+      - application/json
+      description: Adds an existing organization member to the department with the
+        specified role. The target user must already be a member of the parent organization.
+      parameters:
+      - description: Department UUID
+        example: 00000000-0000-0000-0000-000000000020
+        format: uuid
+        in: path
+        name: deptID
+        required: true
+        type: string
+      - description: Member to add
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/dto.AddDeptMemberRequest'
+      produces:
+      - application/json
+      responses:
+        "204":
+          description: Member added to department
+        "400":
+          description: Invalid UUID format
+          schema:
+            $ref: '#/definitions/dto.ErrorResponse'
+        "401":
+          description: Missing or invalid token
+          schema:
+            $ref: '#/definitions/dto.ErrorResponse'
+        "403":
+          description: Insufficient role (FORBIDDEN)
+          schema:
+            $ref: '#/definitions/dto.ErrorResponse'
+        "404":
+          description: Department or user not found
+          schema:
+            $ref: '#/definitions/dto.ErrorResponse'
+        "409":
+          description: User is already a department member (ALREADY_A_MEMBER)
+          schema:
+            $ref: '#/definitions/dto.ErrorResponse'
+        "422":
+          description: Validation error
+          schema:
+            $ref: '#/definitions/dto.ErrorResponse'
+        "500":
+          description: Internal server error
+          schema:
+            $ref: '#/definitions/dto.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Add a member to a department
+      tags:
+      - Departments
+  /api/v1/departments/{deptID}/members/{userID}:
+    delete:
+      description: Removes a user from the department. The user remains a member of
+        the parent organization. Restricted to `owner` or `admin`.
+      parameters:
+      - description: Department UUID
+        example: 00000000-0000-0000-0000-000000000020
+        format: uuid
+        in: path
+        name: deptID
+        required: true
+        type: string
+      - description: Target user UUID
+        example: 00000000-0000-0000-0000-000000000001
+        format: uuid
+        in: path
+        name: userID
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "204":
+          description: Member removed from department
+        "400":
+          description: Invalid UUID format
+          schema:
+            $ref: '#/definitions/dto.ErrorResponse'
+        "401":
+          description: Missing or invalid token
+          schema:
+            $ref: '#/definitions/dto.ErrorResponse'
+        "403":
+          description: Insufficient role (FORBIDDEN)
+          schema:
+            $ref: '#/definitions/dto.ErrorResponse'
+        "404":
+          description: Department or member not found
+          schema:
+            $ref: '#/definitions/dto.ErrorResponse'
+        "500":
+          description: Internal server error
+          schema:
+            $ref: '#/definitions/dto.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Remove a member from a department
+      tags:
+      - Departments
+    patch:
+      consumes:
+      - application/json
+      description: Changes a department member's role (`head` or `member`). Restricted
+        to `owner` or `admin` members of the parent organization.
+      parameters:
+      - description: Department UUID
+        example: 00000000-0000-0000-0000-000000000020
+        format: uuid
+        in: path
+        name: deptID
+        required: true
+        type: string
+      - description: Target user UUID
+        example: 00000000-0000-0000-0000-000000000001
+        format: uuid
+        in: path
+        name: userID
+        required: true
+        type: string
+      - description: New role
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/dto.UpdateDeptMemberRoleRequest'
+      produces:
+      - application/json
+      responses:
+        "204":
+          description: Member role updated
+        "400":
+          description: Invalid UUID format
+          schema:
+            $ref: '#/definitions/dto.ErrorResponse'
+        "401":
+          description: Missing or invalid token
+          schema:
+            $ref: '#/definitions/dto.ErrorResponse'
+        "403":
+          description: Insufficient role (FORBIDDEN)
+          schema:
+            $ref: '#/definitions/dto.ErrorResponse'
+        "404":
+          description: Department or member not found
+          schema:
+            $ref: '#/definitions/dto.ErrorResponse'
+        "422":
+          description: Validation error
+          schema:
+            $ref: '#/definitions/dto.ErrorResponse'
+        "500":
+          description: Internal server error
+          schema:
+            $ref: '#/definitions/dto.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Update a department member's role
+      tags:
+      - Departments
+  /api/v1/invitations/accept:
+    post:
+      consumes:
+      - application/json
+      description: Accepts a pending invitation and adds the authenticated user to
+        the organization with the role specified in the invitation. The invitation
+        token is single-use and valid for 7 days.
+      parameters:
+      - description: Invitation token
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/dto.AcceptInvitationRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Joined organization successfully
+          schema:
+            $ref: '#/definitions/dto.OrgResponseEnvelope'
+        "400":
+          description: Token invalid, expired, or already accepted (INVALID_OR_EXPIRED_INVITATION)
+          schema:
+            $ref: '#/definitions/dto.ErrorResponse'
+        "401":
+          description: Missing or invalid token
+          schema:
+            $ref: '#/definitions/dto.ErrorResponse'
+        "403":
+          description: Authenticated user email does not match invitation email (INVITATION_EMAIL_MISMATCH)
+          schema:
+            $ref: '#/definitions/dto.ErrorResponse'
+        "422":
+          description: Validation error
+          schema:
+            $ref: '#/definitions/dto.ErrorResponse'
+        "500":
+          description: Internal server error
+          schema:
+            $ref: '#/definitions/dto.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Accept an organization invitation
+      tags:
+      - Auth
+  /api/v1/meetings:
+    post:
+      consumes:
+      - application/json
+      description: Creates a new meeting room. Open meetings allow any authenticated
+        user to join directly; private meetings restrict access to org/department
+        members.
+      parameters:
+      - description: Meeting creation parameters
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/dto.CreateMeetingRequest'
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: Meeting created
+          schema:
+            $ref: '#/definitions/dto.MeetingResponseEnvelope'
+        "400":
+          description: Invalid request body or host meeting limit reached
+          schema:
+            $ref: '#/definitions/dto.ErrorResponse'
+        "401":
+          description: Missing or invalid token
+          schema:
+            $ref: '#/definitions/dto.ErrorResponse'
+        "500":
+          description: Internal server error
+          schema:
+            $ref: '#/definitions/dto.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Create a meeting
+      tags:
+      - Meetings
+  /api/v1/meetings/{code}:
+    delete:
+      description: Ends an active meeting. Only the host may call this. Marks all
+        participants as left and sets ended_at.
+      parameters:
+      - description: Meeting code
+        example: abc-defg-hij
+        in: path
+        name: code
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Meeting ended
+          schema:
+            $ref: '#/definitions/dto.MessageResponse'
+        "401":
+          description: Missing or invalid token
+          schema:
+            $ref: '#/definitions/dto.ErrorResponse'
+        "403":
+          description: Caller is not the host
+          schema:
+            $ref: '#/definitions/dto.ErrorResponse'
+        "404":
+          description: Meeting not found
+          schema:
+            $ref: '#/definitions/dto.ErrorResponse'
+        "500":
+          description: Internal server error
+          schema:
+            $ref: '#/definitions/dto.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: End a meeting
+      tags:
+      - Meetings
+    get:
+      description: Returns a single meeting by its short code (e.g. abc-defg-hij).
+        Does not require authentication.
+      parameters:
+      - description: Meeting code
+        example: abc-defg-hij
+        in: path
+        name: code
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Meeting record
+          schema:
+            $ref: '#/definitions/dto.MeetingResponseEnvelope'
+        "404":
+          description: Meeting not found
+          schema:
+            $ref: '#/definitions/dto.ErrorResponse'
+        "500":
+          description: Internal server error
+          schema:
+            $ref: '#/definitions/dto.ErrorResponse'
+      summary: Get a meeting
+      tags:
+      - Meetings
+  /api/v1/meetings/{code}/ws:
+    get:
+      description: Upgrades the connection to WebSocket and places the caller into
+        the meeting hub. The JWT access token must be passed as the `token` query
+        parameter because WebSocket clients cannot send custom headers during the
+        handshake. Callers who are scope members join directly; others enter the waiting
+        room (knock flow).
+      parameters:
+      - description: Meeting code
+        example: abc-defg-hij
+        in: path
+        name: code
+        required: true
+        type: string
+      - description: JWT access token
+        in: query
+        name: token
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "101":
+          description: Switching Protocols — WebSocket connection established
+          schema:
+            type: string
+        "401":
+          description: Missing or invalid token
+          schema:
+            $ref: '#/definitions/dto.ErrorResponse'
+        "403":
+          description: Access denied (meeting ended or at capacity)
+          schema:
+            $ref: '#/definitions/dto.ErrorResponse'
+        "404":
+          description: Meeting not found
+          schema:
+            $ref: '#/definitions/dto.ErrorResponse'
+        "500":
+          description: Internal server error
+          schema:
+            $ref: '#/definitions/dto.ErrorResponse'
+      summary: Join meeting via WebSocket
+      tags:
+      - Meetings
+  /api/v1/meetings/mine:
+    get:
+      description: Returns all meetings the authenticated user hosted or participated
+        in, enriched with computed duration and up to 3 participant previews. Supports
+        filtering by status and sorting by multiple criteria.
+      parameters:
+      - description: Filter by status
+        enum:
+        - in_progress
+        - complete
+        - processing
+        - failed
+        in: query
+        name: filter[status]
+        type: string
+      - default: created_at_desc
+        description: Sort order
+        enum:
+        - created_at_desc
+        - created_at_asc
+        - duration_desc
+        - duration_asc
+        - title_asc
+        - title_desc
+        in: query
+        name: sort
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: List of meetings
+          schema:
+            $ref: '#/definitions/dto.MeetingListResponse'
+        "401":
+          description: Missing or invalid token
+          schema:
+            $ref: '#/definitions/dto.ErrorResponse'
+        "500":
+          description: Internal server error
+          schema:
+            $ref: '#/definitions/dto.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: List my meetings
+      tags:
+      - Meetings
+  /api/v1/organizations:
+    get:
+      description: Returns all organizations the authenticated user is a member of
+        (any role). There is no pagination — the list is bounded by the user's membership
+        count.
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: List of organizations
+          schema:
+            $ref: '#/definitions/dto.OrgListResponse'
+        "401":
+          description: Missing or invalid token
+          schema:
+            $ref: '#/definitions/dto.ErrorResponse'
+        "500":
+          description: Internal server error
+          schema:
+            $ref: '#/definitions/dto.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: List my organizations
+      tags:
+      - Organizations
+    post:
+      consumes:
+      - application/json
+      description: Creates a new organization workspace. The authenticated user automatically
+        becomes the `owner` member. The slug is derived from the name if not provided.
+      parameters:
+      - description: Organization details
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/dto.CreateOrgRequest'
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: Organization created
+          schema:
+            $ref: '#/definitions/dto.OrgResponseEnvelope'
+        "401":
+          description: Missing or invalid token
+          schema:
+            $ref: '#/definitions/dto.ErrorResponse'
+        "409":
+          description: Slug already taken (SLUG_ALREADY_TAKEN)
+          schema:
+            $ref: '#/definitions/dto.ErrorResponse'
+        "422":
+          description: Validation error
+          schema:
+            $ref: '#/definitions/dto.ErrorResponse'
+        "500":
+          description: Internal server error
+          schema:
+            $ref: '#/definitions/dto.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Create an organization
+      tags:
+      - Organizations
+  /api/v1/organizations/{id}:
+    delete:
+      description: Soft-deletes the organization and all its memberships. Restricted
+        to the `owner`.
+      parameters:
+      - description: Organization UUID
+        example: 00000000-0000-0000-0000-000000000010
+        format: uuid
+        in: path
+        name: id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "204":
+          description: Organization deleted
+        "400":
+          description: Invalid UUID format
+          schema:
+            $ref: '#/definitions/dto.ErrorResponse'
+        "401":
+          description: Missing or invalid token
+          schema:
+            $ref: '#/definitions/dto.ErrorResponse'
+        "403":
+          description: Insufficient role — owner required (FORBIDDEN)
+          schema:
+            $ref: '#/definitions/dto.ErrorResponse'
+        "404":
+          description: Organization not found or access denied
+          schema:
+            $ref: '#/definitions/dto.ErrorResponse'
+        "500":
+          description: Internal server error
+          schema:
+            $ref: '#/definitions/dto.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Delete an organization
+      tags:
+      - Organizations
+    get:
+      description: Returns a single organization by ID. Non-members receive **404**
+        (not 403) to avoid leaking existence.
+      parameters:
+      - description: Organization UUID
+        example: 00000000-0000-0000-0000-000000000010
+        format: uuid
+        in: path
+        name: id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Organization details
+          schema:
+            $ref: '#/definitions/dto.OrgResponseEnvelope'
+        "400":
+          description: Invalid UUID format
+          schema:
+            $ref: '#/definitions/dto.ErrorResponse'
+        "401":
+          description: Missing or invalid token
+          schema:
+            $ref: '#/definitions/dto.ErrorResponse'
+        "404":
+          description: Organization not found or access denied
+          schema:
+            $ref: '#/definitions/dto.ErrorResponse'
+        "500":
+          description: Internal server error
+          schema:
+            $ref: '#/definitions/dto.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Get an organization
+      tags:
+      - Organizations
+    patch:
+      consumes:
+      - application/json
+      description: Updates the organization name. Restricted to members with `owner`
+        or `admin` role.
+      parameters:
+      - description: Organization UUID
+        example: 00000000-0000-0000-0000-000000000010
+        format: uuid
+        in: path
+        name: id
+        required: true
+        type: string
+      - description: Fields to update
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/dto.UpdateOrgRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Updated organization
+          schema:
+            $ref: '#/definitions/dto.OrgResponseEnvelope'
+        "400":
+          description: Invalid UUID format
+          schema:
+            $ref: '#/definitions/dto.ErrorResponse'
+        "401":
+          description: Missing or invalid token
+          schema:
+            $ref: '#/definitions/dto.ErrorResponse'
+        "403":
+          description: Insufficient role — owner or admin required (FORBIDDEN)
+          schema:
+            $ref: '#/definitions/dto.ErrorResponse'
+        "404":
+          description: Organization not found or access denied
+          schema:
+            $ref: '#/definitions/dto.ErrorResponse'
+        "422":
+          description: Validation error
+          schema:
+            $ref: '#/definitions/dto.ErrorResponse'
+        "500":
+          description: Internal server error
+          schema:
+            $ref: '#/definitions/dto.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Update an organization
+      tags:
+      - Organizations
+  /api/v1/organizations/{id}/departments:
+    get:
+      description: Returns all departments belonging to the specified organization.
+        Restricted to organization members.
+      parameters:
+      - description: Organization UUID
+        example: 00000000-0000-0000-0000-000000000010
+        format: uuid
+        in: path
+        name: id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: List of departments
+          schema:
+            $ref: '#/definitions/dto.DeptListResponse'
+        "400":
+          description: Invalid UUID format
+          schema:
+            $ref: '#/definitions/dto.ErrorResponse'
+        "401":
+          description: Missing or invalid token
+          schema:
+            $ref: '#/definitions/dto.ErrorResponse'
+        "404":
+          description: Organization not found or access denied
+          schema:
+            $ref: '#/definitions/dto.ErrorResponse'
+        "500":
+          description: Internal server error
+          schema:
+            $ref: '#/definitions/dto.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: List departments in an organization
+      tags:
+      - Departments
+    post:
+      consumes:
+      - application/json
+      description: Creates a new department within the specified organization. Restricted
+        to `owner` or `admin` members.
+      parameters:
+      - description: Organization UUID
+        example: 00000000-0000-0000-0000-000000000010
+        format: uuid
+        in: path
+        name: id
+        required: true
+        type: string
+      - description: Department details
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/dto.CreateDeptRequest'
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: Department created
+          schema:
+            $ref: '#/definitions/dto.DeptResponseEnvelope'
+        "400":
+          description: Invalid UUID format
+          schema:
+            $ref: '#/definitions/dto.ErrorResponse'
+        "401":
+          description: Missing or invalid token
+          schema:
+            $ref: '#/definitions/dto.ErrorResponse'
+        "403":
+          description: Insufficient role (FORBIDDEN)
+          schema:
+            $ref: '#/definitions/dto.ErrorResponse'
+        "404":
+          description: Organization not found or access denied
+          schema:
+            $ref: '#/definitions/dto.ErrorResponse'
+        "422":
+          description: Validation error
+          schema:
+            $ref: '#/definitions/dto.ErrorResponse'
+        "500":
+          description: Internal server error
+          schema:
+            $ref: '#/definitions/dto.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Create a department
+      tags:
+      - Departments
+  /api/v1/organizations/{id}/invitations:
+    post:
+      consumes:
+      - application/json
+      description: Sends an email invitation to the given address. If a pending invitation
+        for that email already exists it is refreshed (expiry reset, email re-sent)
+        rather than creating a duplicate. Restricted to `owner` or `admin`.
+      parameters:
+      - description: Organization UUID
+        example: 00000000-0000-0000-0000-000000000010
+        format: uuid
+        in: path
+        name: id
+        required: true
+        type: string
+      - description: Invitation details
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/dto.InviteUserRequest'
+      produces:
+      - application/json
+      responses:
+        "202":
+          description: Invitation sent
+          schema:
+            $ref: '#/definitions/dto.MessageResponse'
+        "400":
+          description: Invalid UUID format
+          schema:
+            $ref: '#/definitions/dto.ErrorResponse'
+        "401":
+          description: Missing or invalid token
+          schema:
+            $ref: '#/definitions/dto.ErrorResponse'
+        "403":
+          description: Insufficient role (FORBIDDEN)
+          schema:
+            $ref: '#/definitions/dto.ErrorResponse'
+        "404":
+          description: Organization not found or access denied
+          schema:
+            $ref: '#/definitions/dto.ErrorResponse'
+        "409":
+          description: User is already a member (ALREADY_A_MEMBER)
+          schema:
+            $ref: '#/definitions/dto.ErrorResponse'
+        "422":
+          description: Validation error
+          schema:
+            $ref: '#/definitions/dto.ErrorResponse'
+        "500":
+          description: Internal server error
+          schema:
+            $ref: '#/definitions/dto.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Invite a user to an organization
+      tags:
+      - Organizations
+  /api/v1/organizations/{id}/members:
+    get:
+      description: Returns all active members of the organization with their roles.
+        Restricted to current members.
+      parameters:
+      - description: Organization UUID
+        example: 00000000-0000-0000-0000-000000000010
+        format: uuid
+        in: path
+        name: id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: List of members
+          schema:
+            $ref: '#/definitions/dto.MemberListResponse'
+        "400":
+          description: Invalid UUID format
+          schema:
+            $ref: '#/definitions/dto.ErrorResponse'
+        "401":
+          description: Missing or invalid token
+          schema:
+            $ref: '#/definitions/dto.ErrorResponse'
+        "404":
+          description: Organization not found or access denied
+          schema:
+            $ref: '#/definitions/dto.ErrorResponse'
+        "500":
+          description: Internal server error
+          schema:
+            $ref: '#/definitions/dto.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: List organization members
+      tags:
+      - Organizations
+  /api/v1/organizations/{id}/members/{userID}:
+    delete:
+      description: Removes a user from the organization. The `owner` cannot be removed
+        via this endpoint — ownership must be transferred first. Restricted to `owner`
+        or `admin`.
+      parameters:
+      - description: Organization UUID
+        example: 00000000-0000-0000-0000-000000000010
+        format: uuid
+        in: path
+        name: id
+        required: true
+        type: string
+      - description: Target user UUID
+        example: 00000000-0000-0000-0000-000000000002
+        format: uuid
+        in: path
+        name: userID
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "204":
+          description: Member removed
+        "400":
+          description: Cannot remove the owner (CANNOT_REMOVE_OWNER)
+          schema:
+            $ref: '#/definitions/dto.ErrorResponse'
+        "401":
+          description: Missing or invalid token
+          schema:
+            $ref: '#/definitions/dto.ErrorResponse'
+        "403":
+          description: Insufficient role (FORBIDDEN)
+          schema:
+            $ref: '#/definitions/dto.ErrorResponse'
+        "404":
+          description: Organization or member not found
+          schema:
+            $ref: '#/definitions/dto.ErrorResponse'
+        "500":
+          description: Internal server error
+          schema:
+            $ref: '#/definitions/dto.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Remove a member
+      tags:
+      - Organizations
+    patch:
+      consumes:
+      - application/json
+      description: Changes a member's role within the organization. Restricted to
+        `owner` or `admin`. An `admin` cannot promote another user to `owner` or modify
+        another `admin`.
+      parameters:
+      - description: Organization UUID
+        example: 00000000-0000-0000-0000-000000000010
+        format: uuid
+        in: path
+        name: id
+        required: true
+        type: string
+      - description: Target user UUID
+        example: 00000000-0000-0000-0000-000000000002
+        format: uuid
+        in: path
+        name: userID
+        required: true
+        type: string
+      - description: New role
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/dto.UpdateMemberRoleRequest'
+      produces:
+      - application/json
+      responses:
+        "204":
+          description: Member role updated
+        "400":
+          description: Cannot remove or demote the owner (CANNOT_REMOVE_OWNER)
+          schema:
+            $ref: '#/definitions/dto.ErrorResponse'
+        "401":
+          description: Missing or invalid token
+          schema:
+            $ref: '#/definitions/dto.ErrorResponse'
+        "403":
+          description: Insufficient role (FORBIDDEN)
+          schema:
+            $ref: '#/definitions/dto.ErrorResponse'
+        "404":
+          description: Organization or member not found
+          schema:
+            $ref: '#/definitions/dto.ErrorResponse'
+        "422":
+          description: Validation error
+          schema:
+            $ref: '#/definitions/dto.ErrorResponse'
+        "500":
+          description: Internal server error
+          schema:
+            $ref: '#/definitions/dto.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Update a member's role
+      tags:
+      - Organizations
+  /api/v1/users:
+    get:
+      description: Returns a paginated list of all platform users. **Requires `admin`
+        role.** Regular members receive 403.
+      parameters:
+      - default: 1
+        description: Page number (1-based)
+        in: query
+        minimum: 1
+        name: page
+        type: integer
+      - default: 20
+        description: Number of items per page
+        in: query
+        maximum: 100
+        minimum: 1
+        name: per_page
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Paginated user list
+          schema:
+            $ref: '#/definitions/dto.UserListResponse'
+        "401":
+          description: Missing or invalid token
+          schema:
+            $ref: '#/definitions/dto.ErrorResponse'
+        "403":
+          description: Insufficient role — admin required (FORBIDDEN)
+          schema:
+            $ref: '#/definitions/dto.ErrorResponse'
+        "500":
+          description: Internal server error
+          schema:
+            $ref: '#/definitions/dto.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: List users  [admin]
+      tags:
+      - Users
+    post:
+      consumes:
+      - application/json
+      description: Creates a new platform user directly (admin operation — bypasses
+        the self-registration flow). **Requires `admin` role.**
+      parameters:
+      - description: User payload
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/handlers.CreateUserRequest'
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: User created
+          schema:
+            $ref: '#/definitions/dto.UserResponseEnvelope'
+        "401":
+          description: Missing or invalid token
+          schema:
+            $ref: '#/definitions/dto.ErrorResponse'
+        "403":
+          description: Insufficient role — admin required (FORBIDDEN)
+          schema:
+            $ref: '#/definitions/dto.ErrorResponse'
+        "409":
+          description: Email already registered (EMAIL_ALREADY_REGISTERED)
+          schema:
+            $ref: '#/definitions/dto.ErrorResponse'
+        "422":
+          description: Validation error
+          schema:
+            $ref: '#/definitions/dto.ErrorResponse'
+        "500":
+          description: Internal server error
+          schema:
+            $ref: '#/definitions/dto.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Create a user  [admin]
+      tags:
+      - Users
+  /api/v1/users/{id}:
+    delete:
+      description: Soft-deletes a platform user. **Requires `admin` role.**
+      parameters:
+      - description: User UUID
+        example: 00000000-0000-0000-0000-000000000001
+        format: uuid
+        in: path
+        name: id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "204":
+          description: User deleted
+        "400":
+          description: Invalid UUID format
+          schema:
+            $ref: '#/definitions/dto.ErrorResponse'
+        "401":
+          description: Missing or invalid token
+          schema:
+            $ref: '#/definitions/dto.ErrorResponse'
+        "403":
+          description: Insufficient role — admin required (FORBIDDEN)
+          schema:
+            $ref: '#/definitions/dto.ErrorResponse'
+        "404":
+          description: User not found (USER_NOT_FOUND)
+          schema:
+            $ref: '#/definitions/dto.ErrorResponse'
+        "500":
+          description: Internal server error
+          schema:
+            $ref: '#/definitions/dto.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Delete a user  [admin]
+      tags:
+      - Users
+    get:
+      description: Returns a single user profile by UUID. **Requires `admin` role.**
+      parameters:
+      - description: User UUID
+        example: 00000000-0000-0000-0000-000000000001
+        format: uuid
+        in: path
+        name: id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: User profile
+          schema:
+            $ref: '#/definitions/dto.UserResponseEnvelope'
+        "400":
+          description: Invalid UUID format
+          schema:
+            $ref: '#/definitions/dto.ErrorResponse'
+        "401":
+          description: Missing or invalid token
+          schema:
+            $ref: '#/definitions/dto.ErrorResponse'
+        "403":
+          description: Insufficient role — admin required (FORBIDDEN)
+          schema:
+            $ref: '#/definitions/dto.ErrorResponse'
+        "404":
+          description: User not found (USER_NOT_FOUND)
+          schema:
+            $ref: '#/definitions/dto.ErrorResponse'
+        "500":
+          description: Internal server error
+          schema:
+            $ref: '#/definitions/dto.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Get a user  [admin]
+      tags:
+      - Users
+  /health:
+    get:
+      description: Returns 200 as long as the server process is running. Used by load
+        balancers and orchestrators to verify the process is alive.
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Server is alive
+          headers:
+            X-Request-ID:
+              description: Unique request identifier
+              type: string
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      summary: Liveness probe
+      tags:
+      - Health
+  /ready:
+    get:
+      description: Returns 200 when the database connection is healthy. Returns 503
+        if the database is unreachable. Used by orchestrators to gate traffic until
+        the service is fully initialised.
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Server is ready and database is reachable
+          headers:
+            X-Request-ID:
+              description: Unique request identifier
+              type: string
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "503":
+          description: Database unavailable (DB_UNAVAILABLE)
+          schema:
+            $ref: '#/definitions/dto.ErrorResponse'
+      summary: Readiness probe
+      tags:
+      - Health
+schemes:
+- http
+- https
+securityDefinitions:
+  BearerAuth:
+    description: 'Enter your JWT access token as: **Bearer &lt;token&gt;**'
+    in: header
+    name: Authorization
+    type: apiKey
+swagger: "2.0"

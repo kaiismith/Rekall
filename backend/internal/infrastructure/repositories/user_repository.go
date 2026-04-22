@@ -1,0 +1,114 @@
+package repositories
+
+import (
+	"context"
+	"errors"
+
+	"github.com/google/uuid"
+	"github.com/rekall/backend/internal/domain/entities"
+	apperr "github.com/rekall/backend/pkg/errors"
+	"gorm.io/gorm"
+)
+
+// UserRepository implements ports.UserRepository using GORM.
+type UserRepository struct {
+	db *gorm.DB
+}
+
+// NewUserRepository creates a UserRepository backed by the given GORM DB.
+func NewUserRepository(db *gorm.DB) *UserRepository {
+	return &UserRepository{db: db}
+}
+
+// Create persists a new user row and returns the stored entity.
+func (r *UserRepository) Create(ctx context.Context, user *entities.User) (*entities.User, error) {
+	if err := r.db.WithContext(ctx).Create(user).Error; err != nil {
+		return nil, err
+	}
+	return user, nil
+}
+
+// GetByID retrieves a non-deleted user by primary key.
+func (r *UserRepository) GetByID(ctx context.Context, id uuid.UUID) (*entities.User, error) {
+	var user entities.User
+	err := r.db.WithContext(ctx).First(&user, "id = ?", id).Error
+	if err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return nil, apperr.NotFound("User", id.String())
+		}
+		return nil, err
+	}
+	return &user, nil
+}
+
+// GetByEmail retrieves a non-deleted user by email address.
+func (r *UserRepository) GetByEmail(ctx context.Context, email string) (*entities.User, error) {
+	var user entities.User
+	err := r.db.WithContext(ctx).Where("email = ?", email).First(&user).Error
+	if err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return nil, apperr.NotFound("User", email)
+		}
+		return nil, err
+	}
+	return &user, nil
+}
+
+// List returns a paginated slice of non-deleted users and the total count.
+// GORM's soft-delete filter (WHERE deleted_at IS NULL) is applied automatically.
+func (r *UserRepository) List(ctx context.Context, page, perPage int) ([]*entities.User, int, error) {
+	var (
+		users []*entities.User
+		total int64
+	)
+
+	base := r.db.WithContext(ctx).Model(&entities.User{})
+
+	if err := base.Count(&total).Error; err != nil {
+		return nil, 0, err
+	}
+
+	offset := (page - 1) * perPage
+	if err := base.Order("created_at DESC").Limit(perPage).Offset(offset).Find(&users).Error; err != nil {
+		return nil, 0, err
+	}
+
+	return users, int(total), nil
+}
+
+// Update saves changes to an existing user row.
+func (r *UserRepository) Update(ctx context.Context, user *entities.User) (*entities.User, error) {
+	if err := r.db.WithContext(ctx).Save(user).Error; err != nil {
+		return nil, err
+	}
+	return user, nil
+}
+
+// SoftDelete sets deleted_at on the matching user row.
+// GORM handles this automatically when the model has a DeletedAt *time.Time field.
+func (r *UserRepository) SoftDelete(ctx context.Context, id uuid.UUID) error {
+	result := r.db.WithContext(ctx).Delete(&entities.User{}, "id = ?", id)
+	if result.Error != nil {
+		return result.Error
+	}
+	if result.RowsAffected == 0 {
+		return apperr.NotFound("User", id.String())
+	}
+	return nil
+}
+
+// SetEmailVerified updates the email_verified column for the given user.
+func (r *UserRepository) SetEmailVerified(ctx context.Context, id uuid.UUID, verified bool) error {
+	return r.db.WithContext(ctx).
+		Model(&entities.User{}).
+		Where("id = ?", id).
+		Update("email_verified", verified).Error
+}
+
+// UpdatePassword replaces the password_hash column for the given user.
+func (r *UserRepository) UpdatePassword(ctx context.Context, id uuid.UUID, hash string) error {
+	return r.db.WithContext(ctx).
+		Model(&entities.User{}).
+		Where("id = ?", id).
+		Update("password_hash", hash).Error
+}
