@@ -155,3 +155,21 @@ func TestRequireRole_CaseInsensitive(t *testing.T) {
 
 	assert.Equal(t, http.StatusOK, w.Code)
 }
+
+// TestRequireRole_WithoutAuthenticateMiddleware ensures RequireRole aborts with
+// 401 when claims are absent from the context (e.g. misconfigured chain).
+func TestRequireRole_WithoutAuthenticateMiddleware(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	r := gin.New()
+	// Only RequireRole — no Authenticate first, so claims will be nil.
+	r.Use(middleware.RequireRole("admin"))
+	r.GET("/protected", func(c *gin.Context) {
+		c.Status(http.StatusOK)
+	})
+
+	w := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodGet, "/protected", nil)
+	r.ServeHTTP(w, req)
+
+	assert.Equal(t, http.StatusUnauthorized, w.Code)
+}

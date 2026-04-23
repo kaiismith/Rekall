@@ -3,6 +3,8 @@ package handlers_test
 import (
 	"encoding/json"
 	"net/http"
+	"net/http/httptest"
+	"strings"
 	"testing"
 	"time"
 
@@ -182,6 +184,59 @@ func TestCallCreateHandler_MissingUserID(t *testing.T) {
 
 	w := doRequest(r, http.MethodPost, "/calls", jsonBody(t, map[string]string{"title": "Test"}))
 	assert.Equal(t, http.StatusUnprocessableEntity, w.Code)
+}
+
+func TestCallCreateHandler_ServiceError(t *testing.T) {
+	repo := new(mockCallRepo)
+	h := handlers.NewCallHandler(newCallService(repo), zap.NewNop())
+	r := newCallRouter(h, uuid.New())
+
+	repo.On("Create", mock.Anything, mock.AnythingOfType("*entities.Call")).Return(nil, assert.AnError)
+
+	userID := uuid.New()
+	w := doRequest(r, http.MethodPost, "/calls", jsonBody(t, map[string]interface{}{
+		"user_id": userID.String(),
+		"title":   "Test",
+	}))
+	assert.NotEqual(t, http.StatusCreated, w.Code)
+}
+
+func TestCallUpdateHandler_InvalidBody(t *testing.T) {
+	h := handlers.NewCallHandler(newCallService(new(mockCallRepo)), zap.NewNop())
+	r := newCallRouter(h, uuid.New())
+
+	// Malformed JSON body.
+	req := httptest.NewRequest(http.MethodPatch, "/calls/"+uuid.New().String(),
+		strings.NewReader("not-json"))
+	req.Header.Set("Content-Type", "application/json")
+	w := httptest.NewRecorder()
+	r.ServeHTTP(w, req)
+
+	assert.Equal(t, http.StatusUnprocessableEntity, w.Code)
+}
+
+func TestCallListHandler_ServiceError(t *testing.T) {
+	repo := new(mockCallRepo)
+	h := handlers.NewCallHandler(newCallService(repo), zap.NewNop())
+	r := newCallRouter(h, uuid.New())
+
+	repo.On("List", mock.Anything, mock.Anything, mock.Anything, mock.Anything).
+		Return([]*entities.Call(nil), 0, assert.AnError)
+
+	w := doRequest(r, http.MethodGet, "/calls", nil)
+	assert.NotEqual(t, http.StatusOK, w.Code)
+}
+
+func TestCallGetHandler_ServiceError(t *testing.T) {
+	repo := new(mockCallRepo)
+	h := handlers.NewCallHandler(newCallService(repo), zap.NewNop())
+	r := newCallRouter(h, uuid.New())
+
+	id := uuid.New()
+	repo.On("GetByID", mock.Anything, id).Return(nil, assert.AnError)
+
+	w := doRequest(r, http.MethodGet, "/calls/"+id.String(), nil)
+	assert.NotEqual(t, http.StatusOK, w.Code)
 }
 
 // ─── Update ───────────────────────────────────────────────────────────────────

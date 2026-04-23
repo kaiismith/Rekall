@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 	"time"
 
@@ -116,6 +117,44 @@ func TestOrgCreateHandler_EmptyBody(t *testing.T) {
 	w := httptest.NewRecorder()
 	r.ServeHTTP(w, req)
 	assert.Equal(t, http.StatusUnprocessableEntity, w.Code)
+}
+
+func TestOrgCreateHandler_BadBodyType(t *testing.T) {
+	callerID := uuid.New()
+	h := handlers.NewOrganizationHandler(newOrgService(new(mockOrgRepo), new(mockMemberRepo), new(mockInviteRepo), new(mockUserRepo), new(mockMailer)), zap.NewNop())
+	r := newOrgRouter(h, callerID)
+
+	req := httptest.NewRequest(http.MethodPost, "/organizations", strings.NewReader("{{bad"))
+	req.Header.Set("Content-Type", "application/json")
+	w := httptest.NewRecorder()
+	r.ServeHTTP(w, req)
+	assert.Equal(t, http.StatusUnprocessableEntity, w.Code)
+}
+
+func TestOrgUpdateHandler_BadBodyType(t *testing.T) {
+	callerID := uuid.New()
+	h := handlers.NewOrganizationHandler(newOrgService(new(mockOrgRepo), new(mockMemberRepo), new(mockInviteRepo), new(mockUserRepo), new(mockMailer)), zap.NewNop())
+	r := newOrgRouter(h, callerID)
+
+	req := httptest.NewRequest(http.MethodPatch, "/organizations/"+uuid.New().String(), strings.NewReader("{{bad"))
+	req.Header.Set("Content-Type", "application/json")
+	w := httptest.NewRecorder()
+	r.ServeHTTP(w, req)
+	assert.Equal(t, http.StatusUnprocessableEntity, w.Code)
+}
+
+func TestOrgGetHandler_ServiceError(t *testing.T) {
+	orgRepo := new(mockOrgRepo)
+	memberRepo := new(mockMemberRepo)
+	callerID := uuid.New()
+	h := handlers.NewOrganizationHandler(newOrgService(orgRepo, memberRepo, new(mockInviteRepo), new(mockUserRepo), new(mockMailer)), zap.NewNop())
+	r := newOrgRouter(h, callerID)
+
+	orgID := uuid.New()
+	memberRepo.On("GetByOrgAndUser", mock.Anything, orgID, callerID).Return(nil, apperr.NotFound("OrgMembership", ""))
+
+	w := doRequest(r, http.MethodGet, "/organizations/"+orgID.String(), nil)
+	assert.Equal(t, http.StatusForbidden, w.Code)
 }
 
 func TestOrgCreateHandler_ServiceError(t *testing.T) {

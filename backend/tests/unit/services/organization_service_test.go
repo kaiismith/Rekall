@@ -487,6 +487,348 @@ func TestUpdateMemberRole_TargetNotFound(t *testing.T) {
 	assert.True(t, apperr.IsNotFound(err))
 }
 
+func TestRemoveMember_SelfRemoval_AsPlainMember(t *testing.T) {
+	// Plain members can still remove themselves (isSelf branch bypasses CanManageMembers).
+	memberRepo := new(mockMemberRepo)
+	svc := newOrgService(new(mockOrgRepo), memberRepo, new(mockInviteRepo), new(mockUserRepo), new(mockMailer))
+
+	orgID, userID := uuid.New(), uuid.New()
+	memberRepo.On("GetByOrgAndUser", mock.Anything, orgID, userID).Return(membership(orgID, userID, "member"), nil)
+	memberRepo.On("Delete", mock.Anything, orgID, userID).Return(nil)
+
+	require.NoError(t, svc.RemoveMember(context.Background(), orgID, userID, userID))
+}
+
+func TestRemoveMember_NotManager_Forbidden(t *testing.T) {
+	memberRepo := new(mockMemberRepo)
+	svc := newOrgService(new(mockOrgRepo), memberRepo, new(mockInviteRepo), new(mockUserRepo), new(mockMailer))
+
+	orgID, callerID, targetID := uuid.New(), uuid.New(), uuid.New()
+	memberRepo.On("GetByOrgAndUser", mock.Anything, orgID, callerID).Return(membership(orgID, callerID, "member"), nil)
+
+	err := svc.RemoveMember(context.Background(), orgID, callerID, targetID)
+	require.Error(t, err)
+	assert.True(t, apperr.IsForbidden(err))
+}
+
+func TestRemoveMember_TargetNotFound(t *testing.T) {
+	memberRepo := new(mockMemberRepo)
+	svc := newOrgService(new(mockOrgRepo), memberRepo, new(mockInviteRepo), new(mockUserRepo), new(mockMailer))
+
+	orgID, ownerID, targetID := uuid.New(), uuid.New(), uuid.New()
+	memberRepo.On("GetByOrgAndUser", mock.Anything, orgID, ownerID).Return(membership(orgID, ownerID, "owner"), nil)
+	memberRepo.On("GetByOrgAndUser", mock.Anything, orgID, targetID).Return(nil, apperr.NotFound("OrgMembership", ""))
+
+	err := svc.RemoveMember(context.Background(), orgID, ownerID, targetID)
+	require.Error(t, err)
+	assert.True(t, apperr.IsNotFound(err))
+}
+
+func TestUpdateMemberRole_TargetRepoError(t *testing.T) {
+	// Non-NotFound error from target GetByOrgAndUser → 500.
+	memberRepo := new(mockMemberRepo)
+	svc := newOrgService(new(mockOrgRepo), memberRepo, new(mockInviteRepo), new(mockUserRepo), new(mockMailer))
+	ctx := context.Background()
+
+	orgID, ownerID, targetID := uuid.New(), uuid.New(), uuid.New()
+	memberRepo.On("GetByOrgAndUser", ctx, orgID, ownerID).Return(membership(orgID, ownerID, "owner"), nil)
+	memberRepo.On("GetByOrgAndUser", ctx, orgID, targetID).Return(nil, assert.AnError)
+
+	err := svc.UpdateMemberRole(ctx, orgID, ownerID, targetID, "admin")
+	require.Error(t, err)
+	appErr, ok := apperr.AsAppError(err)
+	require.True(t, ok)
+	assert.Equal(t, 500, appErr.Status)
+}
+
+func TestUpdateMemberRole_AdminCannotGrantAdmin(t *testing.T) {
+	// Admins cannot promote others to admin — only the owner can.
+	memberRepo := new(mockMemberRepo)
+	svc := newOrgService(new(mockOrgRepo), memberRepo, new(mockInviteRepo), new(mockUserRepo), new(mockMailer))
+	ctx := context.Background()
+
+	orgID, adminID, targetID := uuid.New(), uuid.New(), uuid.New()
+	memberRepo.On("GetByOrgAndUser", ctx, orgID, adminID).Return(membership(orgID, adminID, "admin"), nil)
+
+	err := svc.UpdateMemberRole(ctx, orgID, adminID, targetID, "admin")
+	require.Error(t, err)
+	assert.True(t, apperr.IsForbidden(err))
+}
+
+func TestRemoveMember_DeleteError(t *testing.T) {
+	memberRepo := new(mockMemberRepo)
+	svc := newOrgService(new(mockOrgRepo), memberRepo, new(mockInviteRepo), new(mockUserRepo), new(mockMailer))
+
+	orgID, ownerID, targetID := uuid.New(), uuid.New(), uuid.New()
+	memberRepo.On("GetByOrgAndUser", mock.Anything, orgID, ownerID).Return(membership(orgID, ownerID, "owner"), nil)
+	memberRepo.On("GetByOrgAndUser", mock.Anything, orgID, targetID).Return(membership(orgID, targetID, "member"), nil)
+	memberRepo.On("Delete", mock.Anything, orgID, targetID).Return(assert.AnError)
+
+	err := svc.RemoveMember(context.Background(), orgID, ownerID, targetID)
+	require.Error(t, err)
+	appErr, ok := apperr.AsAppError(err)
+	require.True(t, ok)
+	assert.Equal(t, 500, appErr.Status)
+}
+
+func TestInviteUser_NotManager_Forbidden(t *testing.T) {
+	memberRepo := new(mockMemberRepo)
+	svc := newOrgService(new(mockOrgRepo), memberRepo, new(mockInviteRepo), new(mockUserRepo), new(mockMailer))
+
+	orgID, reqID := uuid.New(), uuid.New()
+	memberRepo.On("GetByOrgAndUser", mock.Anything, orgID, reqID).Return(membership(orgID, reqID, "member"), nil)
+
+	err := svc.InviteUser(context.Background(), orgID, reqID, "new@x.com", "member")
+	require.Error(t, err)
+	assert.True(t, apperr.IsForbidden(err))
+}
+
+func TestInviteUser_OrgNotFound(t *testing.T) {
+	orgRepo := new(mockOrgRepo)
+	memberRepo := new(mockMemberRepo)
+	svc := newOrgService(orgRepo, memberRepo, new(mockInviteRepo), new(mockUserRepo), new(mockMailer))
+
+	orgID, reqID := uuid.New(), uuid.New()
+	memberRepo.On("GetByOrgAndUser", mock.Anything, orgID, reqID).Return(membership(orgID, reqID, "owner"), nil)
+	orgRepo.On("GetByID", mock.Anything, orgID).Return(nil, apperr.NotFound("Organization", orgID.String()))
+
+	err := svc.InviteUser(context.Background(), orgID, reqID, "x@y.z", "member")
+	require.Error(t, err)
+}
+
+func TestInviteUser_InviterNotFound(t *testing.T) {
+	orgRepo := new(mockOrgRepo)
+	memberRepo := new(mockMemberRepo)
+	userRepo := new(mockUserRepo)
+	svc := newOrgService(orgRepo, memberRepo, new(mockInviteRepo), userRepo, new(mockMailer))
+
+	orgID, reqID := uuid.New(), uuid.New()
+	memberRepo.On("GetByOrgAndUser", mock.Anything, orgID, reqID).Return(membership(orgID, reqID, "owner"), nil)
+	orgRepo.On("GetByID", mock.Anything, orgID).Return(&entities.Organization{ID: orgID, Name: "Acme"}, nil)
+	userRepo.On("GetByID", mock.Anything, reqID).Return(nil, assert.AnError)
+
+	err := svc.InviteUser(context.Background(), orgID, reqID, "x@y.z", "member")
+	require.Error(t, err)
+	appErr, ok := apperr.AsAppError(err)
+	require.True(t, ok)
+	assert.Equal(t, 500, appErr.Status)
+}
+
+func TestInviteUser_UpsertError(t *testing.T) {
+	orgRepo := new(mockOrgRepo)
+	memberRepo := new(mockMemberRepo)
+	userRepo := new(mockUserRepo)
+	inviteRepo := new(mockInviteRepo)
+	svc := newOrgService(orgRepo, memberRepo, inviteRepo, userRepo, new(mockMailer))
+
+	orgID, reqID := uuid.New(), uuid.New()
+	memberRepo.On("GetByOrgAndUser", mock.Anything, orgID, reqID).Return(membership(orgID, reqID, "owner"), nil)
+	orgRepo.On("GetByID", mock.Anything, orgID).Return(&entities.Organization{ID: orgID, Name: "Acme"}, nil)
+	userRepo.On("GetByID", mock.Anything, reqID).Return(&entities.User{ID: reqID, Email: "o@x.y", FullName: "O"}, nil)
+	inviteRepo.On("Upsert", mock.Anything, mock.AnythingOfType("*entities.Invitation")).Return(assert.AnError)
+
+	err := svc.InviteUser(context.Background(), orgID, reqID, "x@y.z", "member")
+	require.Error(t, err)
+	appErr, ok := apperr.AsAppError(err)
+	require.True(t, ok)
+	assert.Equal(t, 500, appErr.Status)
+}
+
+func TestInviteUser_DefaultRoleWhenInvalid(t *testing.T) {
+	// Invalid role passed → defaults to "member" and succeeds.
+	orgRepo := new(mockOrgRepo)
+	memberRepo := new(mockMemberRepo)
+	userRepo := new(mockUserRepo)
+	inviteRepo := new(mockInviteRepo)
+	mailer := new(mockMailer)
+	svc := newOrgService(orgRepo, memberRepo, inviteRepo, userRepo, mailer)
+
+	orgID, reqID := uuid.New(), uuid.New()
+	memberRepo.On("GetByOrgAndUser", mock.Anything, orgID, reqID).Return(membership(orgID, reqID, "owner"), nil)
+	orgRepo.On("GetByID", mock.Anything, orgID).Return(&entities.Organization{ID: orgID, Name: "Acme"}, nil)
+	userRepo.On("GetByID", mock.Anything, reqID).Return(&entities.User{ID: reqID, Email: "o@x.y", FullName: "O"}, nil)
+	inviteRepo.On("Upsert", mock.Anything, mock.MatchedBy(func(inv *entities.Invitation) bool {
+		return inv.Role == "member" // defaulted
+	})).Return(nil)
+	mailer.On("Send", mock.Anything, mock.AnythingOfType("ports.EmailMessage")).Return(nil)
+
+	require.NoError(t, svc.InviteUser(context.Background(), orgID, reqID, "x@y.z", "supreme-leader"))
+}
+
+func TestAcceptInvitation_InvalidToken(t *testing.T) {
+	inviteRepo := new(mockInviteRepo)
+	svc := newOrgService(new(mockOrgRepo), new(mockMemberRepo), inviteRepo, new(mockUserRepo), new(mockMailer))
+
+	inviteRepo.On("GetByTokenHash", mock.Anything, mock.Anything).Return(nil, apperr.NotFound("Invitation", "x"))
+
+	_, err := svc.AcceptInvitation(context.Background(), uuid.New(), "bad-token")
+	require.Error(t, err)
+	appErr, ok := apperr.AsAppError(err)
+	require.True(t, ok)
+	assert.Equal(t, 400, appErr.Status)
+}
+
+func TestAcceptInvitation_UserNotFound(t *testing.T) {
+	inviteRepo := new(mockInviteRepo)
+	userRepo := new(mockUserRepo)
+	svc := newOrgService(new(mockOrgRepo), new(mockMemberRepo), inviteRepo, userRepo, new(mockMailer))
+
+	userID := uuid.New()
+	inv := &entities.Invitation{
+		ID: uuid.New(), OrgID: uuid.New(), Email: "a@x.y", TokenHash: "h",
+		ExpiresAt: time.Now().Add(time.Hour),
+	}
+	inviteRepo.On("GetByTokenHash", mock.Anything, mock.Anything).Return(inv, nil)
+	userRepo.On("GetByID", mock.Anything, userID).Return(nil, assert.AnError)
+
+	_, err := svc.AcceptInvitation(context.Background(), userID, "t")
+	require.Error(t, err)
+	appErr, ok := apperr.AsAppError(err)
+	require.True(t, ok)
+	assert.Equal(t, 401, appErr.Status)
+}
+
+func TestAcceptInvitation_CreateMembershipError(t *testing.T) {
+	orgRepo := new(mockOrgRepo)
+	memberRepo := new(mockMemberRepo)
+	inviteRepo := new(mockInviteRepo)
+	userRepo := new(mockUserRepo)
+	svc := newOrgService(orgRepo, memberRepo, inviteRepo, userRepo, new(mockMailer))
+
+	userID := uuid.New()
+	orgID := uuid.New()
+	inv := &entities.Invitation{
+		ID: uuid.New(), OrgID: orgID, Email: "a@x.y", TokenHash: "h",
+		Role: "member", ExpiresAt: time.Now().Add(time.Hour),
+	}
+	inviteRepo.On("GetByTokenHash", mock.Anything, mock.Anything).Return(inv, nil)
+	userRepo.On("GetByID", mock.Anything, userID).Return(&entities.User{ID: userID, Email: "a@x.y"}, nil)
+	orgRepo.On("GetByID", mock.Anything, orgID).Return(&entities.Organization{ID: orgID}, nil)
+	memberRepo.On("GetByOrgAndUser", mock.Anything, orgID, userID).Return(nil, apperr.NotFound("OrgMembership", ""))
+	memberRepo.On("Create", mock.Anything, mock.AnythingOfType("*entities.OrgMembership")).Return(assert.AnError)
+
+	_, err := svc.AcceptInvitation(context.Background(), userID, "t")
+	require.Error(t, err)
+	appErr, ok := apperr.AsAppError(err)
+	require.True(t, ok)
+	assert.Equal(t, 500, appErr.Status)
+}
+
+func TestAcceptInvitation_MarkAcceptedError_StillSucceeds(t *testing.T) {
+	// MarkAccepted failure is non-fatal — org is still returned.
+	orgRepo := new(mockOrgRepo)
+	memberRepo := new(mockMemberRepo)
+	inviteRepo := new(mockInviteRepo)
+	userRepo := new(mockUserRepo)
+	svc := newOrgService(orgRepo, memberRepo, inviteRepo, userRepo, new(mockMailer))
+
+	userID := uuid.New()
+	orgID := uuid.New()
+	inv := &entities.Invitation{
+		ID: uuid.New(), OrgID: orgID, Email: "a@x.y", TokenHash: "h",
+		Role: "member", ExpiresAt: time.Now().Add(time.Hour),
+	}
+	inviteRepo.On("GetByTokenHash", mock.Anything, mock.Anything).Return(inv, nil)
+	userRepo.On("GetByID", mock.Anything, userID).Return(&entities.User{ID: userID, Email: "a@x.y"}, nil)
+	orgRepo.On("GetByID", mock.Anything, orgID).Return(&entities.Organization{ID: orgID}, nil)
+	memberRepo.On("GetByOrgAndUser", mock.Anything, orgID, userID).
+		Return(&entities.OrgMembership{OrgID: orgID, UserID: userID, Role: "member"}, nil) // already member
+	inviteRepo.On("MarkAccepted", mock.Anything, mock.Anything).Return(assert.AnError)
+
+	org, err := svc.AcceptInvitation(context.Background(), userID, "t")
+	require.NoError(t, err)
+	assert.Equal(t, orgID, org.ID)
+}
+
+func TestAcceptInvitation_OrgNotFound(t *testing.T) {
+	orgRepo := new(mockOrgRepo)
+	inviteRepo := new(mockInviteRepo)
+	userRepo := new(mockUserRepo)
+	svc := newOrgService(orgRepo, new(mockMemberRepo), inviteRepo, userRepo, new(mockMailer))
+
+	userID := uuid.New()
+	orgID := uuid.New()
+	inv := &entities.Invitation{
+		ID: uuid.New(), OrgID: orgID, Email: "a@x.y", TokenHash: "h",
+		ExpiresAt: time.Now().Add(time.Hour),
+	}
+	inviteRepo.On("GetByTokenHash", mock.Anything, mock.Anything).Return(inv, nil)
+	userRepo.On("GetByID", mock.Anything, userID).Return(&entities.User{ID: userID, Email: "a@x.y"}, nil)
+	orgRepo.On("GetByID", mock.Anything, orgID).Return(nil, assert.AnError)
+
+	_, err := svc.AcceptInvitation(context.Background(), userID, "t")
+	require.Error(t, err)
+}
+
+func TestUpdateOrganization_EmptyName(t *testing.T) {
+	svc := newOrgService(new(mockOrgRepo), new(mockMemberRepo), new(mockInviteRepo), new(mockUserRepo), new(mockMailer))
+
+	_, err := svc.UpdateOrganization(context.Background(), uuid.New(), uuid.New(), "   ")
+	require.Error(t, err)
+	appErr, ok := apperr.AsAppError(err)
+	require.True(t, ok)
+	assert.Equal(t, 422, appErr.Status)
+}
+
+func TestUpdateOrganization_OrgGetByIDError(t *testing.T) {
+	orgRepo := new(mockOrgRepo)
+	memberRepo := new(mockMemberRepo)
+	svc := newOrgService(orgRepo, memberRepo, new(mockInviteRepo), new(mockUserRepo), new(mockMailer))
+
+	orgID, reqID := uuid.New(), uuid.New()
+	memberRepo.On("GetByOrgAndUser", mock.Anything, orgID, reqID).Return(membership(orgID, reqID, "admin"), nil)
+	orgRepo.On("GetByID", mock.Anything, orgID).Return(nil, apperr.NotFound("Organization", orgID.String()))
+
+	_, err := svc.UpdateOrganization(context.Background(), orgID, reqID, "New Name")
+	require.Error(t, err)
+}
+
+func TestUpdateOrganization_UpdateRepoError(t *testing.T) {
+	orgRepo := new(mockOrgRepo)
+	memberRepo := new(mockMemberRepo)
+	svc := newOrgService(orgRepo, memberRepo, new(mockInviteRepo), new(mockUserRepo), new(mockMailer))
+
+	orgID, reqID := uuid.New(), uuid.New()
+	org := &entities.Organization{ID: orgID, Name: "Old", OwnerID: reqID}
+	memberRepo.On("GetByOrgAndUser", mock.Anything, orgID, reqID).Return(membership(orgID, reqID, "admin"), nil)
+	orgRepo.On("GetByID", mock.Anything, orgID).Return(org, nil)
+	orgRepo.On("Update", mock.Anything, mock.AnythingOfType("*entities.Organization")).Return(nil, assert.AnError)
+
+	_, err := svc.UpdateOrganization(context.Background(), orgID, reqID, "New")
+	require.Error(t, err)
+	appErr, ok := apperr.AsAppError(err)
+	require.True(t, ok)
+	assert.Equal(t, 500, appErr.Status)
+}
+
+func TestDeleteOrganization_NotOwner(t *testing.T) {
+	memberRepo := new(mockMemberRepo)
+	svc := newOrgService(new(mockOrgRepo), memberRepo, new(mockInviteRepo), new(mockUserRepo), new(mockMailer))
+
+	orgID, reqID := uuid.New(), uuid.New()
+	memberRepo.On("GetByOrgAndUser", mock.Anything, orgID, reqID).Return(membership(orgID, reqID, "admin"), nil)
+
+	err := svc.DeleteOrganization(context.Background(), orgID, reqID)
+	require.Error(t, err)
+	assert.True(t, apperr.IsForbidden(err))
+}
+
+func TestDeleteOrganization_SoftDeleteError(t *testing.T) {
+	orgRepo := new(mockOrgRepo)
+	memberRepo := new(mockMemberRepo)
+	svc := newOrgService(orgRepo, memberRepo, new(mockInviteRepo), new(mockUserRepo), new(mockMailer))
+
+	orgID, reqID := uuid.New(), uuid.New()
+	memberRepo.On("GetByOrgAndUser", mock.Anything, orgID, reqID).Return(membership(orgID, reqID, "owner"), nil)
+	orgRepo.On("SoftDelete", mock.Anything, orgID).Return(assert.AnError)
+
+	err := svc.DeleteOrganization(context.Background(), orgID, reqID)
+	require.Error(t, err)
+	appErr, ok := apperr.AsAppError(err)
+	require.True(t, ok)
+	assert.Equal(t, 500, appErr.Status)
+}
+
 func TestUpdateMemberRole_UpdateError(t *testing.T) {
 	memberRepo := new(mockMemberRepo)
 	svc := newOrgService(new(mockOrgRepo), memberRepo, new(mockInviteRepo), new(mockUserRepo), new(mockMailer))

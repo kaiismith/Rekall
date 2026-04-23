@@ -297,6 +297,23 @@ func TestMeHandler_Unauthenticated(t *testing.T) {
 	assert.Equal(t, http.StatusUnauthorized, w.Code)
 }
 
+// TestMeHandler_NoClaims_InContext directly hits Me without any auth middleware,
+// so CallerID returns an error (no claims in context) — covers the 401 branch
+// inside the handler itself (not the pre-empt from Authenticate middleware).
+func TestMeHandler_NoClaims_InContext(t *testing.T) {
+	svc := newAuthService(new(mockUserRepo), new(mockTokenRepo), new(mockMailer))
+	h := handlers.NewAuthHandler(svc, 7*24*time.Hour, zap.NewNop())
+
+	r := gin.New()
+	r.GET("/auth/me", h.Me) // no middleware → claims absent
+
+	w := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodGet, "/auth/me", nil)
+	r.ServeHTTP(w, req)
+
+	assert.Equal(t, http.StatusUnauthorized, w.Code)
+}
+
 // ─── Refresh ──────────────────────────────────────────────────────────────────
 
 func TestRefreshHandler_Success(t *testing.T) {
