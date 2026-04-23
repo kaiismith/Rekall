@@ -636,6 +636,112 @@ func TestUpdateDeptMemberRole_HeadCannotPromoteToHead(t *testing.T) {
 	assert.Equal(t, 403, appErr.Status)
 }
 
+func TestCreateDepartment_NameTooLong(t *testing.T) {
+	svc := newDeptService(new(mockDeptRepo), new(mockDeptMemberRepo), new(mockMemberRepo))
+
+	longName := make([]byte, 101)
+	for i := range longName {
+		longName[i] = 'a'
+	}
+	_, err := svc.CreateDepartment(context.Background(), uuid.New(), uuid.New(), string(longName), "desc")
+	require.Error(t, err)
+	appErr, ok := apperr.AsAppError(err)
+	require.True(t, ok)
+	assert.Equal(t, 422, appErr.Status)
+}
+
+func TestCreateDepartment_CreateRepoError(t *testing.T) {
+	deptRepo := new(mockDeptRepo)
+	memberRepo := new(mockMemberRepo)
+	svc := newDeptService(deptRepo, new(mockDeptMemberRepo), memberRepo)
+	ctx := context.Background()
+
+	orgID, adminID := uuid.New(), uuid.New()
+	memberRepo.On("GetByOrgAndUser", ctx, orgID, adminID).Return(orgMembership(orgID, adminID, "admin"), nil)
+	deptRepo.On("Create", ctx, mock.AnythingOfType("*entities.Department")).Return(nil, assert.AnError)
+
+	_, err := svc.CreateDepartment(ctx, orgID, adminID, "Eng", "")
+	require.Error(t, err)
+	appErr, ok := apperr.AsAppError(err)
+	require.True(t, ok)
+	assert.Equal(t, 500, appErr.Status)
+}
+
+func TestUpdateDepartment_UpdateRepoError(t *testing.T) {
+	deptRepo := new(mockDeptRepo)
+	memberRepo := new(mockMemberRepo)
+	svc := newDeptService(deptRepo, new(mockDeptMemberRepo), memberRepo)
+	ctx := context.Background()
+
+	orgID, adminID := uuid.New(), uuid.New()
+	dept := department(orgID)
+	deptRepo.On("GetByID", ctx, dept.ID).Return(dept, nil)
+	memberRepo.On("GetByOrgAndUser", ctx, orgID, adminID).Return(orgMembership(orgID, adminID, "admin"), nil)
+	deptRepo.On("Update", ctx, mock.AnythingOfType("*entities.Department")).Return(nil, assert.AnError)
+
+	_, err := svc.UpdateDepartment(ctx, dept.ID, adminID, "NewName", "desc")
+	require.Error(t, err)
+	appErr, ok := apperr.AsAppError(err)
+	require.True(t, ok)
+	assert.Equal(t, 500, appErr.Status)
+}
+
+func TestAddDeptMember_DeptNotFound(t *testing.T) {
+	deptRepo := new(mockDeptRepo)
+	svc := newDeptService(deptRepo, new(mockDeptMemberRepo), new(mockMemberRepo))
+
+	deptID := uuid.New()
+	deptRepo.On("GetByID", mock.Anything, deptID).Return(nil, apperr.NotFound("Department", deptID.String()))
+
+	err := svc.AddDeptMember(context.Background(), deptID, uuid.New(), uuid.New(), "member")
+	require.Error(t, err)
+	assert.True(t, apperr.IsNotFound(err))
+}
+
+func TestAddDeptMember_CreateError(t *testing.T) {
+	deptRepo := new(mockDeptRepo)
+	deptMemberRepo := new(mockDeptMemberRepo)
+	memberRepo := new(mockMemberRepo)
+	svc := newDeptService(deptRepo, deptMemberRepo, memberRepo)
+	ctx := context.Background()
+
+	orgID, adminID, targetID := uuid.New(), uuid.New(), uuid.New()
+	dept := department(orgID)
+
+	deptRepo.On("GetByID", ctx, dept.ID).Return(dept, nil)
+	memberRepo.On("GetByOrgAndUser", ctx, orgID, adminID).Return(orgMembership(orgID, adminID, "admin"), nil)
+	memberRepo.On("GetByOrgAndUser", ctx, orgID, targetID).Return(orgMembership(orgID, targetID, "member"), nil)
+	deptMemberRepo.On("GetByDeptAndUser", ctx, dept.ID, targetID).Return(nil, apperr.NotFound("DeptMembership", ""))
+	deptMemberRepo.On("Create", ctx, mock.AnythingOfType("*entities.DepartmentMembership")).Return(assert.AnError)
+
+	err := svc.AddDeptMember(ctx, dept.ID, adminID, targetID, "member")
+	require.Error(t, err)
+	appErr, ok := apperr.AsAppError(err)
+	require.True(t, ok)
+	assert.Equal(t, 500, appErr.Status)
+}
+
+func TestAddDeptMember_UpdateError(t *testing.T) {
+	deptRepo := new(mockDeptRepo)
+	deptMemberRepo := new(mockDeptMemberRepo)
+	memberRepo := new(mockMemberRepo)
+	svc := newDeptService(deptRepo, deptMemberRepo, memberRepo)
+	ctx := context.Background()
+
+	orgID, adminID, targetID := uuid.New(), uuid.New(), uuid.New()
+	dept := department(orgID)
+
+	deptRepo.On("GetByID", ctx, dept.ID).Return(dept, nil)
+	memberRepo.On("GetByOrgAndUser", ctx, orgID, adminID).Return(orgMembership(orgID, adminID, "admin"), nil)
+	memberRepo.On("GetByOrgAndUser", ctx, orgID, targetID).Return(orgMembership(orgID, targetID, "member"), nil)
+	deptMemberRepo.On("GetByDeptAndUser", ctx, dept.ID, targetID).
+		Return(deptMembership(dept.ID, targetID, "member"), nil) // already a member
+	deptMemberRepo.On("Update", ctx, mock.AnythingOfType("*entities.DepartmentMembership")).Return(assert.AnError)
+
+	err := svc.AddDeptMember(ctx, dept.ID, adminID, targetID, "head")
+	require.Error(t, err)
+}
+
 func TestUpdateDeptMemberRole_InvalidRole(t *testing.T) {
 	svc := newDeptService(new(mockDeptRepo), new(mockDeptMemberRepo), new(mockMemberRepo))
 

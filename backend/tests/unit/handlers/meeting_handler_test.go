@@ -3,6 +3,8 @@ package handlers_test
 import (
 	"encoding/json"
 	"net/http"
+	"net/http/httptest"
+	"strings"
 	"testing"
 	"time"
 
@@ -447,6 +449,91 @@ func TestMeetingConnectHandler_CanJoinError(t *testing.T) {
 	// not return 200 or attempt a WS upgrade when CanJoin errors.
 	assert.GreaterOrEqual(t, w.Code, http.StatusBadRequest)
 	mr.AssertExpectations(t)
+}
+
+// injectBadClaims plants claims whose Subject is not a UUID, so SubjectAsUUID()
+// returns an error. Used to exercise the "invalid token subject" branch.
+func injectBadClaims(role string) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		claims := &infraauth.Claims{
+			RegisteredClaims: jwt.RegisteredClaims{Subject: "not-a-uuid"},
+			Email:            "test@example.com",
+			Role:             role,
+		}
+		c.Set("auth_claims", claims)
+		c.Next()
+	}
+}
+
+func TestMeetingCreateHandler_BadSubject(t *testing.T) {
+	mr := new(mockMeetingRepo)
+	pr := new(mockParticipantRepo)
+	h := newMeetingHandler(newMeetingService(mr, pr))
+
+	r := gin.New()
+	r.Use(injectBadClaims("member"))
+	r.POST("/meetings", h.Create)
+
+	body := jsonBody(t, dto.CreateMeetingRequest{Type: "open", Title: "T"})
+	w := doRequest(r, http.MethodPost, "/meetings", body)
+	assert.Equal(t, http.StatusUnauthorized, w.Code)
+}
+
+func TestMeetingListMineHandler_BadSubject(t *testing.T) {
+	mr := new(mockMeetingRepo)
+	pr := new(mockParticipantRepo)
+	h := newMeetingHandler(newMeetingService(mr, pr))
+
+	r := gin.New()
+	r.Use(injectBadClaims("member"))
+	r.GET("/meetings/mine", h.ListMine)
+
+	w := doRequest(r, http.MethodGet, "/meetings/mine", nil)
+	assert.Equal(t, http.StatusUnauthorized, w.Code)
+}
+
+func TestMeetingEndHandler_BadSubject(t *testing.T) {
+	mr := new(mockMeetingRepo)
+	pr := new(mockParticipantRepo)
+	h := newMeetingHandler(newMeetingService(mr, pr))
+
+	r := gin.New()
+	r.Use(injectBadClaims("member"))
+	r.DELETE("/meetings/:code", h.End)
+
+	w := doRequest(r, http.MethodDelete, "/meetings/abc", nil)
+	assert.Equal(t, http.StatusUnauthorized, w.Code)
+}
+
+func TestMeetingCreateHandler_InvalidBody(t *testing.T) {
+	hostID := uuid.New()
+	mr := new(mockMeetingRepo)
+	pr := new(mockParticipantRepo)
+	h := newMeetingHandler(newMeetingService(mr, pr))
+	r := newMeetingRouter(h, hostID)
+
+	// Malformed JSON body.
+	req := httptest.NewRequest(http.MethodPost, "/meetings", strings.NewReader("not json"))
+	req.Header.Set("Content-Type", "application/json")
+	w := httptest.NewRecorder()
+	r.ServeHTTP(w, req)
+
+	assert.Equal(t, http.StatusBadRequest, w.Code)
+}
+
+func TestMeetingListMineHandler_ServiceError2(t *testing.T) {
+	// Service error → 5xx (different from existing ServiceError test).
+	hostID := uuid.New()
+	mr := new(mockMeetingRepo)
+	pr := new(mockParticipantRepo)
+	h := newMeetingHandler(newMeetingService(mr, pr))
+	r := newMeetingRouter(h, hostID)
+
+	mr.On("ListByUser", mock.Anything, hostID, mock.Anything).
+		Return([]*ports.MeetingListItem(nil), assert.AnError)
+
+	w := doRequest(r, http.MethodGet, "/meetings/mine", nil)
+	assert.NotEqual(t, http.StatusOK, w.Code)
 }
 
 func TestMeetingConnectHandler_InvalidSubjectUUID(t *testing.T) {

@@ -13,6 +13,7 @@ import (
 	"github.com/rekall/backend/internal/application/services"
 	httpiface "github.com/rekall/backend/internal/interfaces/http"
 	"github.com/rekall/backend/internal/interfaces/http/handlers"
+	wsHub "github.com/rekall/backend/internal/interfaces/http/ws"
 	"github.com/rekall/backend/pkg/config"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -178,6 +179,31 @@ func TestNewRouter_MeetingHNil_SkipsMeetingRoutes(t *testing.T) {
 	assert.Contains(t, []int{http.StatusNotFound, http.StatusUnauthorized}, w.Code)
 }
 
+func TestNewRouter_MeetingHWired_RegistersMeetingRoutes(t *testing.T) {
+	// Supply a MeetingH so the non-nil branch in NewRouter fires.
+	deps := newTestDeps(t)
+	log := zap.NewNop()
+	meetingSvc := services.NewMeetingService(nil, nil, nil, nil, "http://rekall.test", log)
+	manager := wsHub.NewHubManager(log)
+	deps.MeetingH = handlers.NewMeetingHandler(meetingSvc, manager, "http://rekall.test",
+		deps.JWTSecret, deps.JWTIssuer, log)
+
+	r := httpiface.NewRouter(deps)
+
+	// Verify the authenticated meetings route exists (returns 401 without auth, not 404).
+	w := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/meetings/mine", nil)
+	r.ServeHTTP(w, req)
+	assert.Equal(t, http.StatusUnauthorized, w.Code)
+
+	// Verify the WS endpoint is registered (public, no JWT middleware).
+	w2 := httptest.NewRecorder()
+	req2 := httptest.NewRequest(http.MethodGet, "/api/v1/meetings/abc-defg-hij/ws", nil)
+	r.ServeHTTP(w2, req2)
+	// The Connect handler rejects missing token with 401 (not 404).
+	assert.Equal(t, http.StatusUnauthorized, w2.Code)
+}
+
 // ─── Server ──────────────────────────────────────────────────────────────────
 
 func TestNewServer_Constructs(t *testing.T) {
@@ -190,6 +216,25 @@ func TestNewServer_Constructs(t *testing.T) {
 	router := gin.New()
 	s := httpiface.NewServer(cfg, router, zap.NewNop())
 	assert.NotNil(t, s)
+}
+
+func TestServer_Start_BindError(t *testing.T) {
+	// Bind to port 1 (reserved) → ListenAndServe returns a non-ErrServerClosed error.
+	cfg := config.ServerConfig{
+		Port:         "1",
+		ReadTimeout:  time.Second,
+		WriteTimeout: time.Second,
+		IdleTimeout:  time.Second,
+	}
+	s := httpiface.NewServer(cfg, gin.New(), zap.NewNop())
+
+	err := s.Start()
+	// Expected: permission denied / address in use / bind error wrapped as "server: ..."
+	if err != nil {
+		assert.Contains(t, err.Error(), "server:")
+	}
+	// On some systems port 1 may bind (running as root in CI container),
+	// so tolerate both paths. We at least hit the wrapping branch when it fails.
 }
 
 func TestServer_StartAndShutdown(t *testing.T) {

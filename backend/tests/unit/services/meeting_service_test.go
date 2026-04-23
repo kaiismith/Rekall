@@ -283,6 +283,238 @@ func TestCreateMeeting_CountActiveError(t *testing.T) {
 	assert.Equal(t, 500, appErr.Status)
 }
 
+func TestCanJoin_MalformedPrivateMeeting_NoScope(t *testing.T) {
+	// Private meeting with nil ScopeID → deny (malformed).
+	mr := new(mockMeetingRepo)
+	pr := new(mockParticipantRepo)
+	svc := newTestMeetingService(mr, pr, new(meetingMockOrgMemberRepo), new(meetingMockDeptMemberRepo))
+
+	meeting := openMeeting(uuid.New())
+	meeting.Type = entities.MeetingTypePrivate
+	meeting.ScopeID = nil
+	meeting.ScopeType = nil
+
+	pr.On("CountActive", mock.Anything, meeting.ID).Return(int64(0), nil)
+
+	result, err := svc.CanJoin(context.Background(), meeting, uuid.New())
+	require.NoError(t, err)
+	assert.Equal(t, services.CanJoinDenied, result)
+}
+
+func TestCanJoin_ScopeAssertionUnexpectedError(t *testing.T) {
+	// Non-NotFound/Forbidden error from assertScopeMember → return Denied + error.
+	mr := new(mockMeetingRepo)
+	pr := new(mockParticipantRepo)
+	orgMem := new(meetingMockOrgMemberRepo)
+	svc := newTestMeetingService(mr, pr, orgMem, new(meetingMockDeptMemberRepo))
+
+	orgID := uuid.New()
+	meeting := privateMeeting(uuid.New(), orgID)
+
+	pr.On("CountActive", mock.Anything, meeting.ID).Return(int64(0), nil)
+	orgMem.On("GetByOrgAndUser", mock.Anything, orgID, mock.AnythingOfType("uuid.UUID")).
+		Return(nil, assert.AnError) // unexpected error
+
+	_, err := svc.CanJoin(context.Background(), meeting, uuid.New())
+	require.Error(t, err)
+}
+
+func TestAssertScopeMember_DeptScope(t *testing.T) {
+	// Exercises the dept-scope branch of assertScopeMember via a private
+	// meeting with scope=department.
+	mr := new(mockMeetingRepo)
+	pr := new(mockParticipantRepo)
+	orgMem := new(meetingMockOrgMemberRepo)
+	deptMem := new(meetingMockDeptMemberRepo)
+	svc := newTestMeetingService(mr, pr, orgMem, deptMem)
+
+	deptID := uuid.New()
+	scopeType := entities.MeetingScopeDept
+	meeting := &entities.Meeting{
+		ID:              uuid.New(),
+		Code:            "xyz",
+		Type:            entities.MeetingTypePrivate,
+		HostID:          uuid.New(),
+		Status:          entities.MeetingStatusWaiting,
+		MaxParticipants: 50,
+		ScopeType:       &scopeType,
+		ScopeID:         &deptID,
+	}
+
+	pr.On("CountActive", mock.Anything, meeting.ID).Return(int64(0), nil)
+	deptMem.On("GetByDeptAndUser", mock.Anything, deptID, mock.AnythingOfType("uuid.UUID")).
+		Return(&entities.DepartmentMembership{}, nil)
+
+	result, err := svc.CanJoin(context.Background(), meeting, uuid.New())
+	require.NoError(t, err)
+	assert.Equal(t, services.CanJoinDirect, result)
+}
+
+func TestAssertScopeMember_UnknownScope(t *testing.T) {
+	// Exercises the "unknown scope_type" branch via a private meeting with a
+	// bogus scope_type. CanJoin propagates the error as Denied.
+	mr := new(mockMeetingRepo)
+	pr := new(mockParticipantRepo)
+	svc := newTestMeetingService(mr, pr, new(meetingMockOrgMemberRepo), new(meetingMockDeptMemberRepo))
+
+	bogus := "team"
+	id := uuid.New()
+	meeting := &entities.Meeting{
+		ID:              uuid.New(),
+		Code:            "xyz",
+		Type:            entities.MeetingTypePrivate,
+		HostID:          uuid.New(),
+		Status:          entities.MeetingStatusWaiting,
+		MaxParticipants: 50,
+		ScopeType:       &bogus,
+		ScopeID:         &id,
+	}
+
+	pr.On("CountActive", mock.Anything, meeting.ID).Return(int64(0), nil)
+
+	// assertScopeMember returns BadRequest for unknown scope → caller receives
+	// Denied with the error.
+	_, err := svc.CanJoin(context.Background(), meeting, uuid.New())
+	require.Error(t, err)
+}
+
+func TestRecordJoin_GetParticipantError(t *testing.T) {
+	mr := new(mockMeetingRepo)
+	pr := new(mockParticipantRepo)
+	svc := newTestMeetingService(mr, pr, new(meetingMockOrgMemberRepo), new(meetingMockDeptMemberRepo))
+
+	meeting := openMeeting(uuid.New())
+	userID := uuid.New()
+	pr.On("GetByMeetingAndUser", mock.Anything, meeting.ID, userID).Return(nil, assert.AnError)
+
+	err := svc.RecordJoin(context.Background(), meeting, userID, "participant")
+	require.Error(t, err)
+	appErr, ok := apperr.AsAppError(err)
+	require.True(t, ok)
+	assert.Equal(t, 500, appErr.Status)
+}
+
+func TestRecordJoin_UpdateParticipantError(t *testing.T) {
+	mr := new(mockMeetingRepo)
+	pr := new(mockParticipantRepo)
+	svc := newTestMeetingService(mr, pr, new(meetingMockOrgMemberRepo), new(meetingMockDeptMemberRepo))
+
+	meeting := openMeeting(uuid.New())
+	userID := uuid.New()
+	now := time.Now()
+	existing := &entities.MeetingParticipant{
+		MeetingID: meeting.ID, UserID: userID, Role: "participant",
+		JoinedAt: &now, LeftAt: &now,
+	}
+	pr.On("GetByMeetingAndUser", mock.Anything, meeting.ID, userID).Return(existing, nil)
+	pr.On("Update", mock.Anything, mock.AnythingOfType("*entities.MeetingParticipant")).Return(assert.AnError)
+
+	err := svc.RecordJoin(context.Background(), meeting, userID, "participant")
+	require.Error(t, err)
+}
+
+func TestRecordJoin_CreateParticipantError(t *testing.T) {
+	mr := new(mockMeetingRepo)
+	pr := new(mockParticipantRepo)
+	svc := newTestMeetingService(mr, pr, new(meetingMockOrgMemberRepo), new(meetingMockDeptMemberRepo))
+
+	meeting := openMeeting(uuid.New())
+	userID := uuid.New()
+	pr.On("GetByMeetingAndUser", mock.Anything, meeting.ID, userID).
+		Return(nil, apperr.NotFound("participant", ""))
+	pr.On("Create", mock.Anything, mock.AnythingOfType("*entities.MeetingParticipant")).Return(assert.AnError)
+
+	err := svc.RecordJoin(context.Background(), meeting, userID, "participant")
+	require.Error(t, err)
+}
+
+func TestRecordJoin_UpdateMeetingError(t *testing.T) {
+	mr := new(mockMeetingRepo)
+	pr := new(mockParticipantRepo)
+	svc := newTestMeetingService(mr, pr, new(meetingMockOrgMemberRepo), new(meetingMockDeptMemberRepo))
+
+	// Waiting meeting → RecordJoin will transition to active → calls Update.
+	meeting := openMeeting(uuid.New())
+	meeting.Status = entities.MeetingStatusWaiting
+	userID := uuid.New()
+
+	pr.On("GetByMeetingAndUser", mock.Anything, meeting.ID, userID).
+		Return(nil, apperr.NotFound("participant", ""))
+	pr.On("Create", mock.Anything, mock.AnythingOfType("*entities.MeetingParticipant")).Return(nil)
+	mr.On("Update", mock.Anything, mock.AnythingOfType("*entities.Meeting")).Return(assert.AnError)
+
+	err := svc.RecordJoin(context.Background(), meeting, userID, "participant")
+	require.Error(t, err)
+}
+
+func TestRecordLeave_ParticipantNotFound(t *testing.T) {
+	mr := new(mockMeetingRepo)
+	pr := new(mockParticipantRepo)
+	svc := newTestMeetingService(mr, pr, new(meetingMockOrgMemberRepo), new(meetingMockDeptMemberRepo))
+
+	meeting := openMeeting(uuid.New())
+	userID := uuid.New()
+	pr.On("GetByMeetingAndUser", mock.Anything, meeting.ID, userID).
+		Return(nil, apperr.NotFound("participant", ""))
+
+	err := svc.RecordLeave(context.Background(), meeting, userID)
+	require.Error(t, err)
+	assert.True(t, apperr.IsNotFound(err))
+}
+
+func TestRecordLeave_UpdateError(t *testing.T) {
+	mr := new(mockMeetingRepo)
+	pr := new(mockParticipantRepo)
+	svc := newTestMeetingService(mr, pr, new(meetingMockOrgMemberRepo), new(meetingMockDeptMemberRepo))
+
+	meeting := openMeeting(uuid.New())
+	userID := uuid.New()
+	now := time.Now()
+	pr.On("GetByMeetingAndUser", mock.Anything, meeting.ID, userID).
+		Return(&entities.MeetingParticipant{
+			MeetingID: meeting.ID, UserID: userID, Role: "participant", JoinedAt: &now,
+		}, nil)
+	pr.On("Update", mock.Anything, mock.AnythingOfType("*entities.MeetingParticipant")).Return(assert.AnError)
+
+	err := svc.RecordLeave(context.Background(), meeting, userID)
+	require.Error(t, err)
+}
+
+func TestEndMeeting_AlreadyEnded_Noop2(t *testing.T) {
+	// Covers the early return when meeting.IsEnded() already.
+	svc := newTestMeetingService(new(mockMeetingRepo), new(mockParticipantRepo), new(meetingMockOrgMemberRepo), new(meetingMockDeptMemberRepo))
+
+	ended := openMeeting(uuid.New())
+	ended.Status = entities.MeetingStatusEnded
+
+	require.NoError(t, svc.EndMeeting(context.Background(), ended))
+}
+
+func TestEndMeeting_UpdateError(t *testing.T) {
+	mr := new(mockMeetingRepo)
+	pr := new(mockParticipantRepo)
+	svc := newTestMeetingService(mr, pr, new(meetingMockOrgMemberRepo), new(meetingMockDeptMemberRepo))
+
+	meeting := openMeeting(uuid.New())
+	mr.On("Update", mock.Anything, mock.AnythingOfType("*entities.Meeting")).Return(assert.AnError)
+
+	err := svc.EndMeeting(context.Background(), meeting)
+	require.Error(t, err)
+}
+
+func TestEndMeeting_MarkAllLeftError(t *testing.T) {
+	mr := new(mockMeetingRepo)
+	pr := new(mockParticipantRepo)
+	svc := newTestMeetingService(mr, pr, new(meetingMockOrgMemberRepo), new(meetingMockDeptMemberRepo))
+
+	meeting := openMeeting(uuid.New())
+	mr.On("Update", mock.Anything, mock.AnythingOfType("*entities.Meeting")).Return(nil)
+	pr.On("MarkAllLeft", mock.Anything, meeting.ID).Return(assert.AnError)
+
+	err := svc.EndMeeting(context.Background(), meeting)
+	require.Error(t, err)
+}
+
 func TestCreateMeeting_RepoCreateError(t *testing.T) {
 	mr := new(mockMeetingRepo)
 	svc := newTestMeetingService(mr, new(mockParticipantRepo), new(meetingMockOrgMemberRepo), new(meetingMockDeptMemberRepo))

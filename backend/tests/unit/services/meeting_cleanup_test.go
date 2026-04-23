@@ -135,6 +135,21 @@ func TestCleanupJob_ErrorInOnePhase_OtherPhasesStillRun(t *testing.T) {
 	mr.AssertNumberOfCalls(t, "Update", 1)
 }
 
+func TestCleanupJob_AbandonedFindError(t *testing.T) {
+	// Error in FindActiveWithNoParticipants — phase 3 errors don't crash.
+	mr := new(mockMeetingRepo)
+	pr := new(mockParticipantRepo)
+
+	mr.On("FindStaleWaiting", mock.Anything, mock.Anything).Return([]*entities.Meeting{}, nil)
+	mr.On("FindStaleActive", mock.Anything, mock.Anything).Return([]*entities.Meeting{}, nil)
+	mr.On("FindActiveWithNoParticipants", mock.Anything).Return([]*entities.Meeting{}, errors.New("db failure"))
+
+	require.NotPanics(t, func() {
+		newTestCleanupJob(mr, pr).RunOnce(context.Background())
+	})
+	mr.AssertNotCalled(t, "Update")
+}
+
 func TestCleanupJob_AutoEndUpdateError(t *testing.T) {
 	// Covers autoEnd's meetingRepo.Update error branch.
 	mr := new(mockMeetingRepo)
