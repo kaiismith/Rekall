@@ -1,6 +1,36 @@
 import { apiClient } from './api'
 import type { ApiResponse } from '@/types/common'
-import type { Meeting, CreateMeetingPayload, ListMeetingsParams } from '@/types/meeting'
+import type {
+  Meeting,
+  CreateMeetingPayload,
+  ListMeetingsParams,
+  ChatMessage,
+  ListChatMessagesResponse,
+} from '@/types/meeting'
+
+/** Raw chat message shape returned by the backend (snake_case, ISO timestamp). */
+interface RawChatMessage {
+  id: string
+  meeting_id: string
+  user_id: string
+  body: string
+  sent_at: string
+}
+
+/** Raw chat history response envelope. */
+interface RawChatListData {
+  messages: RawChatMessage[]
+  has_more: boolean
+}
+
+function normaliseChatMessage(raw: RawChatMessage): ChatMessage {
+  return {
+    id: raw.id,
+    userId: raw.user_id,
+    body: raw.body,
+    sentAt: new Date(raw.sent_at).getTime(),
+  }
+}
 
 export const meetingService = {
   /** Create a new meeting. */
@@ -28,6 +58,30 @@ export const meetingService = {
   /** End a meeting (host only). */
   async end(code: string): Promise<void> {
     await apiClient.delete(`/meetings/${code}`)
+  },
+
+  /**
+   * Fetch the chat message history for a meeting.
+   * `before` is an RFC3339 cursor — when set, only messages strictly older
+   * than that timestamp are returned. `limit` defaults to 50 server-side and
+   * is clamped to [1, 100].
+   */
+  async listMessages(
+    code: string,
+    params?: { before?: string; limit?: number },
+  ): Promise<ListChatMessagesResponse> {
+    const qs = new URLSearchParams()
+    if (params?.before) qs.set('before', params.before)
+    if (params?.limit != null) qs.set('limit', String(params.limit))
+    const query = qs.toString() ? `?${qs.toString()}` : ''
+    const response = await apiClient.get<ApiResponse<RawChatListData>>(
+      `/meetings/${code}/messages${query}`,
+    )
+    const { messages, has_more } = response.data.data
+    return {
+      messages: messages.map(normaliseChatMessage),
+      has_more,
+    }
   },
 
   /**

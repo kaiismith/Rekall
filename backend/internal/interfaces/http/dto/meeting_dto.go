@@ -101,3 +101,43 @@ type MeetingListResponse struct {
 	Success bool              `json:"success" example:"true"`
 	Data    []MeetingResponse `json:"data"`
 }
+
+// ─── Chat message DTOs ────────────────────────────────────────────────────────
+
+// ChatMessage is the outbound representation of a MeetingMessage.
+type ChatMessage struct {
+	ID        uuid.UUID `json:"id"`
+	MeetingID uuid.UUID `json:"meeting_id"`
+	UserID    uuid.UUID `json:"user_id"`
+	Body      string    `json:"body"`
+	SentAt    time.Time `json:"sent_at"`
+}
+
+// ChatMessageListPayload is the data body of a chat history response.
+// `HasMore` is true when additional older pages exist beyond the returned slice.
+type ChatMessageListPayload struct {
+	Messages []ChatMessage `json:"messages"`
+	HasMore  bool          `json:"has_more"`
+}
+
+// ChatMessageListResponse wraps a chat history page in the standard envelope.
+type ChatMessageListResponse struct {
+	Success bool                   `json:"success" example:"true"`
+	Data    ChatMessageListPayload `json:"data"`
+}
+
+// ChatMessagesFromEntities converts a slice of MeetingMessage entities to
+// their outbound DTO representation.
+func ChatMessagesFromEntities(msgs []*entities.MeetingMessage) []ChatMessage {
+	out := make([]ChatMessage, len(msgs))
+	for i, m := range msgs {
+		out[i] = ChatMessage{
+			ID:        m.ID,
+			MeetingID: m.MeetingID,
+			UserID:    m.UserID,
+			Body:      m.Body,
+			SentAt:    m.SentAt,
+		}
+	}
+	return out
+}

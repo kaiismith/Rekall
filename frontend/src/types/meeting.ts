@@ -83,6 +83,7 @@ export type WsMsgType =
   | 'laser_move'
   | 'laser_stop'
   | 'room_state'
+  | 'chat_message'
 
 export interface WsMessage {
   type: WsMsgType
@@ -103,6 +104,14 @@ export interface WsMessage {
   from_id?: string          // emoji_reaction sender
   target_id?: string        // force_mute target (client → server)
   participants?: RoomStateParticipant[]
+  // chat_message
+  id?: string               // server-assigned message id (echo)
+  client_id?: string        // client-generated optimistic id (echo)
+  body?: string             // message body
+  sent_at?: string          // ISO8601 server timestamp
+  // Identity fields attached to participant.joined / chat broadcasts
+  full_name?: string
+  initials?: string
 }
 
 export interface KnockEntry {
@@ -145,6 +154,8 @@ export interface LaserState {
 /** Snapshot entry sent by the server on join. */
 export interface RoomStateParticipant {
   user_id: string
+  full_name?: string
+  initials?: string
   audio: boolean
   video: boolean
   hand_raised: boolean
@@ -156,3 +167,33 @@ export type BackgroundOption =
   | { type: 'none' }
   | { type: 'blur'; level: 'light' | 'heavy' }
   | { type: 'image'; src: string; label: string }
+
+// ─── Chat types ───────────────────────────────────────────────────────────────
+
+/** A single chat message in the in-room panel. */
+export interface ChatMessage {
+  /** Server id once confirmed; equal to `clientId` while pending or failed. */
+  id: string
+  /** Present on pending local sends; echoed back by the server for reconcile. */
+  clientId?: string
+  userId: string
+  body: string
+  /** Epoch milliseconds. */
+  sentAt: number
+  /** True between optimistic append and server echo. */
+  pending?: boolean
+  /** True when the server echo did not arrive within the timeout window. */
+  failed?: boolean
+}
+
+/** Display entry for resolving a sender's name/avatar from a userId. */
+export interface ParticipantDirectoryEntry {
+  full_name: string
+  initials: string
+}
+
+/** Response payload for GET /meetings/:code/messages. */
+export interface ListChatMessagesResponse {
+  messages: ChatMessage[]
+  has_more: boolean
+}

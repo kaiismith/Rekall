@@ -4,6 +4,10 @@ import (
 	"context"
 	"fmt"
 	"net/http"
+	"strconv"
+	"strings"
+	"time"
+	"unicode"
 
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
@@ -27,17 +31,24 @@ var wsUpgrader = websocket.Upgrader{
 
 // MeetingHandler handles HTTP and WebSocket requests for the /meetings resource.
 type MeetingHandler struct {
-	service    *services.MeetingService
-	hubManager *wsHub.HubManager
-	baseURL    string
-	jwtSecret  string
-	jwtIssuer  string
-	logger     *zap.Logger
+	service     *services.MeetingService
+	chatService *services.ChatMessageService
+	userService *services.UserService
+	hubManager  *wsHub.HubManager
+	baseURL     string
+	jwtSecret   string
+	jwtIssuer   string
+	logger      *zap.Logger
 }
 
 // NewMeetingHandler creates a MeetingHandler with its required dependencies.
+// chatService and userService may be nil — the chat endpoints will degrade
+// gracefully (500 / missing names) rather than panic in test harnesses that
+// don't wire them.
 func NewMeetingHandler(
 	service *services.MeetingService,
+	chatService *services.ChatMessageService,
+	userService *services.UserService,
 	hubManager *wsHub.HubManager,
 	baseURL string,
 	jwtSecret string,
@@ -45,12 +56,14 @@ func NewMeetingHandler(
 	logger *zap.Logger,
 ) *MeetingHandler {
 	return &MeetingHandler{
-		service:    service,
-		hubManager: hubManager,
-		baseURL:    baseURL,
-		jwtSecret:  jwtSecret,
-		jwtIssuer:  jwtIssuer,
-		logger:     logger,
+		service:     service,
+		chatService: chatService,
+		userService: userService,
+		hubManager:  hubManager,
+		baseURL:     baseURL,
+		jwtSecret:   jwtSecret,
+		jwtIssuer:   jwtIssuer,
+		logger:      logger,
 	}
 }
 
@@ -285,9 +298,117 @@ func (h *MeetingHandler) Connect(c *gin.Context) {
 		}
 	}
 
-	client := wsHub.NewClient(hub, conn, callerID)
+	// Resolve the caller's display info so peers see real names in
+	// participant.joined and room_state broadcasts. A lookup failure is
+	// non-fatal: we still admit the client, just with empty name/initials.
+	var fullName, initials string
+	if h.userService != nil {
+		if u, err := h.userService.GetUser(c.Request.Context(), callerID); err == nil && u != nil {
+			fullName = u.FullName
+			initials = userInitials(u.FullName)
+		}
+	}
+
+	client := wsHub.NewClient(hub, conn, callerID, fullName, initials)
 	hub.Register(client, isDirect, knockID)
 	client.Start()
+}
+
+// userInitials returns up to two uppercase letters from the user's full name
+// (first letter of the first word + first letter of the last word). Falls back
+// to "?" if the name is empty or contains no letters.
+func userInitials(fullName string) string {
+	fields := strings.Fields(fullName)
+	if len(fields) == 0 {
+		return "?"
+	}
+	first := firstLetter(fields[0])
+	if len(fields) == 1 {
+		if first == "" {
+			return "?"
+		}
+		return first
+	}
+	last := firstLetter(fields[len(fields)-1])
+	return first + last
+}
+
+func firstLetter(word string) string {
+	for _, r := range word {
+		if unicode.IsLetter(r) {
+			return strings.ToUpper(string(r))
+		}
+	}
+	return ""
+}
+
+// ListMessages handles GET /api/v1/meetings/:code/messages.
+//
+// @Summary      List chat messages for a meeting
+// @Description  Returns the chat history for a meeting, ordered by sent_at ascending. Supports cursor-based pagination via the `before` query parameter (messages strictly older than the cursor are returned). Accessible to the host and to anyone who has ever been an admitted participant.
+// @Tags         Meetings
+// @Produce      json
+// @Security     BearerAuth
+// @Param        code    path      string  true   "Meeting code"                         example(abc-defg-hij)
+// @Param        before  query     string  false  "RFC3339 cursor — returns messages strictly older"  example(2026-04-23T14:03:17Z)
+// @Param        limit   query     int     false  "Page size (default 50, max 100)"      default(50)
+// @Success      200  {object}  dto.ChatMessageListResponse  "Chat history page"
+// @Failure      400  {object}  dto.ErrorResponse  "Invalid `before` or `limit`"
+// @Failure      401  {object}  dto.ErrorResponse  "Missing or invalid token"
+// @Failure      403  {object}  dto.ErrorResponse  "Requester is not a participant (NOT_A_PARTICIPANT)"
+// @Failure      404  {object}  dto.ErrorResponse  "Meeting not found"
+// @Failure      500  {object}  dto.ErrorResponse  "Internal server error"
+// @Router       /api/v1/meetings/{code}/messages [get]
+func (h *MeetingHandler) ListMessages(c *gin.Context) {
+	if h.chatService == nil {
+		handlerhelpers.RespondError(c, h.logger, apperr.Internal("chat service not configured"))
+		return
+	}
+
+	callerID, err := handlerhelpers.CallerID(c)
+	if err != nil {
+		handlerhelpers.RespondError(c, h.logger, err)
+		return
+	}
+
+	var before *time.Time
+	if raw := c.Query("before"); raw != "" {
+		t, err := time.Parse(time.RFC3339, raw)
+		if err != nil {
+			handlerhelpers.RespondError(c, h.logger, apperr.BadRequest("before must be an RFC3339 timestamp"))
+			return
+		}
+		before = &t
+	}
+
+	limit := 50
+	if raw := c.Query("limit"); raw != "" {
+		n, err := strconv.Atoi(raw)
+		if err != nil || n < 1 {
+			handlerhelpers.RespondError(c, h.logger, apperr.BadRequest("limit must be a positive integer"))
+			return
+		}
+		if n > 100 {
+			n = 100
+		}
+		limit = n
+	}
+
+	msgs, hasMore, err := h.chatService.ListHistory(c.Request.Context(), services.ListHistoryInput{
+		MeetingCode: c.Param("code"),
+		RequesterID: callerID,
+		Before:      before,
+		Limit:       limit,
+	})
+	if err != nil {
+		handlerhelpers.RespondError(c, h.logger, err)
+		return
+	}
+
+	c.JSON(http.StatusOK, dto.OK(dto.ChatMessageListPayload{
+		Messages: dto.ChatMessagesFromEntities(msgs),
+		HasMore:  hasMore,
+	}))
 }
 
 // onMeetingEmpty is called by the hub when the last participant leaves.

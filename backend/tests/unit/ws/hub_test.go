@@ -38,7 +38,7 @@ func makeClientPair(t *testing.T, userID uuid.UUID) (*wsHub.Hub, *websocket.Conn
 	t.Helper()
 
 	meetingID := uuid.New()
-	hub := wsHub.NewHub(meetingID, userID, nil, zap.NewNop())
+	hub := wsHub.NewHub(meetingID, userID, nil, nil, zap.NewNop())
 	ctx, cancel := context.WithCancel(context.Background())
 	go hub.Run(ctx)
 
@@ -49,7 +49,7 @@ func makeClientPair(t *testing.T, userID uuid.UUID) (*wsHub.Hub, *websocket.Conn
 			t.Logf("upgrade error: %v", err)
 			return
 		}
-		hubClient = wsHub.NewClient(hub, conn, userID)
+		hubClient = wsHub.NewClient(hub, conn, userID, "", "")
 		hub.Register(hubClient, true, "")
 		hubClient.Start()
 	})
@@ -110,7 +110,7 @@ func addAdmittedPeer(t *testing.T, hub *wsHub.Hub, existingConns ...*websocket.C
 		if err != nil {
 			return
 		}
-		c := wsHub.NewClient(hub, conn, peerID)
+		c := wsHub.NewClient(hub, conn, peerID, "", "")
 		hub.Register(c, true, "")
 		c.Start()
 	})
@@ -174,7 +174,7 @@ func TestHub_KnockFlow_ApproveAdmitsUser(t *testing.T) {
 		if err != nil {
 			return
 		}
-		client := wsHub.NewClient(hub, conn, knockerID)
+		client := wsHub.NewClient(hub, conn, knockerID, "", "")
 		hub.Register(client, false, knockID)
 		client.Start()
 	})
@@ -204,7 +204,7 @@ func TestHub_KnockFlow_ApproveAdmitsUser(t *testing.T) {
 }
 
 func TestHubManager_GetOrCreate_ReturnsSameHub(t *testing.T) {
-	manager := wsHub.NewHubManager(zap.NewNop())
+	manager := wsHub.NewHubManager(nil, zap.NewNop())
 	meetingID := uuid.New()
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
@@ -230,7 +230,7 @@ func TestHub_KnockFlow_DenyClosesKnocker(t *testing.T) {
 		if err != nil {
 			return
 		}
-		client := wsHub.NewClient(hub, conn, knockerID)
+		client := wsHub.NewClient(hub, conn, knockerID, "", "")
 		hub.Register(client, false, knockID)
 		client.Start()
 	})
@@ -279,7 +279,7 @@ func TestHub_KnockRace_SecondApproveDiscarded(t *testing.T) {
 	p2ID := uuid.New()
 	handler2 := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		conn, _ := testUpgrader.Upgrade(w, r, nil)
-		c := wsHub.NewClient(hub, conn, p2ID)
+		c := wsHub.NewClient(hub, conn, p2ID, "", "")
 		hub.Register(c, true, "")
 		c.Start()
 	})
@@ -293,7 +293,7 @@ func TestHub_KnockRace_SecondApproveDiscarded(t *testing.T) {
 	knockerID := uuid.New()
 	handler3 := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		conn, _ := testUpgrader.Upgrade(w, r, nil)
-		c := wsHub.NewClient(hub, conn, knockerID)
+		c := wsHub.NewClient(hub, conn, knockerID, "", "")
 		hub.Register(c, false, knockID)
 		c.Start()
 	})
@@ -324,7 +324,7 @@ func TestHub_LastParticipantLeaves_TriggersOnEnd(t *testing.T) {
 	userID := uuid.New()
 	onEndCalled := make(chan uuid.UUID, 1)
 
-	hub := wsHub.NewHub(meetingID, userID, func(id uuid.UUID) {
+	hub := wsHub.NewHub(meetingID, userID, nil, func(id uuid.UUID) {
 		onEndCalled <- id
 	}, zap.NewNop())
 	ctx, cancel := context.WithCancel(context.Background())
@@ -332,7 +332,7 @@ func TestHub_LastParticipantLeaves_TriggersOnEnd(t *testing.T) {
 	go hub.Run(ctx)
 	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		conn, _ := testUpgrader.Upgrade(w, r, nil)
-		c := wsHub.NewClient(hub, conn, userID)
+		c := wsHub.NewClient(hub, conn, userID, "", "")
 		hub.Register(c, true, "")
 		c.Start()
 	})
@@ -449,7 +449,7 @@ func TestHub_ParticipantLeaves_BroadcastsParticipantLeft(t *testing.T) {
 	onEndCalled := make(chan struct{}, 1)
 	meetingID := uuid.New()
 	hostID := uuid.New()
-	hub := wsHub.NewHub(meetingID, hostID, func(uuid.UUID) { onEndCalled <- struct{}{} }, zap.NewNop())
+	hub := wsHub.NewHub(meetingID, hostID, nil, func(uuid.UUID) { onEndCalled <- struct{}{} }, zap.NewNop())
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 	go hub.Run(ctx)
@@ -460,7 +460,7 @@ func TestHub_ParticipantLeaves_BroadcastsParticipantLeft(t *testing.T) {
 	h1 := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		conn, _ := testUpgrader.Upgrade(w, r, nil)
 		p1ServerConn = conn
-		c := wsHub.NewClient(hub, conn, p1ID)
+		c := wsHub.NewClient(hub, conn, p1ID, "", "")
 		hub.Register(c, true, "")
 		c.Start()
 	})
@@ -543,7 +543,7 @@ func TestHub_WebRTC_NilOrUnknownTo_SilentlyDropped(t *testing.T) {
 }
 
 func TestHubManager_RemovesHubAfterLastParticipantLeaves(t *testing.T) {
-	manager := wsHub.NewHubManager(zap.NewNop())
+	manager := wsHub.NewHubManager(nil, zap.NewNop())
 	meetingID := uuid.New()
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
@@ -557,7 +557,7 @@ func TestHubManager_RemovesHubAfterLastParticipantLeaves(t *testing.T) {
 	userID := uuid.New()
 	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		conn, _ := testUpgrader.Upgrade(w, r, nil)
-		c := wsHub.NewClient(hub, conn, userID)
+		c := wsHub.NewClient(hub, conn, userID, "", "")
 		hub.Register(c, true, "")
 		c.Start()
 	})
@@ -594,7 +594,7 @@ func TestHub_KnockerDisconnects_BroadcastsCancelled(t *testing.T) {
 	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		conn, _ := testUpgrader.Upgrade(w, r, nil)
 		knockerConn = conn
-		c := wsHub.NewClient(hub, conn, knockerID)
+		c := wsHub.NewClient(hub, conn, knockerID, "", "")
 		hub.Register(c, false, knockID)
 		c.Start()
 	})

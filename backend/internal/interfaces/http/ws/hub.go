@@ -5,6 +5,7 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+	"github.com/rekall/backend/internal/domain/ports"
 	"go.uber.org/zap"
 )
 
@@ -44,6 +45,14 @@ type inboundEnvelope struct {
 	msg    InboundMessage
 }
 
+// identity pairs a user's display name + initials. Kept alongside ephemeral
+// mediaState so participant.joined and room_state broadcasts can surface
+// human-readable names to chat consumers without per-message DB lookups.
+type identity struct {
+	FullName string
+	Initials string
+}
+
 // Hub manages all clients for a single meeting. One goroutine (run) owns all
 // map mutations; no locks are needed on clients/pending/knocks/mediaState.
 type Hub struct {
@@ -64,6 +73,10 @@ type Hub struct {
 	// keyed by userID string. Populated on admit; deleted on unregister.
 	mediaState map[string]*ParticipantState
 
+	// identities maps userID string → display name/initials for every
+	// admitted participant. Populated at admit time from the Client struct.
+	identities map[string]identity
+
 	// laserOwner is the userID string of the participant currently holding the
 	// laser pointer, or "" if no laser is active.
 	laserOwner string
@@ -71,6 +84,11 @@ type Hub struct {
 	// handlers is a registry of message-type → handler function.
 	// Adding a new in-room message type only requires registering here.
 	handlers map[string]handlerFn
+
+	// chatRepo persists chat messages before they are broadcast. Nil-safe:
+	// when unset (e.g. in WS unit tests that don't exercise chat), the chat
+	// handler silently drops inbound messages.
+	chatRepo ports.MeetingMessageRepository
 
 	// channels
 	register   chan registerRequest
@@ -91,8 +109,14 @@ type registerRequest struct {
 	knockID string // pre-generated ID for the knock request
 }
 
-// NewHub creates a Hub for the given meeting.
-func NewHub(meetingID, hostID uuid.UUID, onEnd func(uuid.UUID), logger *zap.Logger) *Hub {
+// NewHub creates a Hub for the given meeting. chatRepo may be nil — handlers
+// that depend on it (handleChatMessage) will no-op when it is unset.
+func NewHub(
+	meetingID, hostID uuid.UUID,
+	chatRepo ports.MeetingMessageRepository,
+	onEnd func(uuid.UUID),
+	logger *zap.Logger,
+) *Hub {
 	h := &Hub{
 		meetingID:  meetingID,
 		hostID:     hostID,
@@ -100,6 +124,8 @@ func NewHub(meetingID, hostID uuid.UUID, onEnd func(uuid.UUID), logger *zap.Logg
 		pending:    make(map[*Client]*KnockRequest),
 		knocks:     make(map[string]*KnockRequest),
 		mediaState: make(map[string]*ParticipantState),
+		identities: make(map[string]identity),
+		chatRepo:   chatRepo,
 		register:   make(chan registerRequest, 8),
 		unregister: make(chan *Client, 8),
 		inbound:    make(chan inboundEnvelope, 64),
@@ -114,6 +140,7 @@ func NewHub(meetingID, hostID uuid.UUID, onEnd func(uuid.UUID), logger *zap.Logg
 		MsgTypeHandRaise:     handleHandRaise,
 		MsgTypeLaserMove:     handleLaserMove,
 		MsgTypeLaserStop:     handleLaserStop,
+		MsgTypeChatMessage:   handleChatMessage,
 	}
 	return h
 }
@@ -159,7 +186,12 @@ func (h *Hub) admitDirect(c *Client) {
 	h.clients[c] = struct{}{}
 	h.promoteToActive(c)
 	uid := c.UserID
-	h.broadcastAll(OutboundMessage{Type: MsgTypeParticipantJoined, UserID: &uid})
+	h.broadcastAll(OutboundMessage{
+		Type:     MsgTypeParticipantJoined,
+		UserID:   &uid,
+		FullName: c.FullName,
+		Initials: c.Initials,
+	})
 	h.logger.Info("client admitted directly", zap.String("user_id", uid.String()))
 }
 
@@ -173,10 +205,12 @@ func (h *Hub) promoteToActive(c *Client) {
 	c.Send(OutboundMessage{Type: MsgTypeRoomState, Participants: snapshot})
 
 	// Initialise this participant's state (defaults: audio on, video on).
-	h.mediaState[c.UserID.String()] = &ParticipantState{
+	uidStr := c.UserID.String()
+	h.mediaState[uidStr] = &ParticipantState{
 		AudioEnabled: true,
 		VideoEnabled: true,
 	}
+	h.identities[uidStr] = identity{FullName: c.FullName, Initials: c.Initials}
 }
 
 // buildRoomStateSnapshot returns the current state of all admitted participants
@@ -184,8 +218,11 @@ func (h *Hub) promoteToActive(c *Client) {
 func (h *Hub) buildRoomStateSnapshot() []RoomStateParticipant {
 	result := make([]RoomStateParticipant, 0, len(h.mediaState))
 	for uid, ps := range h.mediaState {
+		id := h.identities[uid]
 		result = append(result, RoomStateParticipant{
 			UserID:      uid,
+			FullName:    id.FullName,
+			Initials:    id.Initials,
 			Audio:       ps.AudioEnabled,
 			Video:       ps.VideoEnabled,
 			HandRaised:  ps.HandRaised,
@@ -244,6 +281,7 @@ func (h *Hub) handleUnregister(c *Client) {
 
 		// Clean up ephemeral state.
 		delete(h.mediaState, uidStr)
+		delete(h.identities, uidStr)
 		delete(h.clients, c)
 
 		h.broadcastAll(OutboundMessage{Type: MsgTypeParticipantLeft, UserID: &uid})
@@ -334,7 +372,12 @@ func (h *Hub) handleKnockRespond(responder *Client, msg InboundMessage) {
 		uid := kr.UserID
 		t := true
 		kr.Client.Send(OutboundMessage{Type: MsgTypeKnockApproved, KnockID: kr.ID})
-		h.broadcastAll(OutboundMessage{Type: MsgTypeParticipantJoined, UserID: &uid})
+		h.broadcastAll(OutboundMessage{
+			Type:     MsgTypeParticipantJoined,
+			UserID:   &uid,
+			FullName: kr.Client.FullName,
+			Initials: kr.Client.Initials,
+		})
 		h.broadcastAll(OutboundMessage{Type: MsgTypeKnockResolved, KnockID: kr.ID, Approved: &t, UserID: &uid})
 		h.logger.Info("knock approved", zap.String("user_id", uid.String()))
 	} else {

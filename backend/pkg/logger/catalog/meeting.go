@@ -120,4 +120,21 @@ var (
 		Code:    "MEETING_HUB_ERROR",
 		Message: "meeting hub encountered an unrecoverable error",
 	}
+
+	// ── Chat ─────────────────────────────────────────────────────────────────
+
+	ChatPersistFailed = logger.LogEvent{
+		Code:    "MEETING_CHAT_PERSIST_FAILED",
+		Message: "chat message could not be persisted — not broadcast to peers",
+	}
+
+	ChatRateLimited = logger.LogEvent{
+		Code:    "MEETING_CHAT_RATE_LIMITED",
+		Message: "chat message dropped — sender exceeded server-side rate limit",
+	}
+
+	ChatHistoryFetchFailed = logger.LogEvent{
+		Code:    "MEETING_CHAT_HISTORY_FETCH_FAILED",
+		Message: "failed to load chat history for a meeting",
+	}
 )
