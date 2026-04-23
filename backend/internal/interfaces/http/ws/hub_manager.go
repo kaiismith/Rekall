@@ -5,6 +5,7 @@ import (
 	"sync"
 
 	"github.com/google/uuid"
+	"github.com/rekall/backend/internal/domain/ports"
 	"go.uber.org/zap"
 )
 
@@ -12,16 +13,19 @@ import (
 // All map access is guarded by an RWMutex; Hub.Run goroutines own their own
 // internal state exclusively.
 type HubManager struct {
-	mu     sync.RWMutex
-	hubs   map[uuid.UUID]*Hub
-	logger *zap.Logger
+	mu       sync.RWMutex
+	hubs     map[uuid.UUID]*Hub
+	chatRepo ports.MeetingMessageRepository
+	logger   *zap.Logger
 }
 
-// NewHubManager creates an empty HubManager.
-func NewHubManager(logger *zap.Logger) *HubManager {
+// NewHubManager creates an empty HubManager. chatRepo is forwarded to every
+// hub created via GetOrCreate so the chat handler can persist messages.
+func NewHubManager(chatRepo ports.MeetingMessageRepository, logger *zap.Logger) *HubManager {
 	return &HubManager{
-		hubs:   make(map[uuid.UUID]*Hub),
-		logger: logger,
+		hubs:     make(map[uuid.UUID]*Hub),
+		chatRepo: chatRepo,
+		logger:   logger,
 	}
 }
 
@@ -44,7 +48,7 @@ func (m *HubManager) GetOrCreate(ctx context.Context, meetingID, hostID uuid.UUI
 		return h
 	}
 
-	h := NewHub(meetingID, hostID, func(id uuid.UUID) {
+	h := NewHub(meetingID, hostID, m.chatRepo, func(id uuid.UUID) {
 		m.remove(id)
 		if onEnd != nil {
 			onEnd(id)

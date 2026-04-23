@@ -96,7 +96,7 @@ func TestHub_ForceMute_NonHostIgnored(t *testing.T) {
 	hostID := uuid.New()
 	clientID := uuid.New()
 	meetingID := uuid.New()
-	hub := wsHub.NewHub(meetingID, hostID, nil, zap.NewNop())
+	hub := wsHub.NewHub(meetingID, hostID, nil, nil, zap.NewNop())
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 	go hub.Run(ctx)
@@ -104,7 +104,7 @@ func TestHub_ForceMute_NonHostIgnored(t *testing.T) {
 	var clientConn *websocket.Conn
 	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		conn, _ := testUpgrader.Upgrade(w, r, nil)
-		c := wsHub.NewClient(hub, conn, clientID)
+		c := wsHub.NewClient(hub, conn, clientID, "", "")
 		hub.Register(c, true, "")
 		c.Start()
 	})
@@ -319,7 +319,7 @@ func TestHub_BroadcastAll_NotifiesPendingKnockers(t *testing.T) {
 	knockID := "knock-bcall"
 	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		conn, _ := testUpgrader.Upgrade(w, r, nil)
-		c := wsHub.NewClient(hub, conn, knockerID)
+		c := wsHub.NewClient(hub, conn, knockerID, "", "")
 		hub.Register(c, false, knockID)
 		c.Start()
 	})
@@ -364,7 +364,7 @@ func TestHub_KnockTimeout_TriggeredByInternalMessage(t *testing.T) {
 	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		conn, _ := testUpgrader.Upgrade(w, r, nil)
 		knockerConn = conn
-		c := wsHub.NewClient(hub, conn, knockerID)
+		c := wsHub.NewClient(hub, conn, knockerID, "", "")
 		hub.Register(c, false, knockID)
 		c.Start()
 	})

@@ -30,6 +30,8 @@ import { HandButton } from '@/components/meeting/HandButton'
 import { EmojiButton } from '@/components/meeting/EmojiButton'
 import { BackgroundButton } from '@/components/meeting/BackgroundButton'
 import { LaserButton } from '@/components/meeting/LaserButton'
+import { ChatButton } from '@/components/meeting/ChatButton'
+import { ChatPanel } from '@/components/meeting/chat/ChatPanel'
 import type { EmojiReaction } from '@/types/meeting'
 
 // ─── Emoji float animation injected once ─────────────────────────────────────
@@ -97,6 +99,23 @@ export function MeetingRoomPage() {
     customBgSrc,
     uploadCustomBackground,
     mediaStates,
+    messages,
+    unreadCount,
+    isChatPanelOpen,
+    isLoadingHistory,
+    hasMoreHistory,
+    chatHistoryError,
+    participantDirectory,
+    chatFlashKey,
+    chatSendError,
+    openChatPanel,
+    closeChatPanel,
+    sendChatMessage,
+    retrySendMessage,
+    deleteFailedMessage,
+    loadOlderMessages,
+    retryHistoryFetch,
+    dismissChatSendError,
   } = useMeeting({
     code: code ?? '',
     onEnd: () => navigate('/meetings'),
@@ -299,6 +318,27 @@ export function MeetingRoomPage() {
           )}
         </Box>
 
+        {/* ── Chat panel ──────────────────────────────────────────────────── */}
+        <ChatPanel
+          isOpen={isChatPanelOpen}
+          onClose={closeChatPanel}
+          messages={messages}
+          directory={participantDirectory}
+          localUserId={user?.id ?? null}
+          hasMore={hasMoreHistory}
+          isLoading={isLoadingHistory}
+          historyError={chatHistoryError}
+          sendError={chatSendError}
+          onLoadOlder={loadOlderMessages}
+          onRetry={retryHistoryFetch}
+          onSend={sendChatMessage}
+          onRetrySend={retrySendMessage}
+          onDeleteFailed={deleteFailedMessage}
+          onDismissSendError={dismissChatSendError}
+          composerDisabled={roomState !== 'in_meeting'}
+          flashKey={chatFlashKey}
+        />
+
         {/* ── Knock sidebar ────────────────────────────────────────────────── */}
         {knocks.length > 0 && (
           <Box sx={{ width: 280, borderLeft: '1px solid', borderColor: 'divider', p: 2, overflowY: 'auto', flexShrink: 0 }}>
@@ -360,6 +400,11 @@ export function MeetingRoomPage() {
           disabled={!bgSupported}
         />
         <LaserButton isActive={isLaserActive} onToggle={toggleLaser} />
+        <ChatButton
+          unreadCount={unreadCount}
+          isOpen={isChatPanelOpen}
+          onToggle={isChatPanelOpen ? closeChatPanel : openChatPanel}
+        />
       </Box>
     </Box>
   )

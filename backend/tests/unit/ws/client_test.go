@@ -40,8 +40,8 @@ func TestClient_Send_BufferFull(t *testing.T) {
 	require.NoError(t, err)
 	defer clientConn.Close()
 
-	hub := wsHub.NewHub(uuid.New(), uuid.New(), nil, zap.NewNop())
-	c := wsHub.NewClient(hub, clientConn, uuid.New())
+	hub := wsHub.NewHub(uuid.New(), uuid.New(), nil, nil, zap.NewNop())
+	c := wsHub.NewClient(hub, clientConn, uuid.New(), "", "")
 
 	// Fill the send buffer (sendBufferSize = 256).
 	msg := wsHub.OutboundMessage{Type: wsHub.MsgTypePong}

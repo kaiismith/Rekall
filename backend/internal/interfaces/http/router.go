@@ -115,6 +115,7 @@ func NewRouter(deps RouterDeps) *gin.Engine {
 				meetings.GET("/mine", deps.MeetingH.ListMine)
 				meetings.GET("/:code", deps.MeetingH.GetByCode)
 				meetings.DELETE("/:code", deps.MeetingH.End)
+				meetings.GET("/:code/messages", deps.MeetingH.ListMessages)
 			}
 			// WebSocket — no JWT middleware (token passed as query param)
 			v1.GET("/meetings/:code/ws", deps.MeetingH.Connect)

@@ -42,7 +42,7 @@ const docTemplate = `{
                         "in": "body",
                         "required": true,
                         "schema": {
-                            "$ref": "#/definitions/dto.LoginRequest"
+                            "$ref": "#/definitions/github_com_rekall_backend_internal_interfaces_http_dto.LoginRequest"
                         }
                     }
                 ],
@@ -50,31 +50,31 @@ const docTemplate = `{
                     "200": {
                         "description": "Authenticated successfully",
                         "schema": {
-                            "$ref": "#/definitions/dto.LoginResponseEnvelope"
+                            "$ref": "#/definitions/github_com_rekall_backend_internal_interfaces_http_dto.LoginResponseEnvelope"
                         }
                     },
                     "401": {
                         "description": "Invalid credentials (INVALID_CREDENTIALS)",
                         "schema": {
-                            "$ref": "#/definitions/dto.ErrorResponse"
+                            "$ref": "#/definitions/github_com_rekall_backend_internal_interfaces_http_dto.ErrorResponse"
                         }
                     },
                     "403": {
                         "description": "Email address not yet verified (EMAIL_NOT_VERIFIED)",
                         "schema": {
-                            "$ref": "#/definitions/dto.ErrorResponse"
+                            "$ref": "#/definitions/github_com_rekall_backend_internal_interfaces_http_dto.ErrorResponse"
                         }
                     },
                     "422": {
                         "description": "Validation error",
                         "schema": {
-                            "$ref": "#/definitions/dto.ErrorResponse"
+                            "$ref": "#/definitions/github_com_rekall_backend_internal_interfaces_http_dto.ErrorResponse"
                         }
                     },
                     "500": {
                         "description": "Internal server error",
                         "schema": {
-                            "$ref": "#/definitions/dto.ErrorResponse"
+                            "$ref": "#/definitions/github_com_rekall_backend_internal_interfaces_http_dto.ErrorResponse"
                         }
                     }
                 }
@@ -97,7 +97,7 @@ const docTemplate = `{
                     "500": {
                         "description": "Internal server error",
                         "schema": {
-                            "$ref": "#/definitions/dto.ErrorResponse"
+                            "$ref": "#/definitions/github_com_rekall_backend_internal_interfaces_http_dto.ErrorResponse"
                         }
                     }
                 }
@@ -122,25 +122,25 @@ const docTemplate = `{
                     "200": {
                         "description": "Authenticated user profile",
                         "schema": {
-                            "$ref": "#/definitions/dto.UserResponseEnvelope"
+                            "$ref": "#/definitions/github_com_rekall_backend_internal_interfaces_http_dto.UserResponseEnvelope"
                         }
                     },
                     "401": {
                         "description": "Missing or invalid token (MISSING_TOKEN / INVALID_TOKEN)",
                         "schema": {
-                            "$ref": "#/definitions/dto.ErrorResponse"
+                            "$ref": "#/definitions/github_com_rekall_backend_internal_interfaces_http_dto.ErrorResponse"
                         }
                     },
                     "403": {
                         "description": "Email address not verified (EMAIL_NOT_VERIFIED)",
                         "schema": {
-                            "$ref": "#/definitions/dto.ErrorResponse"
+                            "$ref": "#/definitions/github_com_rekall_backend_internal_interfaces_http_dto.ErrorResponse"
                         }
                     },
                     "500": {
                         "description": "Internal server error",
                         "schema": {
-                            "$ref": "#/definitions/dto.ErrorResponse"
+                            "$ref": "#/definitions/github_com_rekall_backend_internal_interfaces_http_dto.ErrorResponse"
                         }
                     }
                 }
@@ -166,7 +166,7 @@ const docTemplate = `{
                         "in": "body",
                         "required": true,
                         "schema": {
-                            "$ref": "#/definitions/dto.ForgotPasswordRequest"
+                            "$ref": "#/definitions/github_com_rekall_backend_internal_interfaces_http_dto.ForgotPasswordRequest"
                         }
                     }
                 ],
@@ -174,19 +174,19 @@ const docTemplate = `{
                     "200": {
                         "description": "Reset email dispatched (if account exists)",
                         "schema": {
-                            "$ref": "#/definitions/dto.MessageResponse"
+                            "$ref": "#/definitions/github_com_rekall_backend_internal_interfaces_http_dto.MessageResponse"
                         }
                     },
                     "422": {
                         "description": "Validation error",
                         "schema": {
-                            "$ref": "#/definitions/dto.ErrorResponse"
+                            "$ref": "#/definitions/github_com_rekall_backend_internal_interfaces_http_dto.ErrorResponse"
                         }
                     },
                     "500": {
                         "description": "Internal server error",
                         "schema": {
-                            "$ref": "#/definitions/dto.ErrorResponse"
+                            "$ref": "#/definitions/github_com_rekall_backend_internal_interfaces_http_dto.ErrorResponse"
                         }
                     }
                 }
@@ -212,7 +212,7 @@ const docTemplate = `{
                         "in": "body",
                         "required": true,
                         "schema": {
-                            "$ref": "#/definitions/dto.ResetPasswordRequest"
+                            "$ref": "#/definitions/github_com_rekall_backend_internal_interfaces_http_dto.ResetPasswordRequest"
                         }
                     }
                 ],
@@ -220,25 +220,25 @@ const docTemplate = `{
                     "200": {
                         "description": "Password updated — all sessions terminated",
                         "schema": {
-                            "$ref": "#/definitions/dto.MessageResponse"
+                            "$ref": "#/definitions/github_com_rekall_backend_internal_interfaces_http_dto.MessageResponse"
                         }
                     },
                     "400": {
                         "description": "Token invalid, expired, or already used (INVALID_OR_EXPIRED_TOKEN)",
                         "schema": {
-                            "$ref": "#/definitions/dto.ErrorResponse"
+                            "$ref": "#/definitions/github_com_rekall_backend_internal_interfaces_http_dto.ErrorResponse"
                         }
                     },
                     "422": {
                         "description": "Validation error — password complexity requirements not met",
                         "schema": {
-                            "$ref": "#/definitions/dto.ErrorResponse"
+                            "$ref": "#/definitions/github_com_rekall_backend_internal_interfaces_http_dto.ErrorResponse"
                         }
                     },
                     "500": {
                         "description": "Internal server error",
                         "schema": {
-                            "$ref": "#/definitions/dto.ErrorResponse"
+                            "$ref": "#/definitions/github_com_rekall_backend_internal_interfaces_http_dto.ErrorResponse"
                         }
                     }
                 }
@@ -258,19 +258,19 @@ const docTemplate = `{
                     "200": {
                         "description": "New access token issued",
                         "schema": {
-                            "$ref": "#/definitions/dto.AccessTokenResponse"
+                            "$ref": "#/definitions/github_com_rekall_backend_internal_interfaces_http_dto.AccessTokenResponse"
                         }
                     },
                     "401": {
                         "description": "Refresh token invalid, expired, or revoked (INVALID_REFRESH_TOKEN)",
                         "schema": {
-                            "$ref": "#/definitions/dto.ErrorResponse"
+                            "$ref": "#/definitions/github_com_rekall_backend_internal_interfaces_http_dto.ErrorResponse"
                         }
                     },
                     "500": {
                         "description": "Internal server error",
                         "schema": {
-                            "$ref": "#/definitions/dto.ErrorResponse"
+                            "$ref": "#/definitions/github_com_rekall_backend_internal_interfaces_http_dto.ErrorResponse"
                         }
                     }
                 }
@@ -296,7 +296,7 @@ const docTemplate = `{
                         "in": "body",
                         "required": true,
                         "schema": {
-                            "$ref": "#/definitions/dto.RegisterRequest"
+                            "$ref": "#/definitions/github_com_rekall_backend_internal_interfaces_http_dto.RegisterRequest"
                         }
                     }
                 ],
@@ -304,25 +304,25 @@ const docTemplate = `{
                     "201": {
                         "description": "Account created — check email for a verification link",
                         "schema": {
-                            "$ref": "#/definitions/dto.UserResponseEnvelope"
+                            "$ref": "#/definitions/github_com_rekall_backend_internal_interfaces_http_dto.UserResponseEnvelope"
                         }
                     },
                     "409": {
                         "description": "Email already registered (EMAIL_ALREADY_REGISTERED)",
                         "schema": {
-                            "$ref": "#/definitions/dto.ErrorResponse"
+                            "$ref": "#/definitions/github_com_rekall_backend_internal_interfaces_http_dto.ErrorResponse"
                         }
                     },
                     "422": {
                         "description": "Validation error — see details for field-level errors",
                         "schema": {
-                            "$ref": "#/definitions/dto.ErrorResponse"
+                            "$ref": "#/definitions/github_com_rekall_backend_internal_interfaces_http_dto.ErrorResponse"
                         }
                     },
                     "500": {
                         "description": "Internal server error",
                         "schema": {
-                            "$ref": "#/definitions/dto.ErrorResponse"
+                            "$ref": "#/definitions/github_com_rekall_backend_internal_interfaces_http_dto.ErrorResponse"
                         }
                     }
                 }
@@ -351,19 +351,19 @@ const docTemplate = `{
                     "200": {
                         "description": "Email verified successfully",
                         "schema": {
-                            "$ref": "#/definitions/dto.MessageResponse"
+                            "$ref": "#/definitions/github_com_rekall_backend_internal_interfaces_http_dto.MessageResponse"
                         }
                     },
                     "400": {
                         "description": "Token missing, invalid, expired, or already used (INVALID_OR_EXPIRED_TOKEN)",
                         "schema": {
-                            "$ref": "#/definitions/dto.ErrorResponse"
+                            "$ref": "#/definitions/github_com_rekall_backend_internal_interfaces_http_dto.ErrorResponse"
                         }
                     },
                     "500": {
                         "description": "Internal server error",
                         "schema": {
-                            "$ref": "#/definitions/dto.ErrorResponse"
+                            "$ref": "#/definitions/github_com_rekall_backend_internal_interfaces_http_dto.ErrorResponse"
                         }
                     }
                 }
@@ -389,7 +389,7 @@ const docTemplate = `{
                         "in": "body",
                         "required": true,
                         "schema": {
-                            "$ref": "#/definitions/dto.ResendVerificationRequest"
+                            "$ref": "#/definitions/github_com_rekall_backend_internal_interfaces_http_dto.ResendVerificationRequest"
                         }
                     }
                 ],
@@ -397,25 +397,25 @@ const docTemplate = `{
                     "200": {
                         "description": "Verification email sent (if the address is registered and unverified)",
                         "schema": {
-                            "$ref": "#/definitions/dto.MessageResponse"
+                            "$ref": "#/definitions/github_com_rekall_backend_internal_interfaces_http_dto.MessageResponse"
                         }
                     },
                     "400": {
                         "description": "Email is already verified (EMAIL_ALREADY_VERIFIED)",
                         "schema": {
-                            "$ref": "#/definitions/dto.ErrorResponse"
+                            "$ref": "#/definitions/github_com_rekall_backend_internal_interfaces_http_dto.ErrorResponse"
                         }
                     },
                     "422": {
                         "description": "Validation error",
                         "schema": {
-                            "$ref": "#/definitions/dto.ErrorResponse"
+                            "$ref": "#/definitions/github_com_rekall_backend_internal_interfaces_http_dto.ErrorResponse"
                         }
                     },
                     "500": {
                         "description": "Internal server error",
                         "schema": {
-                            "$ref": "#/definitions/dto.ErrorResponse"
+                            "$ref": "#/definitions/github_com_rekall_backend_internal_interfaces_http_dto.ErrorResponse"
                         }
                     }
                 }
@@ -478,25 +478,25 @@ const docTemplate = `{
                     "200": {
                         "description": "Paginated list of calls",
                         "schema": {
-                            "$ref": "#/definitions/dto.CallListResponse"
+                            "$ref": "#/definitions/github_com_rekall_backend_internal_interfaces_http_dto.CallListResponse"
                         }
                     },
                     "400": {
                         "description": "Invalid query parameter (e.g. malformed UUID)",
                         "schema": {
-                            "$ref": "#/definitions/dto.ErrorResponse"
+                            "$ref": "#/definitions/github_com_rekall_backend_internal_interfaces_http_dto.ErrorResponse"
                         }
                     },
                     "401": {
                         "description": "Missing or invalid token",
                         "schema": {
-                            "$ref": "#/definitions/dto.ErrorResponse"
+                            "$ref": "#/definitions/github_com_rekall_backend_internal_interfaces_http_dto.ErrorResponse"
                         }
                     },
                     "500": {
                         "description": "Internal server error",
                         "schema": {
-                            "$ref": "#/definitions/dto.ErrorResponse"
+                            "$ref": "#/definitions/github_com_rekall_backend_internal_interfaces_http_dto.ErrorResponse"
                         }
                     }
                 }
@@ -525,7 +525,7 @@ const docTemplate = `{
                         "in": "body",
                         "required": true,
                         "schema": {
-                            "$ref": "#/definitions/dto.CreateCallRequest"
+                            "$ref": "#/definitions/github_com_rekall_backend_internal_interfaces_http_dto.CreateCallRequest"
                         }
                     }
                 ],
@@ -533,25 +533,25 @@ const docTemplate = `{
                     "201": {
                         "description": "Call created",
                         "schema": {
-                            "$ref": "#/definitions/dto.CallResponseEnvelope"
+                            "$ref": "#/definitions/github_com_rekall_backend_internal_interfaces_http_dto.CallResponseEnvelope"
                         }
                     },
                     "401": {
                         "description": "Missing or invalid token",
                         "schema": {
-                            "$ref": "#/definitions/dto.ErrorResponse"
+                            "$ref": "#/definitions/github_com_rekall_backend_internal_interfaces_http_dto.ErrorResponse"
                         }
                     },
                     "422": {
                         "description": "Validation error",
                         "schema": {
-                            "$ref": "#/definitions/dto.ErrorResponse"
+                            "$ref": "#/definitions/github_com_rekall_backend_internal_interfaces_http_dto.ErrorResponse"
                         }
                     },
                     "500": {
                         "description": "Internal server error",
                         "schema": {
-                            "$ref": "#/definitions/dto.ErrorResponse"
+                            "$ref": "#/definitions/github_com_rekall_backend_internal_interfaces_http_dto.ErrorResponse"
                         }
                     }
                 }
@@ -587,31 +587,31 @@ const docTemplate = `{
                     "200": {
                         "description": "Call record",
                         "schema": {
-                            "$ref": "#/definitions/dto.CallResponseEnvelope"
+                            "$ref": "#/definitions/github_com_rekall_backend_internal_interfaces_http_dto.CallResponseEnvelope"
                         }
                     },
                     "400": {
                         "description": "Invalid UUID format",
                         "schema": {
-                            "$ref": "#/definitions/dto.ErrorResponse"
+                            "$ref": "#/definitions/github_com_rekall_backend_internal_interfaces_http_dto.ErrorResponse"
                         }
                     },
                     "401": {
                         "description": "Missing or invalid token",
                         "schema": {
-                            "$ref": "#/definitions/dto.ErrorResponse"
+                            "$ref": "#/definitions/github_com_rekall_backend_internal_interfaces_http_dto.ErrorResponse"
                         }
                     },
                     "404": {
                         "description": "Call not found (CALL_NOT_FOUND)",
                         "schema": {
-                            "$ref": "#/definitions/dto.ErrorResponse"
+                            "$ref": "#/definitions/github_com_rekall_backend_internal_interfaces_http_dto.ErrorResponse"
                         }
                     },
                     "500": {
                         "description": "Internal server error",
                         "schema": {
-                            "$ref": "#/definitions/dto.ErrorResponse"
+                            "$ref": "#/definitions/github_com_rekall_backend_internal_interfaces_http_dto.ErrorResponse"
                         }
                     }
                 }
@@ -648,25 +648,25 @@ const docTemplate = `{
                     "400": {
                         "description": "Invalid UUID format",
                         "schema": {
-                            "$ref": "#/definitions/dto.ErrorResponse"
+                            "$ref": "#/definitions/github_com_rekall_backend_internal_interfaces_http_dto.ErrorResponse"
                         }
                     },
                     "401": {
                         "description": "Missing or invalid token",
                         "schema": {
-                            "$ref": "#/definitions/dto.ErrorResponse"
+                            "$ref": "#/definitions/github_com_rekall_backend_internal_interfaces_http_dto.ErrorResponse"
                         }
                     },
                     "404": {
                         "description": "Call not found (CALL_NOT_FOUND)",
                         "schema": {
-                            "$ref": "#/definitions/dto.ErrorResponse"
+                            "$ref": "#/definitions/github_com_rekall_backend_internal_interfaces_http_dto.ErrorResponse"
                         }
                     },
                     "500": {
                         "description": "Internal server error",
                         "schema": {
-                            "$ref": "#/definitions/dto.ErrorResponse"
+                            "$ref": "#/definitions/github_com_rekall_backend_internal_interfaces_http_dto.ErrorResponse"
                         }
                     }
                 }
@@ -704,7 +704,7 @@ const docTemplate = `{
                         "in": "body",
                         "required": true,
                         "schema": {
-                            "$ref": "#/definitions/dto.UpdateCallRequest"
+                            "$ref": "#/definitions/github_com_rekall_backend_internal_interfaces_http_dto.UpdateCallRequest"
                         }
                     }
                 ],
@@ -712,37 +712,37 @@ const docTemplate = `{
                     "200": {
                         "description": "Updated call record",
                         "schema": {
-                            "$ref": "#/definitions/dto.CallResponseEnvelope"
+                            "$ref": "#/definitions/github_com_rekall_backend_internal_interfaces_http_dto.CallResponseEnvelope"
                         }
                     },
                     "400": {
                         "description": "Invalid UUID format",
                         "schema": {
-                            "$ref": "#/definitions/dto.ErrorResponse"
+                            "$ref": "#/definitions/github_com_rekall_backend_internal_interfaces_http_dto.ErrorResponse"
                         }
                     },
                     "401": {
                         "description": "Missing or invalid token",
                         "schema": {
-                            "$ref": "#/definitions/dto.ErrorResponse"
+                            "$ref": "#/definitions/github_com_rekall_backend_internal_interfaces_http_dto.ErrorResponse"
                         }
                     },
                     "404": {
                         "description": "Call not found (CALL_NOT_FOUND)",
                         "schema": {
-                            "$ref": "#/definitions/dto.ErrorResponse"
+                            "$ref": "#/definitions/github_com_rekall_backend_internal_interfaces_http_dto.ErrorResponse"
                         }
                     },
                     "422": {
                         "description": "Validation error",
                         "schema": {
-                            "$ref": "#/definitions/dto.ErrorResponse"
+                            "$ref": "#/definitions/github_com_rekall_backend_internal_interfaces_http_dto.ErrorResponse"
                         }
                     },
                     "500": {
                         "description": "Internal server error",
                         "schema": {
-                            "$ref": "#/definitions/dto.ErrorResponse"
+                            "$ref": "#/definitions/github_com_rekall_backend_internal_interfaces_http_dto.ErrorResponse"
                         }
                     }
                 }
@@ -778,31 +778,31 @@ const docTemplate = `{
                     "200": {
                         "description": "Department details",
                         "schema": {
-                            "$ref": "#/definitions/dto.DeptResponseEnvelope"
+                            "$ref": "#/definitions/github_com_rekall_backend_internal_interfaces_http_dto.DeptResponseEnvelope"
                         }
                     },
                     "400": {
                         "description": "Invalid UUID format",
                         "schema": {
-                            "$ref": "#/definitions/dto.ErrorResponse"
+                            "$ref": "#/definitions/github_com_rekall_backend_internal_interfaces_http_dto.ErrorResponse"
                         }
                     },
                     "401": {
                         "description": "Missing or invalid token",
                         "schema": {
-                            "$ref": "#/definitions/dto.ErrorResponse"
+                            "$ref": "#/definitions/github_com_rekall_backend_internal_interfaces_http_dto.ErrorResponse"
                         }
                     },
                     "404": {
                         "description": "Department not found (DEPARTMENT_NOT_FOUND)",
                         "schema": {
-                            "$ref": "#/definitions/dto.ErrorResponse"
+                            "$ref": "#/definitions/github_com_rekall_backend_internal_interfaces_http_dto.ErrorResponse"
                         }
                     },
                     "500": {
                         "description": "Internal server error",
                         "schema": {
-                            "$ref": "#/definitions/dto.ErrorResponse"
+                            "$ref": "#/definitions/github_com_rekall_backend_internal_interfaces_http_dto.ErrorResponse"
                         }
                     }
                 }
@@ -839,31 +839,31 @@ const docTemplate = `{
                     "400": {
                         "description": "Invalid UUID format",
                         "schema": {
-                            "$ref": "#/definitions/dto.ErrorResponse"
+                            "$ref": "#/definitions/github_com_rekall_backend_internal_interfaces_http_dto.ErrorResponse"
                         }
                     },
                     "401": {
                         "description": "Missing or invalid token",
                         "schema": {
-                            "$ref": "#/definitions/dto.ErrorResponse"
+                            "$ref": "#/definitions/github_com_rekall_backend_internal_interfaces_http_dto.ErrorResponse"
                         }
                     },
                     "403": {
                         "description": "Insufficient role (FORBIDDEN)",
                         "schema": {
-                            "$ref": "#/definitions/dto.ErrorResponse"
+                            "$ref": "#/definitions/github_com_rekall_backend_internal_interfaces_http_dto.ErrorResponse"
                         }
                     },
                     "404": {
                         "description": "Department not found (DEPARTMENT_NOT_FOUND)",
                         "schema": {
-                            "$ref": "#/definitions/dto.ErrorResponse"
+                            "$ref": "#/definitions/github_com_rekall_backend_internal_interfaces_http_dto.ErrorResponse"
                         }
                     },
                     "500": {
                         "description": "Internal server error",
                         "schema": {
-                            "$ref": "#/definitions/dto.ErrorResponse"
+                            "$ref": "#/definitions/github_com_rekall_backend_internal_interfaces_http_dto.ErrorResponse"
                         }
                     }
                 }
@@ -901,7 +901,7 @@ const docTemplate = `{
                         "in": "body",
                         "required": true,
                         "schema": {
-                            "$ref": "#/definitions/dto.UpdateDeptRequest"
+                            "$ref": "#/definitions/github_com_rekall_backend_internal_interfaces_http_dto.UpdateDeptRequest"
                         }
                     }
                 ],
@@ -909,43 +909,43 @@ const docTemplate = `{
                     "200": {
                         "description": "Updated department",
                         "schema": {
-                            "$ref": "#/definitions/dto.DeptResponseEnvelope"
+                            "$ref": "#/definitions/github_com_rekall_backend_internal_interfaces_http_dto.DeptResponseEnvelope"
                         }
                     },
                     "400": {
                         "description": "Invalid UUID format",
                         "schema": {
-                            "$ref": "#/definitions/dto.ErrorResponse"
+                            "$ref": "#/definitions/github_com_rekall_backend_internal_interfaces_http_dto.ErrorResponse"
                         }
                     },
                     "401": {
                         "description": "Missing or invalid token",
                         "schema": {
-                            "$ref": "#/definitions/dto.ErrorResponse"
+                            "$ref": "#/definitions/github_com_rekall_backend_internal_interfaces_http_dto.ErrorResponse"
                         }
                     },
                     "403": {
                         "description": "Insufficient role (FORBIDDEN)",
                         "schema": {
-                            "$ref": "#/definitions/dto.ErrorResponse"
+                            "$ref": "#/definitions/github_com_rekall_backend_internal_interfaces_http_dto.ErrorResponse"
                         }
                     },
                     "404": {
                         "description": "Department not found (DEPARTMENT_NOT_FOUND)",
                         "schema": {
-                            "$ref": "#/definitions/dto.ErrorResponse"
+                            "$ref": "#/definitions/github_com_rekall_backend_internal_interfaces_http_dto.ErrorResponse"
                         }
                     },
                     "422": {
                         "description": "Validation error",
                         "schema": {
-                            "$ref": "#/definitions/dto.ErrorResponse"
+                            "$ref": "#/definitions/github_com_rekall_backend_internal_interfaces_http_dto.ErrorResponse"
                         }
                     },
                     "500": {
                         "description": "Internal server error",
                         "schema": {
-                            "$ref": "#/definitions/dto.ErrorResponse"
+                            "$ref": "#/definitions/github_com_rekall_backend_internal_interfaces_http_dto.ErrorResponse"
                         }
                     }
                 }
@@ -981,31 +981,31 @@ const docTemplate = `{
                     "200": {
                         "description": "List of department members",
                         "schema": {
-                            "$ref": "#/definitions/dto.DeptMemberListResponse"
+                            "$ref": "#/definitions/github_com_rekall_backend_internal_interfaces_http_dto.DeptMemberListResponse"
                         }
                     },
                     "400": {
                         "description": "Invalid UUID format",
                         "schema": {
-                            "$ref": "#/definitions/dto.ErrorResponse"
+                            "$ref": "#/definitions/github_com_rekall_backend_internal_interfaces_http_dto.ErrorResponse"
                         }
                     },
                     "401": {
                         "description": "Missing or invalid token",
                         "schema": {
-                            "$ref": "#/definitions/dto.ErrorResponse"
+                            "$ref": "#/definitions/github_com_rekall_backend_internal_interfaces_http_dto.ErrorResponse"
                         }
                     },
                     "404": {
                         "description": "Department not found (DEPARTMENT_NOT_FOUND)",
                         "schema": {
-                            "$ref": "#/definitions/dto.ErrorResponse"
+                            "$ref": "#/definitions/github_com_rekall_backend_internal_interfaces_http_dto.ErrorResponse"
                         }
                     },
                     "500": {
                         "description": "Internal server error",
                         "schema": {
-                            "$ref": "#/definitions/dto.ErrorResponse"
+                            "$ref": "#/definitions/github_com_rekall_backend_internal_interfaces_http_dto.ErrorResponse"
                         }
                     }
                 }
@@ -1043,7 +1043,7 @@ const docTemplate = `{
                         "in": "body",
                         "required": true,
                         "schema": {
-                            "$ref": "#/definitions/dto.AddDeptMemberRequest"
+                            "$ref": "#/definitions/github_com_rekall_backend_internal_interfaces_http_dto.AddDeptMemberRequest"
                         }
                     }
                 ],
@@ -1054,43 +1054,43 @@ const docTemplate = `{
                     "400": {
                         "description": "Invalid UUID format",
                         "schema": {
-                            "$ref": "#/definitions/dto.ErrorResponse"
+                            "$ref": "#/definitions/github_com_rekall_backend_internal_interfaces_http_dto.ErrorResponse"
                         }
                     },
                     "401": {
                         "description": "Missing or invalid token",
                         "schema": {
-                            "$ref": "#/definitions/dto.ErrorResponse"
+                            "$ref": "#/definitions/github_com_rekall_backend_internal_interfaces_http_dto.ErrorResponse"
                         }
                     },
                     "403": {
                         "description": "Insufficient role (FORBIDDEN)",
                         "schema": {
-                            "$ref": "#/definitions/dto.ErrorResponse"
+                            "$ref": "#/definitions/github_com_rekall_backend_internal_interfaces_http_dto.ErrorResponse"
                         }
                     },
                     "404": {
                         "description": "Department or user not found",
                         "schema": {
-                            "$ref": "#/definitions/dto.ErrorResponse"
+                            "$ref": "#/definitions/github_com_rekall_backend_internal_interfaces_http_dto.ErrorResponse"
                         }
                     },
                     "409": {
                         "description": "User is already a department member (ALREADY_A_MEMBER)",
                         "schema": {
-                            "$ref": "#/definitions/dto.ErrorResponse"
+                            "$ref": "#/definitions/github_com_rekall_backend_internal_interfaces_http_dto.ErrorResponse"
                         }
                     },
                     "422": {
                         "description": "Validation error",
                         "schema": {
-                            "$ref": "#/definitions/dto.ErrorResponse"
+                            "$ref": "#/definitions/github_com_rekall_backend_internal_interfaces_http_dto.ErrorResponse"
                         }
                     },
                     "500": {
                         "description": "Internal server error",
                         "schema": {
-                            "$ref": "#/definitions/dto.ErrorResponse"
+                            "$ref": "#/definitions/github_com_rekall_backend_internal_interfaces_http_dto.ErrorResponse"
                         }
                     }
                 }
@@ -1138,31 +1138,31 @@ const docTemplate = `{
                     "400": {
                         "description": "Invalid UUID format",
                         "schema": {
-                            "$ref": "#/definitions/dto.ErrorResponse"
+                            "$ref": "#/definitions/github_com_rekall_backend_internal_interfaces_http_dto.ErrorResponse"
                         }
                     },
                     "401": {
                         "description": "Missing or invalid token",
                         "schema": {
-                            "$ref": "#/definitions/dto.ErrorResponse"
+                            "$ref": "#/definitions/github_com_rekall_backend_internal_interfaces_http_dto.ErrorResponse"
                         }
                     },
                     "403": {
                         "description": "Insufficient role (FORBIDDEN)",
                         "schema": {
-                            "$ref": "#/definitions/dto.ErrorResponse"
+                            "$ref": "#/definitions/github_com_rekall_backend_internal_interfaces_http_dto.ErrorResponse"
                         }
                     },
                     "404": {
                         "description": "Department or member not found",
                         "schema": {
-                            "$ref": "#/definitions/dto.ErrorResponse"
+                            "$ref": "#/definitions/github_com_rekall_backend_internal_interfaces_http_dto.ErrorResponse"
                         }
                     },
                     "500": {
                         "description": "Internal server error",
                         "schema": {
-                            "$ref": "#/definitions/dto.ErrorResponse"
+                            "$ref": "#/definitions/github_com_rekall_backend_internal_interfaces_http_dto.ErrorResponse"
                         }
                     }
                 }
@@ -1209,7 +1209,7 @@ const docTemplate = `{
                         "in": "body",
                         "required": true,
                         "schema": {
-                            "$ref": "#/definitions/dto.UpdateDeptMemberRoleRequest"
+                            "$ref": "#/definitions/github_com_rekall_backend_internal_interfaces_http_dto.UpdateDeptMemberRoleRequest"
                         }
                     }
                 ],
@@ -1220,37 +1220,37 @@ const docTemplate = `{
                     "400": {
                         "description": "Invalid UUID format",
                         "schema": {
-                            "$ref": "#/definitions/dto.ErrorResponse"
+                            "$ref": "#/definitions/github_com_rekall_backend_internal_interfaces_http_dto.ErrorResponse"
                         }
                     },
                     "401": {
                         "description": "Missing or invalid token",
                         "schema": {
-                            "$ref": "#/definitions/dto.ErrorResponse"
+                            "$ref": "#/definitions/github_com_rekall_backend_internal_interfaces_http_dto.ErrorResponse"
                         }
                     },
                     "403": {
                         "description": "Insufficient role (FORBIDDEN)",
                         "schema": {
-                            "$ref": "#/definitions/dto.ErrorResponse"
+                            "$ref": "#/definitions/github_com_rekall_backend_internal_interfaces_http_dto.ErrorResponse"
                         }
                     },
                     "404": {
                         "description": "Department or member not found",
                         "schema": {
-                            "$ref": "#/definitions/dto.ErrorResponse"
+                            "$ref": "#/definitions/github_com_rekall_backend_internal_interfaces_http_dto.ErrorResponse"
                         }
                     },
                     "422": {
                         "description": "Validation error",
                         "schema": {
-                            "$ref": "#/definitions/dto.ErrorResponse"
+                            "$ref": "#/definitions/github_com_rekall_backend_internal_interfaces_http_dto.ErrorResponse"
                         }
                     },
                     "500": {
                         "description": "Internal server error",
                         "schema": {
-                            "$ref": "#/definitions/dto.ErrorResponse"
+                            "$ref": "#/definitions/github_com_rekall_backend_internal_interfaces_http_dto.ErrorResponse"
                         }
                     }
                 }
@@ -1281,7 +1281,7 @@ const docTemplate = `{
                         "in": "body",
                         "required": true,
                         "schema": {
-                            "$ref": "#/definitions/dto.AcceptInvitationRequest"
+                            "$ref": "#/definitions/github_com_rekall_backend_internal_interfaces_http_dto.AcceptInvitationRequest"
                         }
                     }
                 ],
@@ -1289,37 +1289,37 @@ const docTemplate = `{
                     "200": {
                         "description": "Joined organization successfully",
                         "schema": {
-                            "$ref": "#/definitions/dto.OrgResponseEnvelope"
+                            "$ref": "#/definitions/github_com_rekall_backend_internal_interfaces_http_dto.OrgResponseEnvelope"
                         }
                     },
                     "400": {
                         "description": "Token invalid, expired, or already accepted (INVALID_OR_EXPIRED_INVITATION)",
                         "schema": {
-                            "$ref": "#/definitions/dto.ErrorResponse"
+                            "$ref": "#/definitions/github_com_rekall_backend_internal_interfaces_http_dto.ErrorResponse"
                         }
                     },
                     "401": {
                         "description": "Missing or invalid token",
                         "schema": {
-                            "$ref": "#/definitions/dto.ErrorResponse"
+                            "$ref": "#/definitions/github_com_rekall_backend_internal_interfaces_http_dto.ErrorResponse"
                         }
                     },
                     "403": {
                         "description": "Authenticated user email does not match invitation email (INVITATION_EMAIL_MISMATCH)",
                         "schema": {
-                            "$ref": "#/definitions/dto.ErrorResponse"
+                            "$ref": "#/definitions/github_com_rekall_backend_internal_interfaces_http_dto.ErrorResponse"
                         }
                     },
                     "422": {
                         "description": "Validation error",
                         "schema": {
-                            "$ref": "#/definitions/dto.ErrorResponse"
+                            "$ref": "#/definitions/github_com_rekall_backend_internal_interfaces_http_dto.ErrorResponse"
                         }
                     },
                     "500": {
                         "description": "Internal server error",
                         "schema": {
-                            "$ref": "#/definitions/dto.ErrorResponse"
+                            "$ref": "#/definitions/github_com_rekall_backend_internal_interfaces_http_dto.ErrorResponse"
                         }
                     }
                 }
@@ -1350,7 +1350,7 @@ const docTemplate = `{
                         "in": "body",
                         "required": true,
                         "schema": {
-                            "$ref": "#/definitions/dto.CreateMeetingRequest"
+                            "$ref": "#/definitions/github_com_rekall_backend_internal_interfaces_http_dto.CreateMeetingRequest"
                         }
                     }
                 ],
@@ -1358,25 +1358,25 @@ const docTemplate = `{
                     "201": {
                         "description": "Meeting created",
                         "schema": {
-                            "$ref": "#/definitions/dto.MeetingResponseEnvelope"
+                            "$ref": "#/definitions/github_com_rekall_backend_internal_interfaces_http_dto.MeetingResponseEnvelope"
                         }
                     },
                     "400": {
                         "description": "Invalid request body or host meeting limit reached",
                         "schema": {
-                            "$ref": "#/definitions/dto.ErrorResponse"
+                            "$ref": "#/definitions/github_com_rekall_backend_internal_interfaces_http_dto.ErrorResponse"
                         }
                     },
                     "401": {
                         "description": "Missing or invalid token",
                         "schema": {
-                            "$ref": "#/definitions/dto.ErrorResponse"
+                            "$ref": "#/definitions/github_com_rekall_backend_internal_interfaces_http_dto.ErrorResponse"
                         }
                     },
                     "500": {
                         "description": "Internal server error",
                         "schema": {
-                            "$ref": "#/definitions/dto.ErrorResponse"
+                            "$ref": "#/definitions/github_com_rekall_backend_internal_interfaces_http_dto.ErrorResponse"
                         }
                     }
                 }
@@ -1430,19 +1430,19 @@ const docTemplate = `{
                     "200": {
                         "description": "List of meetings",
                         "schema": {
-                            "$ref": "#/definitions/dto.MeetingListResponse"
+                            "$ref": "#/definitions/github_com_rekall_backend_internal_interfaces_http_dto.MeetingListResponse"
                         }
                     },
                     "401": {
                         "description": "Missing or invalid token",
                         "schema": {
-                            "$ref": "#/definitions/dto.ErrorResponse"
+                            "$ref": "#/definitions/github_com_rekall_backend_internal_interfaces_http_dto.ErrorResponse"
                         }
                     },
                     "500": {
                         "description": "Internal server error",
                         "schema": {
-                            "$ref": "#/definitions/dto.ErrorResponse"
+                            "$ref": "#/definitions/github_com_rekall_backend_internal_interfaces_http_dto.ErrorResponse"
                         }
                     }
                 }
@@ -1472,19 +1472,19 @@ const docTemplate = `{
                     "200": {
                         "description": "Meeting record",
                         "schema": {
-                            "$ref": "#/definitions/dto.MeetingResponseEnvelope"
+                            "$ref": "#/definitions/github_com_rekall_backend_internal_interfaces_http_dto.MeetingResponseEnvelope"
                         }
                     },
                     "404": {
                         "description": "Meeting not found",
                         "schema": {
-                            "$ref": "#/definitions/dto.ErrorResponse"
+                            "$ref": "#/definitions/github_com_rekall_backend_internal_interfaces_http_dto.ErrorResponse"
                         }
                     },
                     "500": {
                         "description": "Internal server error",
                         "schema": {
-                            "$ref": "#/definitions/dto.ErrorResponse"
+                            "$ref": "#/definitions/github_com_rekall_backend_internal_interfaces_http_dto.ErrorResponse"
                         }
                     }
                 }
@@ -1517,31 +1517,110 @@ const docTemplate = `{
                     "200": {
                         "description": "Meeting ended",
                         "schema": {
-                            "$ref": "#/definitions/dto.MessageResponse"
+                            "$ref": "#/definitions/github_com_rekall_backend_internal_interfaces_http_dto.MessageResponse"
                         }
                     },
                     "401": {
                         "description": "Missing or invalid token",
                         "schema": {
-                            "$ref": "#/definitions/dto.ErrorResponse"
+                            "$ref": "#/definitions/github_com_rekall_backend_internal_interfaces_http_dto.ErrorResponse"
                         }
                     },
                     "403": {
                         "description": "Caller is not the host",
                         "schema": {
-                            "$ref": "#/definitions/dto.ErrorResponse"
+                            "$ref": "#/definitions/github_com_rekall_backend_internal_interfaces_http_dto.ErrorResponse"
                         }
                     },
                     "404": {
                         "description": "Meeting not found",
                         "schema": {
-                            "$ref": "#/definitions/dto.ErrorResponse"
+                            "$ref": "#/definitions/github_com_rekall_backend_internal_interfaces_http_dto.ErrorResponse"
                         }
                     },
                     "500": {
                         "description": "Internal server error",
                         "schema": {
-                            "$ref": "#/definitions/dto.ErrorResponse"
+                            "$ref": "#/definitions/github_com_rekall_backend_internal_interfaces_http_dto.ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/v1/meetings/{code}/messages": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Returns the chat history for a meeting, ordered by sent_at ascending. Supports cursor-based pagination via the ` + "`" + `before` + "`" + ` query parameter (messages strictly older than the cursor are returned). Accessible to the host and to anyone who has ever been an admitted participant.",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Meetings"
+                ],
+                "summary": "List chat messages for a meeting",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "example": "abc-defg-hij",
+                        "description": "Meeting code",
+                        "name": "code",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "example": "2026-04-23T14:03:17Z",
+                        "description": "RFC3339 cursor — returns messages strictly older",
+                        "name": "before",
+                        "in": "query"
+                    },
+                    {
+                        "type": "integer",
+                        "default": 50,
+                        "description": "Page size (default 50, max 100)",
+                        "name": "limit",
+                        "in": "query"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Chat history page",
+                        "schema": {
+                            "$ref": "#/definitions/github_com_rekall_backend_internal_interfaces_http_dto.ChatMessageListResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "Invalid ` + "`" + `before` + "`" + ` or ` + "`" + `limit` + "`" + `",
+                        "schema": {
+                            "$ref": "#/definitions/github_com_rekall_backend_internal_interfaces_http_dto.ErrorResponse"
+                        }
+                    },
+                    "401": {
+                        "description": "Missing or invalid token",
+                        "schema": {
+                            "$ref": "#/definitions/github_com_rekall_backend_internal_interfaces_http_dto.ErrorResponse"
+                        }
+                    },
+                    "403": {
+                        "description": "Requester is not a participant (NOT_A_PARTICIPANT)",
+                        "schema": {
+                            "$ref": "#/definitions/github_com_rekall_backend_internal_interfaces_http_dto.ErrorResponse"
+                        }
+                    },
+                    "404": {
+                        "description": "Meeting not found",
+                        "schema": {
+                            "$ref": "#/definitions/github_com_rekall_backend_internal_interfaces_http_dto.ErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal server error",
+                        "schema": {
+                            "$ref": "#/definitions/github_com_rekall_backend_internal_interfaces_http_dto.ErrorResponse"
                         }
                     }
                 }
@@ -1584,25 +1663,25 @@ const docTemplate = `{
                     "401": {
                         "description": "Missing or invalid token",
                         "schema": {
-                            "$ref": "#/definitions/dto.ErrorResponse"
+                            "$ref": "#/definitions/github_com_rekall_backend_internal_interfaces_http_dto.ErrorResponse"
                         }
                     },
                     "403": {
                         "description": "Access denied (meeting ended or at capacity)",
                         "schema": {
-                            "$ref": "#/definitions/dto.ErrorResponse"
+                            "$ref": "#/definitions/github_com_rekall_backend_internal_interfaces_http_dto.ErrorResponse"
                         }
                     },
                     "404": {
                         "description": "Meeting not found",
                         "schema": {
-                            "$ref": "#/definitions/dto.ErrorResponse"
+                            "$ref": "#/definitions/github_com_rekall_backend_internal_interfaces_http_dto.ErrorResponse"
                         }
                     },
                     "500": {
                         "description": "Internal server error",
                         "schema": {
-                            "$ref": "#/definitions/dto.ErrorResponse"
+                            "$ref": "#/definitions/github_com_rekall_backend_internal_interfaces_http_dto.ErrorResponse"
                         }
                     }
                 }
@@ -1627,19 +1706,19 @@ const docTemplate = `{
                     "200": {
                         "description": "List of organizations",
                         "schema": {
-                            "$ref": "#/definitions/dto.OrgListResponse"
+                            "$ref": "#/definitions/github_com_rekall_backend_internal_interfaces_http_dto.OrgListResponse"
                         }
                     },
                     "401": {
                         "description": "Missing or invalid token",
                         "schema": {
-                            "$ref": "#/definitions/dto.ErrorResponse"
+                            "$ref": "#/definitions/github_com_rekall_backend_internal_interfaces_http_dto.ErrorResponse"
                         }
                     },
                     "500": {
                         "description": "Internal server error",
                         "schema": {
-                            "$ref": "#/definitions/dto.ErrorResponse"
+                            "$ref": "#/definitions/github_com_rekall_backend_internal_interfaces_http_dto.ErrorResponse"
                         }
                     }
                 }
@@ -1668,7 +1747,7 @@ const docTemplate = `{
                         "in": "body",
                         "required": true,
                         "schema": {
-                            "$ref": "#/definitions/dto.CreateOrgRequest"
+                            "$ref": "#/definitions/github_com_rekall_backend_internal_interfaces_http_dto.CreateOrgRequest"
                         }
                     }
                 ],
@@ -1676,31 +1755,31 @@ const docTemplate = `{
                     "201": {
                         "description": "Organization created",
                         "schema": {
-                            "$ref": "#/definitions/dto.OrgResponseEnvelope"
+                            "$ref": "#/definitions/github_com_rekall_backend_internal_interfaces_http_dto.OrgResponseEnvelope"
                         }
                     },
                     "401": {
                         "description": "Missing or invalid token",
                         "schema": {
-                            "$ref": "#/definitions/dto.ErrorResponse"
+                            "$ref": "#/definitions/github_com_rekall_backend_internal_interfaces_http_dto.ErrorResponse"
                         }
                     },
                     "409": {
                         "description": "Slug already taken (SLUG_ALREADY_TAKEN)",
                         "schema": {
-                            "$ref": "#/definitions/dto.ErrorResponse"
+                            "$ref": "#/definitions/github_com_rekall_backend_internal_interfaces_http_dto.ErrorResponse"
                         }
                     },
                     "422": {
                         "description": "Validation error",
                         "schema": {
-                            "$ref": "#/definitions/dto.ErrorResponse"
+                            "$ref": "#/definitions/github_com_rekall_backend_internal_interfaces_http_dto.ErrorResponse"
                         }
                     },
                     "500": {
                         "description": "Internal server error",
                         "schema": {
-                            "$ref": "#/definitions/dto.ErrorResponse"
+                            "$ref": "#/definitions/github_com_rekall_backend_internal_interfaces_http_dto.ErrorResponse"
                         }
                     }
                 }
@@ -1736,31 +1815,31 @@ const docTemplate = `{
                     "200": {
                         "description": "Organization details",
                         "schema": {
-                            "$ref": "#/definitions/dto.OrgResponseEnvelope"
+                            "$ref": "#/definitions/github_com_rekall_backend_internal_interfaces_http_dto.OrgResponseEnvelope"
                         }
                     },
                     "400": {
                         "description": "Invalid UUID format",
                         "schema": {
-                            "$ref": "#/definitions/dto.ErrorResponse"
+                            "$ref": "#/definitions/github_com_rekall_backend_internal_interfaces_http_dto.ErrorResponse"
                         }
                     },
                     "401": {
                         "description": "Missing or invalid token",
                         "schema": {
-                            "$ref": "#/definitions/dto.ErrorResponse"
+                            "$ref": "#/definitions/github_com_rekall_backend_internal_interfaces_http_dto.ErrorResponse"
                         }
                     },
                     "404": {
                         "description": "Organization not found or access denied",
                         "schema": {
-                            "$ref": "#/definitions/dto.ErrorResponse"
+                            "$ref": "#/definitions/github_com_rekall_backend_internal_interfaces_http_dto.ErrorResponse"
                         }
                     },
                     "500": {
                         "description": "Internal server error",
                         "schema": {
-                            "$ref": "#/definitions/dto.ErrorResponse"
+                            "$ref": "#/definitions/github_com_rekall_backend_internal_interfaces_http_dto.ErrorResponse"
                         }
                     }
                 }
@@ -1797,31 +1876,31 @@ const docTemplate = `{
                     "400": {
                         "description": "Invalid UUID format",
                         "schema": {
-                            "$ref": "#/definitions/dto.ErrorResponse"
+                            "$ref": "#/definitions/github_com_rekall_backend_internal_interfaces_http_dto.ErrorResponse"
                         }
                     },
                     "401": {
                         "description": "Missing or invalid token",
                         "schema": {
-                            "$ref": "#/definitions/dto.ErrorResponse"
+                            "$ref": "#/definitions/github_com_rekall_backend_internal_interfaces_http_dto.ErrorResponse"
                         }
                     },
                     "403": {
                         "description": "Insufficient role — owner required (FORBIDDEN)",
                         "schema": {
-                            "$ref": "#/definitions/dto.ErrorResponse"
+                            "$ref": "#/definitions/github_com_rekall_backend_internal_interfaces_http_dto.ErrorResponse"
                         }
                     },
                     "404": {
                         "description": "Organization not found or access denied",
                         "schema": {
-                            "$ref": "#/definitions/dto.ErrorResponse"
+                            "$ref": "#/definitions/github_com_rekall_backend_internal_interfaces_http_dto.ErrorResponse"
                         }
                     },
                     "500": {
                         "description": "Internal server error",
                         "schema": {
-                            "$ref": "#/definitions/dto.ErrorResponse"
+                            "$ref": "#/definitions/github_com_rekall_backend_internal_interfaces_http_dto.ErrorResponse"
                         }
                     }
                 }
@@ -1859,7 +1938,7 @@ const docTemplate = `{
                         "in": "body",
                         "required": true,
                         "schema": {
-                            "$ref": "#/definitions/dto.UpdateOrgRequest"
+                            "$ref": "#/definitions/github_com_rekall_backend_internal_interfaces_http_dto.UpdateOrgRequest"
                         }
                     }
                 ],
@@ -1867,43 +1946,43 @@ const docTemplate = `{
                     "200": {
                         "description": "Updated organization",
                         "schema": {
-                            "$ref": "#/definitions/dto.OrgResponseEnvelope"
+                            "$ref": "#/definitions/github_com_rekall_backend_internal_interfaces_http_dto.OrgResponseEnvelope"
                         }
                     },
                     "400": {
                         "description": "Invalid UUID format",
                         "schema": {
-                            "$ref": "#/definitions/dto.ErrorResponse"
+                            "$ref": "#/definitions/github_com_rekall_backend_internal_interfaces_http_dto.ErrorResponse"
                         }
                     },
                     "401": {
                         "description": "Missing or invalid token",
                         "schema": {
-                            "$ref": "#/definitions/dto.ErrorResponse"
+                            "$ref": "#/definitions/github_com_rekall_backend_internal_interfaces_http_dto.ErrorResponse"
                         }
                     },
                     "403": {
                         "description": "Insufficient role — owner or admin required (FORBIDDEN)",
                         "schema": {
-                            "$ref": "#/definitions/dto.ErrorResponse"
+                            "$ref": "#/definitions/github_com_rekall_backend_internal_interfaces_http_dto.ErrorResponse"
                         }
                     },
                     "404": {
                         "description": "Organization not found or access denied",
                         "schema": {
-                            "$ref": "#/definitions/dto.ErrorResponse"
+                            "$ref": "#/definitions/github_com_rekall_backend_internal_interfaces_http_dto.ErrorResponse"
                         }
                     },
                     "422": {
                         "description": "Validation error",
                         "schema": {
-                            "$ref": "#/definitions/dto.ErrorResponse"
+                            "$ref": "#/definitions/github_com_rekall_backend_internal_interfaces_http_dto.ErrorResponse"
                         }
                     },
                     "500": {
                         "description": "Internal server error",
                         "schema": {
-                            "$ref": "#/definitions/dto.ErrorResponse"
+                            "$ref": "#/definitions/github_com_rekall_backend_internal_interfaces_http_dto.ErrorResponse"
                         }
                     }
                 }
@@ -1939,31 +2018,31 @@ const docTemplate = `{
                     "200": {
                         "description": "List of departments",
                         "schema": {
-                            "$ref": "#/definitions/dto.DeptListResponse"
+                            "$ref": "#/definitions/github_com_rekall_backend_internal_interfaces_http_dto.DeptListResponse"
                         }
                     },
                     "400": {
                         "description": "Invalid UUID format",
                         "schema": {
-                            "$ref": "#/definitions/dto.ErrorResponse"
+                            "$ref": "#/definitions/github_com_rekall_backend_internal_interfaces_http_dto.ErrorResponse"
                         }
                     },
                     "401": {
                         "description": "Missing or invalid token",
                         "schema": {
-                            "$ref": "#/definitions/dto.ErrorResponse"
+                            "$ref": "#/definitions/github_com_rekall_backend_internal_interfaces_http_dto.ErrorResponse"
                         }
                     },
                     "404": {
                         "description": "Organization not found or access denied",
                         "schema": {
-                            "$ref": "#/definitions/dto.ErrorResponse"
+                            "$ref": "#/definitions/github_com_rekall_backend_internal_interfaces_http_dto.ErrorResponse"
                         }
                     },
                     "500": {
                         "description": "Internal server error",
                         "schema": {
-                            "$ref": "#/definitions/dto.ErrorResponse"
+                            "$ref": "#/definitions/github_com_rekall_backend_internal_interfaces_http_dto.ErrorResponse"
                         }
                     }
                 }
@@ -2001,7 +2080,7 @@ const docTemplate = `{
                         "in": "body",
                         "required": true,
                         "schema": {
-                            "$ref": "#/definitions/dto.CreateDeptRequest"
+                            "$ref": "#/definitions/github_com_rekall_backend_internal_interfaces_http_dto.CreateDeptRequest"
                         }
                     }
                 ],
@@ -2009,43 +2088,43 @@ const docTemplate = `{
                     "201": {
                         "description": "Department created",
                         "schema": {
-                            "$ref": "#/definitions/dto.DeptResponseEnvelope"
+                            "$ref": "#/definitions/github_com_rekall_backend_internal_interfaces_http_dto.DeptResponseEnvelope"
                         }
                     },
                     "400": {
                         "description": "Invalid UUID format",
                         "schema": {
-                            "$ref": "#/definitions/dto.ErrorResponse"
+                            "$ref": "#/definitions/github_com_rekall_backend_internal_interfaces_http_dto.ErrorResponse"
                         }
                     },
                     "401": {
                         "description": "Missing or invalid token",
                         "schema": {
-                            "$ref": "#/definitions/dto.ErrorResponse"
+                            "$ref": "#/definitions/github_com_rekall_backend_internal_interfaces_http_dto.ErrorResponse"
                         }
                     },
                     "403": {
                         "description": "Insufficient role (FORBIDDEN)",
                         "schema": {
-                            "$ref": "#/definitions/dto.ErrorResponse"
+                            "$ref": "#/definitions/github_com_rekall_backend_internal_interfaces_http_dto.ErrorResponse"
                         }
                     },
                     "404": {
                         "description": "Organization not found or access denied",
                         "schema": {
-                            "$ref": "#/definitions/dto.ErrorResponse"
+                            "$ref": "#/definitions/github_com_rekall_backend_internal_interfaces_http_dto.ErrorResponse"
                         }
                     },
                     "422": {
                         "description": "Validation error",
                         "schema": {
-                            "$ref": "#/definitions/dto.ErrorResponse"
+                            "$ref": "#/definitions/github_com_rekall_backend_internal_interfaces_http_dto.ErrorResponse"
                         }
                     },
                     "500": {
                         "description": "Internal server error",
                         "schema": {
-                            "$ref": "#/definitions/dto.ErrorResponse"
+                            "$ref": "#/definitions/github_com_rekall_backend_internal_interfaces_http_dto.ErrorResponse"
                         }
                     }
                 }
@@ -2085,7 +2164,7 @@ const docTemplate = `{
                         "in": "body",
                         "required": true,
                         "schema": {
-                            "$ref": "#/definitions/dto.InviteUserRequest"
+                            "$ref": "#/definitions/github_com_rekall_backend_internal_interfaces_http_dto.InviteUserRequest"
                         }
                     }
                 ],
@@ -2093,49 +2172,49 @@ const docTemplate = `{
                     "202": {
                         "description": "Invitation sent",
                         "schema": {
-                            "$ref": "#/definitions/dto.MessageResponse"
+                            "$ref": "#/definitions/github_com_rekall_backend_internal_interfaces_http_dto.MessageResponse"
                         }
                     },
                     "400": {
                         "description": "Invalid UUID format",
                         "schema": {
-                            "$ref": "#/definitions/dto.ErrorResponse"
+                            "$ref": "#/definitions/github_com_rekall_backend_internal_interfaces_http_dto.ErrorResponse"
                         }
                     },
                     "401": {
                         "description": "Missing or invalid token",
                         "schema": {
-                            "$ref": "#/definitions/dto.ErrorResponse"
+                            "$ref": "#/definitions/github_com_rekall_backend_internal_interfaces_http_dto.ErrorResponse"
                         }
                     },
                     "403": {
                         "description": "Insufficient role (FORBIDDEN)",
                         "schema": {
-                            "$ref": "#/definitions/dto.ErrorResponse"
+                            "$ref": "#/definitions/github_com_rekall_backend_internal_interfaces_http_dto.ErrorResponse"
                         }
                     },
                     "404": {
                         "description": "Organization not found or access denied",
                         "schema": {
-                            "$ref": "#/definitions/dto.ErrorResponse"
+                            "$ref": "#/definitions/github_com_rekall_backend_internal_interfaces_http_dto.ErrorResponse"
                         }
                     },
                     "409": {
                         "description": "User is already a member (ALREADY_A_MEMBER)",
                         "schema": {
-                            "$ref": "#/definitions/dto.ErrorResponse"
+                            "$ref": "#/definitions/github_com_rekall_backend_internal_interfaces_http_dto.ErrorResponse"
                         }
                     },
                     "422": {
                         "description": "Validation error",
                         "schema": {
-                            "$ref": "#/definitions/dto.ErrorResponse"
+                            "$ref": "#/definitions/github_com_rekall_backend_internal_interfaces_http_dto.ErrorResponse"
                         }
                     },
                     "500": {
                         "description": "Internal server error",
                         "schema": {
-                            "$ref": "#/definitions/dto.ErrorResponse"
+                            "$ref": "#/definitions/github_com_rekall_backend_internal_interfaces_http_dto.ErrorResponse"
                         }
                     }
                 }
@@ -2171,31 +2250,31 @@ const docTemplate = `{
                     "200": {
                         "description": "List of members",
                         "schema": {
-                            "$ref": "#/definitions/dto.MemberListResponse"
+                            "$ref": "#/definitions/github_com_rekall_backend_internal_interfaces_http_dto.MemberListResponse"
                         }
                     },
                     "400": {
                         "description": "Invalid UUID format",
                         "schema": {
-                            "$ref": "#/definitions/dto.ErrorResponse"
+                            "$ref": "#/definitions/github_com_rekall_backend_internal_interfaces_http_dto.ErrorResponse"
                         }
                     },
                     "401": {
                         "description": "Missing or invalid token",
                         "schema": {
-                            "$ref": "#/definitions/dto.ErrorResponse"
+                            "$ref": "#/definitions/github_com_rekall_backend_internal_interfaces_http_dto.ErrorResponse"
                         }
                     },
                     "404": {
                         "description": "Organization not found or access denied",
                         "schema": {
-                            "$ref": "#/definitions/dto.ErrorResponse"
+                            "$ref": "#/definitions/github_com_rekall_backend_internal_interfaces_http_dto.ErrorResponse"
                         }
                     },
                     "500": {
                         "description": "Internal server error",
                         "schema": {
-                            "$ref": "#/definitions/dto.ErrorResponse"
+                            "$ref": "#/definitions/github_com_rekall_backend_internal_interfaces_http_dto.ErrorResponse"
                         }
                     }
                 }
@@ -2243,31 +2322,31 @@ const docTemplate = `{
                     "400": {
                         "description": "Cannot remove the owner (CANNOT_REMOVE_OWNER)",
                         "schema": {
-                            "$ref": "#/definitions/dto.ErrorResponse"
+                            "$ref": "#/definitions/github_com_rekall_backend_internal_interfaces_http_dto.ErrorResponse"
                         }
                     },
                     "401": {
                         "description": "Missing or invalid token",
                         "schema": {
-                            "$ref": "#/definitions/dto.ErrorResponse"
+                            "$ref": "#/definitions/github_com_rekall_backend_internal_interfaces_http_dto.ErrorResponse"
                         }
                     },
                     "403": {
                         "description": "Insufficient role (FORBIDDEN)",
                         "schema": {
-                            "$ref": "#/definitions/dto.ErrorResponse"
+                            "$ref": "#/definitions/github_com_rekall_backend_internal_interfaces_http_dto.ErrorResponse"
                         }
                     },
                     "404": {
                         "description": "Organization or member not found",
                         "schema": {
-                            "$ref": "#/definitions/dto.ErrorResponse"
+                            "$ref": "#/definitions/github_com_rekall_backend_internal_interfaces_http_dto.ErrorResponse"
                         }
                     },
                     "500": {
                         "description": "Internal server error",
                         "schema": {
-                            "$ref": "#/definitions/dto.ErrorResponse"
+                            "$ref": "#/definitions/github_com_rekall_backend_internal_interfaces_http_dto.ErrorResponse"
                         }
                     }
                 }
@@ -2314,7 +2393,7 @@ const docTemplate = `{
                         "in": "body",
                         "required": true,
                         "schema": {
-                            "$ref": "#/definitions/dto.UpdateMemberRoleRequest"
+                            "$ref": "#/definitions/github_com_rekall_backend_internal_interfaces_http_dto.UpdateMemberRoleRequest"
                         }
                     }
                 ],
@@ -2325,37 +2404,37 @@ const docTemplate = `{
                     "400": {
                         "description": "Cannot remove or demote the owner (CANNOT_REMOVE_OWNER)",
                         "schema": {
-                            "$ref": "#/definitions/dto.ErrorResponse"
+                            "$ref": "#/definitions/github_com_rekall_backend_internal_interfaces_http_dto.ErrorResponse"
                         }
                     },
                     "401": {
                         "description": "Missing or invalid token",
                         "schema": {
-                            "$ref": "#/definitions/dto.ErrorResponse"
+                            "$ref": "#/definitions/github_com_rekall_backend_internal_interfaces_http_dto.ErrorResponse"
                         }
                     },
                     "403": {
                         "description": "Insufficient role (FORBIDDEN)",
                         "schema": {
-                            "$ref": "#/definitions/dto.ErrorResponse"
+                            "$ref": "#/definitions/github_com_rekall_backend_internal_interfaces_http_dto.ErrorResponse"
                         }
                     },
                     "404": {
                         "description": "Organization or member not found",
                         "schema": {
-                            "$ref": "#/definitions/dto.ErrorResponse"
+                            "$ref": "#/definitions/github_com_rekall_backend_internal_interfaces_http_dto.ErrorResponse"
                         }
                     },
                     "422": {
                         "description": "Validation error",
                         "schema": {
-                            "$ref": "#/definitions/dto.ErrorResponse"
+                            "$ref": "#/definitions/github_com_rekall_backend_internal_interfaces_http_dto.ErrorResponse"
                         }
                     },
                     "500": {
                         "description": "Internal server error",
                         "schema": {
-                            "$ref": "#/definitions/dto.ErrorResponse"
+                            "$ref": "#/definitions/github_com_rekall_backend_internal_interfaces_http_dto.ErrorResponse"
                         }
                     }
                 }
@@ -2399,25 +2478,25 @@ const docTemplate = `{
                     "200": {
                         "description": "Paginated user list",
                         "schema": {
-                            "$ref": "#/definitions/dto.UserListResponse"
+                            "$ref": "#/definitions/github_com_rekall_backend_internal_interfaces_http_dto.UserListResponse"
                         }
                     },
                     "401": {
                         "description": "Missing or invalid token",
                         "schema": {
-                            "$ref": "#/definitions/dto.ErrorResponse"
+                            "$ref": "#/definitions/github_com_rekall_backend_internal_interfaces_http_dto.ErrorResponse"
                         }
                     },
                     "403": {
                         "description": "Insufficient role — admin required (FORBIDDEN)",
                         "schema": {
-                            "$ref": "#/definitions/dto.ErrorResponse"
+                            "$ref": "#/definitions/github_com_rekall_backend_internal_interfaces_http_dto.ErrorResponse"
                         }
                     },
                     "500": {
                         "description": "Internal server error",
                         "schema": {
-                            "$ref": "#/definitions/dto.ErrorResponse"
+                            "$ref": "#/definitions/github_com_rekall_backend_internal_interfaces_http_dto.ErrorResponse"
                         }
                     }
                 }
@@ -2446,7 +2525,7 @@ const docTemplate = `{
                         "in": "body",
                         "required": true,
                         "schema": {
-                            "$ref": "#/definitions/handlers.CreateUserRequest"
+                            "$ref": "#/definitions/internal_interfaces_http_handlers.CreateUserRequest"
                         }
                     }
                 ],
@@ -2454,37 +2533,37 @@ const docTemplate = `{
                     "201": {
                         "description": "User created",
                         "schema": {
-                            "$ref": "#/definitions/dto.UserResponseEnvelope"
+                            "$ref": "#/definitions/github_com_rekall_backend_internal_interfaces_http_dto.UserResponseEnvelope"
                         }
                     },
                     "401": {
                         "description": "Missing or invalid token",
                         "schema": {
-                            "$ref": "#/definitions/dto.ErrorResponse"
+                            "$ref": "#/definitions/github_com_rekall_backend_internal_interfaces_http_dto.ErrorResponse"
                         }
                     },
                     "403": {
                         "description": "Insufficient role — admin required (FORBIDDEN)",
                         "schema": {
-                            "$ref": "#/definitions/dto.ErrorResponse"
+                            "$ref": "#/definitions/github_com_rekall_backend_internal_interfaces_http_dto.ErrorResponse"
                         }
                     },
                     "409": {
                         "description": "Email already registered (EMAIL_ALREADY_REGISTERED)",
                         "schema": {
-                            "$ref": "#/definitions/dto.ErrorResponse"
+                            "$ref": "#/definitions/github_com_rekall_backend_internal_interfaces_http_dto.ErrorResponse"
                         }
                     },
                     "422": {
                         "description": "Validation error",
                         "schema": {
-                            "$ref": "#/definitions/dto.ErrorResponse"
+                            "$ref": "#/definitions/github_com_rekall_backend_internal_interfaces_http_dto.ErrorResponse"
                         }
                     },
                     "500": {
                         "description": "Internal server error",
                         "schema": {
-                            "$ref": "#/definitions/dto.ErrorResponse"
+                            "$ref": "#/definitions/github_com_rekall_backend_internal_interfaces_http_dto.ErrorResponse"
                         }
                     }
                 }
@@ -2520,37 +2599,37 @@ const docTemplate = `{
                     "200": {
                         "description": "User profile",
                         "schema": {
-                            "$ref": "#/definitions/dto.UserResponseEnvelope"
+                            "$ref": "#/definitions/github_com_rekall_backend_internal_interfaces_http_dto.UserResponseEnvelope"
                         }
                     },
                     "400": {
                         "description": "Invalid UUID format",
                         "schema": {
-                            "$ref": "#/definitions/dto.ErrorResponse"
+                            "$ref": "#/definitions/github_com_rekall_backend_internal_interfaces_http_dto.ErrorResponse"
                         }
                     },
                     "401": {
                         "description": "Missing or invalid token",
                         "schema": {
-                            "$ref": "#/definitions/dto.ErrorResponse"
+                            "$ref": "#/definitions/github_com_rekall_backend_internal_interfaces_http_dto.ErrorResponse"
                         }
                     },
                     "403": {
                         "description": "Insufficient role — admin required (FORBIDDEN)",
                         "schema": {
-                            "$ref": "#/definitions/dto.ErrorResponse"
+                            "$ref": "#/definitions/github_com_rekall_backend_internal_interfaces_http_dto.ErrorResponse"
                         }
                     },
                     "404": {
                         "description": "User not found (USER_NOT_FOUND)",
                         "schema": {
-                            "$ref": "#/definitions/dto.ErrorResponse"
+                            "$ref": "#/definitions/github_com_rekall_backend_internal_interfaces_http_dto.ErrorResponse"
                         }
                     },
                     "500": {
                         "description": "Internal server error",
                         "schema": {
-                            "$ref": "#/definitions/dto.ErrorResponse"
+                            "$ref": "#/definitions/github_com_rekall_backend_internal_interfaces_http_dto.ErrorResponse"
                         }
                     }
                 }
@@ -2587,31 +2666,31 @@ const docTemplate = `{
                     "400": {
                         "description": "Invalid UUID format",
                         "schema": {
-                            "$ref": "#/definitions/dto.ErrorResponse"
+                            "$ref": "#/definitions/github_com_rekall_backend_internal_interfaces_http_dto.ErrorResponse"
                         }
                     },
                     "401": {
                         "description": "Missing or invalid token",
                         "schema": {
-                            "$ref": "#/definitions/dto.ErrorResponse"
+                            "$ref": "#/definitions/github_com_rekall_backend_internal_interfaces_http_dto.ErrorResponse"
                         }
                     },
                     "403": {
                         "description": "Insufficient role — admin required (FORBIDDEN)",
                         "schema": {
-                            "$ref": "#/definitions/dto.ErrorResponse"
+                            "$ref": "#/definitions/github_com_rekall_backend_internal_interfaces_http_dto.ErrorResponse"
                         }
                     },
                     "404": {
                         "description": "User not found (USER_NOT_FOUND)",
                         "schema": {
-                            "$ref": "#/definitions/dto.ErrorResponse"
+                            "$ref": "#/definitions/github_com_rekall_backend_internal_interfaces_http_dto.ErrorResponse"
                         }
                     },
                     "500": {
                         "description": "Internal server error",
                         "schema": {
-                            "$ref": "#/definitions/dto.ErrorResponse"
+                            "$ref": "#/definitions/github_com_rekall_backend_internal_interfaces_http_dto.ErrorResponse"
                         }
                     }
                 }
@@ -2675,7 +2754,7 @@ const docTemplate = `{
                     "503": {
                         "description": "Database unavailable (DB_UNAVAILABLE)",
                         "schema": {
-                            "$ref": "#/definitions/dto.ErrorResponse"
+                            "$ref": "#/definitions/github_com_rekall_backend_internal_interfaces_http_dto.ErrorResponse"
                         }
                     }
                 }
@@ -2683,7 +2762,7 @@ const docTemplate = `{
         }
     },
     "definitions": {
-        "dto.AcceptInvitationRequest": {
+        "github_com_rekall_backend_internal_interfaces_http_dto.AcceptInvitationRequest": {
             "type": "object",
             "required": [
                 "token"
@@ -2695,11 +2774,11 @@ const docTemplate = `{
                 }
             }
         },
-        "dto.AccessTokenResponse": {
+        "github_com_rekall_backend_internal_interfaces_http_dto.AccessTokenResponse": {
             "type": "object",
             "properties": {
                 "data": {
-                    "$ref": "#/definitions/dto.TokenObj"
+                    "$ref": "#/definitions/github_com_rekall_backend_internal_interfaces_http_dto.TokenObj"
                 },
                 "success": {
                     "type": "boolean",
@@ -2707,7 +2786,7 @@ const docTemplate = `{
                 }
             }
         },
-        "dto.AddDeptMemberRequest": {
+        "github_com_rekall_backend_internal_interfaces_http_dto.AddDeptMemberRequest": {
             "type": "object",
             "required": [
                 "user_id"
@@ -2727,17 +2806,17 @@ const docTemplate = `{
                 }
             }
         },
-        "dto.CallListResponse": {
+        "github_com_rekall_backend_internal_interfaces_http_dto.CallListResponse": {
             "type": "object",
             "properties": {
                 "data": {
                     "type": "array",
                     "items": {
-                        "$ref": "#/definitions/dto.CallResponse"
+                        "$ref": "#/definitions/github_com_rekall_backend_internal_interfaces_http_dto.CallResponse"
                     }
                 },
                 "meta": {
-                    "$ref": "#/definitions/dto.Meta"
+                    "$ref": "#/definitions/github_com_rekall_backend_internal_interfaces_http_dto.Meta"
                 },
                 "success": {
                     "type": "boolean",
@@ -2745,7 +2824,7 @@ const docTemplate = `{
                 }
             }
         },
-        "dto.CallResponse": {
+        "github_com_rekall_backend_internal_interfaces_http_dto.CallResponse": {
             "type": "object",
             "properties": {
                 "created_at": {
@@ -2802,11 +2881,11 @@ const docTemplate = `{
                 }
             }
         },
-        "dto.CallResponseEnvelope": {
+        "github_com_rekall_backend_internal_interfaces_http_dto.CallResponseEnvelope": {
             "type": "object",
             "properties": {
                 "data": {
-                    "$ref": "#/definitions/dto.CallResponse"
+                    "$ref": "#/definitions/github_com_rekall_backend_internal_interfaces_http_dto.CallResponse"
                 },
                 "success": {
                     "type": "boolean",
@@ -2814,7 +2893,53 @@ const docTemplate = `{
                 }
             }
         },
-        "dto.CreateCallRequest": {
+        "github_com_rekall_backend_internal_interfaces_http_dto.ChatMessage": {
+            "type": "object",
+            "properties": {
+                "body": {
+                    "type": "string"
+                },
+                "id": {
+                    "type": "string"
+                },
+                "meeting_id": {
+                    "type": "string"
+                },
+                "sent_at": {
+                    "type": "string"
+                },
+                "user_id": {
+                    "type": "string"
+                }
+            }
+        },
+        "github_com_rekall_backend_internal_interfaces_http_dto.ChatMessageListPayload": {
+            "type": "object",
+            "properties": {
+                "has_more": {
+                    "type": "boolean"
+                },
+                "messages": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/github_com_rekall_backend_internal_interfaces_http_dto.ChatMessage"
+                    }
+                }
+            }
+        },
+        "github_com_rekall_backend_internal_interfaces_http_dto.ChatMessageListResponse": {
+            "type": "object",
+            "properties": {
+                "data": {
+                    "$ref": "#/definitions/github_com_rekall_backend_internal_interfaces_http_dto.ChatMessageListPayload"
+                },
+                "success": {
+                    "type": "boolean",
+                    "example": true
+                }
+            }
+        },
+        "github_com_rekall_backend_internal_interfaces_http_dto.CreateCallRequest": {
             "type": "object",
             "required": [
                 "title",
@@ -2836,7 +2961,7 @@ const docTemplate = `{
                 }
             }
         },
-        "dto.CreateDeptRequest": {
+        "github_com_rekall_backend_internal_interfaces_http_dto.CreateDeptRequest": {
             "type": "object",
             "required": [
                 "name"
@@ -2852,7 +2977,7 @@ const docTemplate = `{
                 }
             }
         },
-        "dto.CreateMeetingRequest": {
+        "github_com_rekall_backend_internal_interfaces_http_dto.CreateMeetingRequest": {
             "type": "object",
             "required": [
                 "type"
@@ -2876,7 +3001,7 @@ const docTemplate = `{
                 }
             }
         },
-        "dto.CreateOrgRequest": {
+        "github_com_rekall_backend_internal_interfaces_http_dto.CreateOrgRequest": {
             "type": "object",
             "required": [
                 "name"
@@ -2888,13 +3013,13 @@ const docTemplate = `{
                 }
             }
         },
-        "dto.DeptListResponse": {
+        "github_com_rekall_backend_internal_interfaces_http_dto.DeptListResponse": {
             "type": "object",
             "properties": {
                 "data": {
                     "type": "array",
                     "items": {
-                        "$ref": "#/definitions/dto.DeptResponse"
+                        "$ref": "#/definitions/github_com_rekall_backend_internal_interfaces_http_dto.DeptResponse"
                     }
                 },
                 "success": {
@@ -2903,13 +3028,13 @@ const docTemplate = `{
                 }
             }
         },
-        "dto.DeptMemberListResponse": {
+        "github_com_rekall_backend_internal_interfaces_http_dto.DeptMemberListResponse": {
             "type": "object",
             "properties": {
                 "data": {
                     "type": "array",
                     "items": {
-                        "$ref": "#/definitions/dto.DeptMemberResponse"
+                        "$ref": "#/definitions/github_com_rekall_backend_internal_interfaces_http_dto.DeptMemberResponse"
                     }
                 },
                 "success": {
@@ -2918,7 +3043,7 @@ const docTemplate = `{
                 }
             }
         },
-        "dto.DeptMemberResponse": {
+        "github_com_rekall_backend_internal_interfaces_http_dto.DeptMemberResponse": {
             "type": "object",
             "properties": {
                 "department_id": {
@@ -2943,7 +3068,7 @@ const docTemplate = `{
                 }
             }
         },
-        "dto.DeptResponse": {
+        "github_com_rekall_backend_internal_interfaces_http_dto.DeptResponse": {
             "type": "object",
             "properties": {
                 "created_at": {
@@ -2976,11 +3101,11 @@ const docTemplate = `{
                 }
             }
         },
-        "dto.DeptResponseEnvelope": {
+        "github_com_rekall_backend_internal_interfaces_http_dto.DeptResponseEnvelope": {
             "type": "object",
             "properties": {
                 "data": {
-                    "$ref": "#/definitions/dto.DeptResponse"
+                    "$ref": "#/definitions/github_com_rekall_backend_internal_interfaces_http_dto.DeptResponse"
                 },
                 "success": {
                     "type": "boolean",
@@ -2988,7 +3113,7 @@ const docTemplate = `{
                 }
             }
         },
-        "dto.ErrorBody": {
+        "github_com_rekall_backend_internal_interfaces_http_dto.ErrorBody": {
             "type": "object",
             "properties": {
                 "code": {
@@ -3002,11 +3127,11 @@ const docTemplate = `{
                 }
             }
         },
-        "dto.ErrorResponse": {
+        "github_com_rekall_backend_internal_interfaces_http_dto.ErrorResponse": {
             "type": "object",
             "properties": {
                 "error": {
-                    "$ref": "#/definitions/dto.ErrorBody"
+                    "$ref": "#/definitions/github_com_rekall_backend_internal_interfaces_http_dto.ErrorBody"
                 },
                 "success": {
                     "type": "boolean",
@@ -3014,7 +3139,7 @@ const docTemplate = `{
                 }
             }
         },
-        "dto.ForgotPasswordRequest": {
+        "github_com_rekall_backend_internal_interfaces_http_dto.ForgotPasswordRequest": {
             "type": "object",
             "required": [
                 "email"
@@ -3026,7 +3151,7 @@ const docTemplate = `{
                 }
             }
         },
-        "dto.InviteUserRequest": {
+        "github_com_rekall_backend_internal_interfaces_http_dto.InviteUserRequest": {
             "type": "object",
             "required": [
                 "email"
@@ -3046,7 +3171,7 @@ const docTemplate = `{
                 }
             }
         },
-        "dto.LoginRequest": {
+        "github_com_rekall_backend_internal_interfaces_http_dto.LoginRequest": {
             "type": "object",
             "required": [
                 "email",
@@ -3063,7 +3188,7 @@ const docTemplate = `{
                 }
             }
         },
-        "dto.LoginResponse": {
+        "github_com_rekall_backend_internal_interfaces_http_dto.LoginResponse": {
             "type": "object",
             "properties": {
                 "access_token": {
@@ -3071,15 +3196,15 @@ const docTemplate = `{
                     "example": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIwMDAwMDAwMC0wMDAwLTAwMDAtMDAwMC0wMDAwMDAwMDAwMDEifQ.signature"
                 },
                 "user": {
-                    "$ref": "#/definitions/dto.UserResponse"
+                    "$ref": "#/definitions/github_com_rekall_backend_internal_interfaces_http_dto.UserResponse"
                 }
             }
         },
-        "dto.LoginResponseEnvelope": {
+        "github_com_rekall_backend_internal_interfaces_http_dto.LoginResponseEnvelope": {
             "type": "object",
             "properties": {
                 "data": {
-                    "$ref": "#/definitions/dto.LoginResponse"
+                    "$ref": "#/definitions/github_com_rekall_backend_internal_interfaces_http_dto.LoginResponse"
                 },
                 "success": {
                     "type": "boolean",
@@ -3087,13 +3212,13 @@ const docTemplate = `{
                 }
             }
         },
-        "dto.MeetingListResponse": {
+        "github_com_rekall_backend_internal_interfaces_http_dto.MeetingListResponse": {
             "type": "object",
             "properties": {
                 "data": {
                     "type": "array",
                     "items": {
-                        "$ref": "#/definitions/dto.MeetingResponse"
+                        "$ref": "#/definitions/github_com_rekall_backend_internal_interfaces_http_dto.MeetingResponse"
                     }
                 },
                 "success": {
@@ -3102,7 +3227,7 @@ const docTemplate = `{
                 }
             }
         },
-        "dto.MeetingResponse": {
+        "github_com_rekall_backend_internal_interfaces_http_dto.MeetingResponse": {
             "type": "object",
             "properties": {
                 "code": {
@@ -3132,7 +3257,7 @@ const docTemplate = `{
                 "participant_previews": {
                     "type": "array",
                     "items": {
-                        "$ref": "#/definitions/dto.ParticipantPreview"
+                        "$ref": "#/definitions/github_com_rekall_backend_internal_interfaces_http_dto.ParticipantPreview"
                     }
                 },
                 "scope_id": {
@@ -3155,11 +3280,11 @@ const docTemplate = `{
                 }
             }
         },
-        "dto.MeetingResponseEnvelope": {
+        "github_com_rekall_backend_internal_interfaces_http_dto.MeetingResponseEnvelope": {
             "type": "object",
             "properties": {
                 "data": {
-                    "$ref": "#/definitions/dto.MeetingResponse"
+                    "$ref": "#/definitions/github_com_rekall_backend_internal_interfaces_http_dto.MeetingResponse"
                 },
                 "success": {
                     "type": "boolean",
@@ -3167,13 +3292,13 @@ const docTemplate = `{
                 }
             }
         },
-        "dto.MemberListResponse": {
+        "github_com_rekall_backend_internal_interfaces_http_dto.MemberListResponse": {
             "type": "object",
             "properties": {
                 "data": {
                     "type": "array",
                     "items": {
-                        "$ref": "#/definitions/dto.MemberResponse"
+                        "$ref": "#/definitions/github_com_rekall_backend_internal_interfaces_http_dto.MemberResponse"
                     }
                 },
                 "success": {
@@ -3182,7 +3307,7 @@ const docTemplate = `{
                 }
             }
         },
-        "dto.MemberResponse": {
+        "github_com_rekall_backend_internal_interfaces_http_dto.MemberResponse": {
             "type": "object",
             "properties": {
                 "joined_at": {
@@ -3208,11 +3333,11 @@ const docTemplate = `{
                 }
             }
         },
-        "dto.MessageResponse": {
+        "github_com_rekall_backend_internal_interfaces_http_dto.MessageResponse": {
             "type": "object",
             "properties": {
                 "data": {
-                    "$ref": "#/definitions/dto.MsgObj"
+                    "$ref": "#/definitions/github_com_rekall_backend_internal_interfaces_http_dto.MsgObj"
                 },
                 "success": {
                     "type": "boolean",
@@ -3220,7 +3345,7 @@ const docTemplate = `{
                 }
             }
         },
-        "dto.Meta": {
+        "github_com_rekall_backend_internal_interfaces_http_dto.Meta": {
             "type": "object",
             "properties": {
                 "page": {
@@ -3237,7 +3362,7 @@ const docTemplate = `{
                 }
             }
         },
-        "dto.MsgObj": {
+        "github_com_rekall_backend_internal_interfaces_http_dto.MsgObj": {
             "type": "object",
             "properties": {
                 "message": {
@@ -3246,13 +3371,13 @@ const docTemplate = `{
                 }
             }
         },
-        "dto.OrgListResponse": {
+        "github_com_rekall_backend_internal_interfaces_http_dto.OrgListResponse": {
             "type": "object",
             "properties": {
                 "data": {
                     "type": "array",
                     "items": {
-                        "$ref": "#/definitions/dto.OrgResponse"
+                        "$ref": "#/definitions/github_com_rekall_backend_internal_interfaces_http_dto.OrgResponse"
                     }
                 },
                 "success": {
@@ -3261,7 +3386,7 @@ const docTemplate = `{
                 }
             }
         },
-        "dto.OrgResponse": {
+        "github_com_rekall_backend_internal_interfaces_http_dto.OrgResponse": {
             "type": "object",
             "properties": {
                 "created_at": {
@@ -3290,11 +3415,11 @@ const docTemplate = `{
                 }
             }
         },
-        "dto.OrgResponseEnvelope": {
+        "github_com_rekall_backend_internal_interfaces_http_dto.OrgResponseEnvelope": {
             "type": "object",
             "properties": {
                 "data": {
-                    "$ref": "#/definitions/dto.OrgResponse"
+                    "$ref": "#/definitions/github_com_rekall_backend_internal_interfaces_http_dto.OrgResponse"
                 },
                 "success": {
                     "type": "boolean",
@@ -3302,7 +3427,7 @@ const docTemplate = `{
                 }
             }
         },
-        "dto.ParticipantPreview": {
+        "github_com_rekall_backend_internal_interfaces_http_dto.ParticipantPreview": {
             "type": "object",
             "properties": {
                 "full_name": {
@@ -3316,7 +3441,7 @@ const docTemplate = `{
                 }
             }
         },
-        "dto.RegisterRequest": {
+        "github_com_rekall_backend_internal_interfaces_http_dto.RegisterRequest": {
             "type": "object",
             "required": [
                 "email",
@@ -3338,7 +3463,7 @@ const docTemplate = `{
                 }
             }
         },
-        "dto.ResendVerificationRequest": {
+        "github_com_rekall_backend_internal_interfaces_http_dto.ResendVerificationRequest": {
             "type": "object",
             "required": [
                 "email"
@@ -3350,7 +3475,7 @@ const docTemplate = `{
                 }
             }
         },
-        "dto.ResetPasswordRequest": {
+        "github_com_rekall_backend_internal_interfaces_http_dto.ResetPasswordRequest": {
             "type": "object",
             "required": [
                 "password",
@@ -3367,7 +3492,7 @@ const docTemplate = `{
                 }
             }
         },
-        "dto.TokenObj": {
+        "github_com_rekall_backend_internal_interfaces_http_dto.TokenObj": {
             "type": "object",
             "properties": {
                 "access_token": {
@@ -3376,7 +3501,7 @@ const docTemplate = `{
                 }
             }
         },
-        "dto.UpdateCallRequest": {
+        "github_com_rekall_backend_internal_interfaces_http_dto.UpdateCallRequest": {
             "type": "object",
             "properties": {
                 "ended_at": {
@@ -3416,7 +3541,7 @@ const docTemplate = `{
                 }
             }
         },
-        "dto.UpdateDeptMemberRoleRequest": {
+        "github_com_rekall_backend_internal_interfaces_http_dto.UpdateDeptMemberRoleRequest": {
             "type": "object",
             "required": [
                 "role"
@@ -3432,7 +3557,7 @@ const docTemplate = `{
                 }
             }
         },
-        "dto.UpdateDeptRequest": {
+        "github_com_rekall_backend_internal_interfaces_http_dto.UpdateDeptRequest": {
             "type": "object",
             "required": [
                 "name"
@@ -3448,7 +3573,7 @@ const docTemplate = `{
                 }
             }
         },
-        "dto.UpdateMemberRoleRequest": {
+        "github_com_rekall_backend_internal_interfaces_http_dto.UpdateMemberRoleRequest": {
             "type": "object",
             "required": [
                 "role"
@@ -3464,7 +3589,7 @@ const docTemplate = `{
                 }
             }
         },
-        "dto.UpdateOrgRequest": {
+        "github_com_rekall_backend_internal_interfaces_http_dto.UpdateOrgRequest": {
             "type": "object",
             "required": [
                 "name"
@@ -3476,17 +3601,17 @@ const docTemplate = `{
                 }
             }
         },
-        "dto.UserListResponse": {
+        "github_com_rekall_backend_internal_interfaces_http_dto.UserListResponse": {
             "type": "object",
             "properties": {
                 "data": {
                     "type": "array",
                     "items": {
-                        "$ref": "#/definitions/dto.UserResponse"
+                        "$ref": "#/definitions/github_com_rekall_backend_internal_interfaces_http_dto.UserResponse"
                     }
                 },
                 "meta": {
-                    "$ref": "#/definitions/dto.Meta"
+                    "$ref": "#/definitions/github_com_rekall_backend_internal_interfaces_http_dto.Meta"
                 },
                 "success": {
                     "type": "boolean",
@@ -3494,7 +3619,7 @@ const docTemplate = `{
                 }
             }
         },
-        "dto.UserResponse": {
+        "github_com_rekall_backend_internal_interfaces_http_dto.UserResponse": {
             "type": "object",
             "properties": {
                 "created_at": {
@@ -3527,11 +3652,11 @@ const docTemplate = `{
                 }
             }
         },
-        "dto.UserResponseEnvelope": {
+        "github_com_rekall_backend_internal_interfaces_http_dto.UserResponseEnvelope": {
             "type": "object",
             "properties": {
                 "data": {
-                    "$ref": "#/definitions/dto.UserResponse"
+                    "$ref": "#/definitions/github_com_rekall_backend_internal_interfaces_http_dto.UserResponse"
                 },
                 "success": {
                     "type": "boolean",
@@ -3539,7 +3664,7 @@ const docTemplate = `{
                 }
             }
         },
-        "handlers.CreateUserRequest": {
+        "internal_interfaces_http_handlers.CreateUserRequest": {
             "type": "object",
             "required": [
                 "email",

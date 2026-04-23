@@ -12,7 +12,16 @@ import type {
   EmojiReaction,
   LaserState,
   BackgroundOption,
+  ChatMessage,
+  ParticipantDirectoryEntry,
 } from '@/types/meeting'
+import {
+  MAX_MESSAGE_LENGTH,
+  RATE_LIMIT_MESSAGES,
+  RATE_LIMIT_WINDOW_MS,
+  HISTORY_PAGE_SIZE,
+  PENDING_MESSAGE_TIMEOUT_MS,
+} from '@/config/chat'
 
 const LASER_THROTTLE_MS = 33  // ~30 fps
 const EMOJI_RATE_LIMIT_MS = 500
@@ -71,6 +80,24 @@ export interface UseMeetingReturn {
   uploadCustomBackground: (file: File) => Promise<string | null>
   // ── remote participant state ─────────────────────────────────────────────────
   mediaStates: Record<string, MediaState>
+  // ── chat ────────────────────────────────────────────────────────────────────
+  messages: ChatMessage[]
+  unreadCount: number
+  isChatPanelOpen: boolean
+  isLoadingHistory: boolean
+  hasMoreHistory: boolean
+  chatHistoryError: string | null
+  participantDirectory: Record<string, ParticipantDirectoryEntry>
+  chatFlashKey: number
+  chatSendError: string | null
+  openChatPanel: () => void
+  closeChatPanel: () => void
+  sendChatMessage: (body: string) => void
+  retrySendMessage: (localId: string) => void
+  deleteFailedMessage: (localId: string) => void
+  loadOlderMessages: () => Promise<void>
+  retryHistoryFetch: () => void
+  dismissChatSendError: () => void
 }
 
 const RTC_CONFIG: RTCConfiguration = {
@@ -101,7 +128,7 @@ function loadCustomBgSrc(): string | null {
 }
 
 export function useMeeting({ code, onEnd }: UseMeetingOptions): UseMeetingReturn {
-  const { accessToken } = useAuthStore()
+  const { accessToken, user } = useAuthStore()
 
   // ── core state ─────────────────────────────────────────────────────────────
   const [meeting, setMeeting] = useState<Meeting | null>(null)
@@ -133,6 +160,17 @@ export function useMeeting({ code, onEnd }: UseMeetingOptions): UseMeetingReturn
   // ── remote participant media state (from room_state / media_state events) ──
   const [mediaStates, setMediaStates] = useState<Record<string, MediaState>>({})
 
+  // ── chat state ─────────────────────────────────────────────────────────────
+  const [messages, setMessages] = useState<ChatMessage[]>([])
+  const [unreadCount, setUnreadCount] = useState(0)
+  const [isChatPanelOpen, setIsChatPanelOpen] = useState(false)
+  const [isLoadingHistory, setIsLoadingHistory] = useState(false)
+  const [hasMoreHistory, setHasMoreHistory] = useState(false)
+  const [chatHistoryError, setChatHistoryError] = useState<string | null>(null)
+  const [participantDirectory, setParticipantDirectory] = useState<Record<string, ParticipantDirectoryEntry>>({})
+  const [chatFlashKey, setChatFlashKey] = useState(0)
+  const [chatSendError, setChatSendError] = useState<string | null>(null)
+
   // ── refs ───────────────────────────────────────────────────────────────────
   const wsRef = useRef<WebSocket | null>(null)
   const vadRef = useRef<VadDetector | null>(null)
@@ -146,6 +184,12 @@ export function useMeeting({ code, onEnd }: UseMeetingOptions): UseMeetingReturn
   }>({ audioTrack: null, videoTrack: null, screenTrack: null, canvasTrack: null })
   const lastLaserSentRef = useRef(0)
   const lastEmojiSentRef = useRef(0)
+  const chatSendTimestampsRef = useRef<number[]>([])
+  const localUserIdRef = useRef<string | null>(null)
+  const isChatPanelOpenRef = useRef(false)
+  // Tracks setTimeout handles keyed by client_id so we can clear them on echo
+  // and mark the message `failed` if the echo never arrives.
+  const pendingMsgTimeoutsRef = useRef<Record<string, ReturnType<typeof setTimeout>>>({})
   // Keep a ref to isMuted/isCameraOff for use inside callbacks without stale closures.
   const isMutedRef = useRef(false)
   const isCameraOffRef = useRef(false)
@@ -159,6 +203,8 @@ export function useMeeting({ code, onEnd }: UseMeetingOptions): UseMeetingReturn
   useEffect(() => { isScreenSharingRef.current = isScreenSharing }, [isScreenSharing])
   useEffect(() => { isHandRaisedRef.current = isHandRaised }, [isHandRaised])
   useEffect(() => { isLaserActiveRef.current = isLaserActive }, [isLaserActive])
+  useEffect(() => { localUserIdRef.current = user?.id ?? null }, [user])
+  useEffect(() => { isChatPanelOpenRef.current = isChatPanelOpen }, [isChatPanelOpen])
 
   // ── WS send helper ─────────────────────────────────────────────────────────
   const send = useCallback((msg: WsMessage) => {
@@ -275,6 +321,18 @@ export function useMeeting({ code, onEnd }: UseMeetingOptions): UseMeetingReturn
     switch (msg.type) {
       case 'participant.joined': {
         if (!msg.user_id) break
+        // Record display info so chat messages from this user render with a
+        // name immediately — no per-user fetch required.
+        if (msg.full_name || msg.initials) {
+          setParticipantDirectory(prev => (
+            prev[msg.user_id!]
+              ? prev
+              : { ...prev, [msg.user_id!]: {
+                  full_name: msg.full_name ?? 'User',
+                  initials: msg.initials ?? '?',
+                } }
+          ))
+        }
         const stream = localStream ?? (await acquireMedia())
         const pc = getPeer(msg.user_id)
         addLocalTracksToPeer(pc, stream)
@@ -329,14 +387,24 @@ export function useMeeting({ code, onEnd }: UseMeetingOptions): UseMeetingReturn
         const states: Record<string, MediaState> = {}
         const raised = new Set<string>()
         let activeLaser: LaserState | null = null
+        const dirPatch: Record<string, ParticipantDirectoryEntry> = {}
         parts.forEach((p) => {
           states[p.user_id] = { audio: p.audio, video: p.video }
           if (p.hand_raised) raised.add(p.user_id)
           if (p.laser_active) activeLaser = { userId: p.user_id, x: 0, y: 0 }
+          if (p.full_name || p.initials) {
+            dirPatch[p.user_id] = {
+              full_name: p.full_name ?? 'User',
+              initials: p.initials ?? '?',
+            }
+          }
         })
         setMediaStates(states)
         setHandRaisedUsers(raised)
         if (activeLaser) setLaserState(activeLaser)
+        if (Object.keys(dirPatch).length > 0) {
+          setParticipantDirectory(prev => ({ ...dirPatch, ...prev }))
+        }
         break
       }
 
@@ -408,6 +476,58 @@ export function useMeeting({ code, onEnd }: UseMeetingOptions): UseMeetingReturn
         break
       }
 
+      // ── Chat ──────────────────────────────────────────────────────────────
+      case 'chat_message': {
+        if (!msg.id || !msg.user_id || msg.body == null) break
+        const serverId = msg.id
+        const serverClientId = msg.client_id
+        const senderId = msg.user_id
+        const body = msg.body
+        const sentAt = msg.sent_at ? new Date(msg.sent_at).getTime() : Date.now()
+        const localUid = localUserIdRef.current
+
+        // Cancel the pending-timeout for this client_id if we have one — the
+        // server echo has arrived, so the send is confirmed.
+        if (serverClientId) {
+          const handle = pendingMsgTimeoutsRef.current[serverClientId]
+          if (handle) {
+            clearTimeout(handle)
+            delete pendingMsgTimeoutsRef.current[serverClientId]
+          }
+        }
+
+        setMessages(prev => {
+          // Dedup: already have this server id → ignore.
+          if (prev.some(m => m.id === serverId)) return prev
+
+          // Optimistic reconcile: match by client_id on a pending OR failed
+          // entry (failed → retried → confirmed is a valid flow).
+          if (serverClientId) {
+            const idx = prev.findIndex(m => m.clientId === serverClientId)
+            if (idx !== -1) {
+              const next = prev.slice()
+              next[idx] = {
+                ...next[idx],
+                id: serverId,
+                sentAt,
+                pending: false,
+                failed: false,
+              }
+              return next
+            }
+          }
+
+          // New message from someone else (or own send without matching client_id).
+          return [...prev, { id: serverId, userId: senderId, body, sentAt }]
+        })
+
+        // Unread: count only remote messages while the panel is closed.
+        if (!isChatPanelOpenRef.current && senderId !== localUid) {
+          setUnreadCount(c => c + 1)
+        }
+        break
+      }
+
       // ── Knock flow ────────────────────────────────────────────────────────
       case 'knock.requested': {
         if (msg.knock_id && msg.user_id) {
@@ -456,6 +576,10 @@ export function useMeeting({ code, onEnd }: UseMeetingOptions): UseMeetingReturn
     localTracksRef.current = { audioTrack: null, videoTrack: null, screenTrack: null, canvasTrack: null }
     Object.values(peersRef.current).forEach((pc) => pc.close())
     peersRef.current = {}
+    // Clear any outstanding pending-message timeouts to avoid state updates
+    // after unmount.
+    Object.values(pendingMsgTimeoutsRef.current).forEach(clearTimeout)
+    pendingMsgTimeoutsRef.current = {}
     wsRef.current?.close()
   }, [localStream])
 
@@ -470,6 +594,20 @@ export function useMeeting({ code, onEnd }: UseMeetingOptions): UseMeetingReturn
         const res = await meetingService.getByCode(code)
         if (cancelled) return
         setMeeting(res.data)
+
+        // Populate participant directory from the meeting previews so chat
+        // messages render names immediately on first paint.
+        if (res.data.participant_previews?.length) {
+          setParticipantDirectory(prev => {
+            const next = { ...prev }
+            for (const p of res.data.participant_previews!) {
+              if (!next[p.user_id]) {
+                next[p.user_id] = { full_name: p.full_name, initials: p.initials }
+              }
+            }
+            return next
+          })
+        }
 
         const wsUrl = meetingService.buildWsUrl(code, accessToken)
         const ws = new WebSocket(wsUrl)
@@ -512,6 +650,32 @@ export function useMeeting({ code, onEnd }: UseMeetingOptions): UseMeetingReturn
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [code, accessToken])
+
+  // ── Chat history fetch on join ────────────────────────────────────────────
+  // Runs once each time the user enters `in_meeting` (including re-entry after
+  // a reconnect). History is re-fetched so the server is the source of truth;
+  // live WS messages dedup by `id` against the fresh list.
+  useEffect(() => {
+    if (roomState !== 'in_meeting' || !code) return
+    let cancelled = false
+    ;(async () => {
+      setIsLoadingHistory(true)
+      setChatHistoryError(null)
+      try {
+        const { messages: rows, has_more } = await meetingService.listMessages(code, { limit: HISTORY_PAGE_SIZE })
+        if (cancelled) return
+        setMessages(rows)
+        setHasMoreHistory(has_more)
+      } catch (err) {
+        if (!cancelled) {
+          setChatHistoryError(err instanceof Error ? err.message : 'Failed to load chat history')
+        }
+      } finally {
+        if (!cancelled) setIsLoadingHistory(false)
+      }
+    })()
+    return () => { cancelled = true }
+  }, [roomState, code])
 
   // ── Public actions ────────────────────────────────────────────────────────
 
@@ -711,6 +875,141 @@ export function useMeeting({ code, onEnd }: UseMeetingOptions): UseMeetingReturn
     try { localStorage.setItem(BG_STORAGE_KEY, JSON.stringify(option)) } catch { /* ignore */ }
   }, [bgSupported, localStream, replaceVideoTrack])
 
+  // ── Chat ──────────────────────────────────────────────────────────────────
+
+  const fetchHistory = useCallback(async () => {
+    if (!code) return
+    setIsLoadingHistory(true)
+    setChatHistoryError(null)
+    try {
+      const { messages: rows, has_more } = await meetingService.listMessages(code, { limit: HISTORY_PAGE_SIZE })
+      setMessages(rows)
+      setHasMoreHistory(has_more)
+    } catch (err) {
+      setChatHistoryError(err instanceof Error ? err.message : 'Failed to load chat history')
+    } finally {
+      setIsLoadingHistory(false)
+    }
+  }, [code])
+
+  const retryHistoryFetch = useCallback(() => { void fetchHistory() }, [fetchHistory])
+
+  const openChatPanel = useCallback(() => {
+    setIsChatPanelOpen(true)
+    setUnreadCount(0)
+  }, [])
+
+  const closeChatPanel = useCallback(() => {
+    setIsChatPanelOpen(false)
+  }, [])
+
+  const dismissChatSendError = useCallback(() => { setChatSendError(null) }, [])
+
+  // schedulePendingTimeout marks a pending entry `failed` if no echo arrives
+  // within PENDING_MESSAGE_TIMEOUT_MS. Also exposes a way for the UI to
+  // trigger a retry.
+  const schedulePendingTimeout = useCallback((clientId: string) => {
+    const handle = setTimeout(() => {
+      delete pendingMsgTimeoutsRef.current[clientId]
+      setMessages(prev => prev.map(m => (
+        m.clientId === clientId && m.pending
+          ? { ...m, pending: false, failed: true }
+          : m
+      )))
+    }, PENDING_MESSAGE_TIMEOUT_MS)
+    pendingMsgTimeoutsRef.current[clientId] = handle
+  }, [])
+
+  const sendChatMessage = useCallback((rawBody: string) => {
+    const body = rawBody.trim()
+    if (!body) return
+
+    if (body.length > MAX_MESSAGE_LENGTH) {
+      setChatSendError(`Messages are limited to ${MAX_MESSAGE_LENGTH} characters`)
+      return
+    }
+
+    if (wsRef.current?.readyState !== WebSocket.OPEN) {
+      setChatSendError('Not connected — message could not be sent')
+      return
+    }
+
+    // Rolling rate limit: last RATE_LIMIT_MESSAGES timestamps within window.
+    const now = Date.now()
+    const recent = chatSendTimestampsRef.current.filter(t => now - t < RATE_LIMIT_WINDOW_MS)
+    if (recent.length >= RATE_LIMIT_MESSAGES) {
+      chatSendTimestampsRef.current = recent
+      setChatFlashKey(k => k + 1)
+      return
+    }
+    recent.push(now)
+    chatSendTimestampsRef.current = recent
+
+    const uid = localUserIdRef.current
+    if (!uid) return
+
+    const clientId = generateId()
+    send({ type: 'chat_message', client_id: clientId, body })
+    schedulePendingTimeout(clientId)
+
+    setMessages(prev => [
+      ...prev,
+      { id: clientId, clientId, userId: uid, body, sentAt: now, pending: true },
+    ])
+  }, [send, schedulePendingTimeout])
+
+  // Retry a previously-failed local message by re-sending with the SAME
+  // client_id. The backend tolerates duplicate client_ids (each insert gets
+  // its own server id) but on our side we re-use the local id so React keys
+  // stay stable and the echoed message reconciles in-place.
+  const retrySendMessage = useCallback((localId: string) => {
+    const entry = messages.find(m => m.id === localId || m.clientId === localId)
+    if (!entry || !entry.clientId) return
+    if (!entry.failed && !entry.pending) return
+
+    if (wsRef.current?.readyState !== WebSocket.OPEN) {
+      setChatSendError('Not connected — message could not be sent')
+      return
+    }
+
+    // Mark pending again and reschedule timeout.
+    setMessages(prev => prev.map(m => (
+      m.id === entry.id ? { ...m, pending: true, failed: false } : m
+    )))
+    send({ type: 'chat_message', client_id: entry.clientId, body: entry.body })
+    schedulePendingTimeout(entry.clientId)
+  }, [messages, send, schedulePendingTimeout])
+
+  const deleteFailedMessage = useCallback((localId: string) => {
+    setMessages(prev => prev.filter(m => m.id !== localId))
+  }, [])
+
+  const loadOlderMessages = useCallback(async () => {
+    if (!code || isLoadingHistory || !hasMoreHistory || messages.length === 0) return
+    setIsLoadingHistory(true)
+    try {
+      const oldest = messages[0]
+      const before = new Date(oldest.sentAt).toISOString()
+      const { messages: older, has_more } = await meetingService.listMessages(code, {
+        before,
+        limit: HISTORY_PAGE_SIZE,
+      })
+      // Dedup by id before prepending (the oldest of the current list may
+      // match the most recent of the older page in theory; we trust `before`
+      // exclusivity but keep the safety check).
+      setMessages(prev => {
+        const existingIds = new Set(prev.map(m => m.id))
+        const unique = older.filter(m => !existingIds.has(m.id))
+        return [...unique, ...prev]
+      })
+      setHasMoreHistory(has_more)
+    } catch (err) {
+      setChatHistoryError(err instanceof Error ? err.message : 'Failed to load more messages')
+    } finally {
+      setIsLoadingHistory(false)
+    }
+  }, [code, isLoadingHistory, hasMoreHistory, messages])
+
   // ─────────────────────────────────────────────────────────────────────────
   return {
     meeting,
@@ -748,5 +1047,23 @@ export function useMeeting({ code, onEnd }: UseMeetingOptions): UseMeetingReturn
     customBgSrc,
     uploadCustomBackground,
     mediaStates,
+    // ── chat ──────────────────────────────────────────────────────────────
+    messages,
+    unreadCount,
+    isChatPanelOpen,
+    isLoadingHistory,
+    hasMoreHistory,
+    chatHistoryError,
+    participantDirectory,
+    chatFlashKey,
+    chatSendError,
+    openChatPanel,
+    closeChatPanel,
+    sendChatMessage,
+    retrySendMessage,
+    deleteFailedMessage,
+    loadOlderMessages,
+    retryHistoryFetch,
+    dismissChatSendError,
   }
 }

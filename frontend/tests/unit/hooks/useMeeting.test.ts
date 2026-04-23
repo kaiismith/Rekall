@@ -13,7 +13,10 @@ import { renderHook, act } from '@testing-library/react'
 // ── Module mocks (must be hoisted before imports) ─────────────────────────────
 
 vi.mock('@/store/authStore', () => ({
-  useAuthStore: () => ({ accessToken: 'fake-token' }),
+  useAuthStore: () => ({
+    accessToken: 'fake-token',
+    user: { id: 'user-1', email: 'u1@example.com', full_name: 'User One', role: 'member', email_verified: true, created_at: '2026-01-01T00:00:00Z' },
+  }),
 }))
 
 vi.mock('@/services/meetingService', () => ({
@@ -27,6 +30,7 @@ vi.mock('@/services/meetingService', () => ({
     }),
     buildWsUrl: vi.fn().mockReturnValue('ws://localhost/ws/test-code'),
     end: vi.fn().mockResolvedValue({}),
+    listMessages: vi.fn().mockResolvedValue({ messages: [], has_more: false }),
   },
 }))
 
@@ -135,6 +139,7 @@ function setupBrowserMocks() {
   vi.mocked(meetingService.getByCode).mockResolvedValue({ data: mockMeeting } as never)
   vi.mocked(meetingService.buildWsUrl).mockReturnValue('ws://localhost/ws/test-code')
   vi.mocked(meetingService.end).mockResolvedValue({} as never)
+  vi.mocked(meetingService.listMessages).mockResolvedValue({ messages: [], has_more: false })
 
   vi.stubGlobal('WebSocket', MockWebSocket)
   vi.stubGlobal('RTCPeerConnection', MockRTCPeerConnection)
@@ -1073,5 +1078,173 @@ describe('useMeeting — setBackground', () => {
     expect(localStorage.getItem(CUSTOM_BG_KEY)).not.toBeNull()
     const pref = JSON.parse(localStorage.getItem(BG_STORAGE_KEY)!)
     expect(pref.src).toBe('__custom__')
+  })
+})
+
+// ═════════════════════════════════════════════════════════════════════════════
+// Chat message handling
+// ═════════════════════════════════════════════════════════════════════════════
+
+describe('useMeeting — chat', () => {
+  beforeEach(() => setupBrowserMocks())
+  afterEach(() => teardownBrowserMocks())
+
+  async function joinedMeeting() {
+    const res = await renderMeeting()
+    const { ws } = res
+    await act(async () => {
+      ws._open()
+      ws._msg({ type: 'participant.joined', user_id: 'remote-1' })
+    })
+    // Let the history-fetch effect flush.
+    await act(async () => { await Promise.resolve() })
+    return res
+  }
+
+  it('fetches chat history when entering in_meeting state', async () => {
+    vi.mocked(meetingService.listMessages).mockResolvedValueOnce({
+      messages: [
+        { id: 'm1', userId: 'remote-1', body: 'historic', sentAt: Date.now() - 60_000 },
+      ],
+      has_more: true,
+    })
+    const { result } = await joinedMeeting()
+    await act(async () => { await vi.waitFor(() => result.current.messages.length > 0) })
+    expect(result.current.messages[0].body).toBe('historic')
+    expect(result.current.hasMoreHistory).toBe(true)
+  })
+
+  it('sendChatMessage sends WS message and appends pending entry', async () => {
+    const { result, ws } = await joinedMeeting()
+    act(() => result.current.sendChatMessage('hello'))
+    expect(ws.send).toHaveBeenCalledWith(
+      expect.stringContaining('"type":"chat_message"'),
+    )
+    expect(result.current.messages).toHaveLength(1)
+    expect(result.current.messages[0].pending).toBe(true)
+    expect(result.current.messages[0].body).toBe('hello')
+    expect(result.current.messages[0].userId).toBe('user-1')
+  })
+
+  it('sendChatMessage trims body and ignores empty/whitespace', async () => {
+    const { result, ws } = await joinedMeeting()
+    vi.mocked(ws.send).mockClear()
+    act(() => result.current.sendChatMessage('   '))
+    expect(ws.send).not.toHaveBeenCalled()
+    expect(result.current.messages).toHaveLength(0)
+  })
+
+  it('sendChatMessage blocks when body exceeds MAX_MESSAGE_LENGTH', async () => {
+    const { result, ws } = await joinedMeeting()
+    vi.mocked(ws.send).mockClear()
+    act(() => result.current.sendChatMessage('x'.repeat(2001)))
+    expect(ws.send).not.toHaveBeenCalled()
+    expect(result.current.messages).toHaveLength(0)
+    expect(result.current.chatSendError).toMatch(/2000 characters/)
+  })
+
+  it('rate-limits: 4th send within 2s is blocked and flashKey ticks', async () => {
+    const { result, ws } = await joinedMeeting()
+    vi.mocked(ws.send).mockClear()
+    const initialFlash = result.current.chatFlashKey
+    act(() => {
+      result.current.sendChatMessage('a')
+      result.current.sendChatMessage('b')
+      result.current.sendChatMessage('c')
+      result.current.sendChatMessage('d')
+    })
+    expect(ws.send).toHaveBeenCalledTimes(3)
+    expect(result.current.chatFlashKey).toBeGreaterThan(initialFlash)
+  })
+
+  it('echoed chat_message reconciles pending entry by client_id', async () => {
+    const { result, ws } = await joinedMeeting()
+    act(() => result.current.sendChatMessage('hi'))
+    const pending = result.current.messages[0]
+    expect(pending.pending).toBe(true)
+    const clientId = pending.clientId!
+
+    await act(async () => {
+      ws._msg({
+        type: 'chat_message',
+        id: 'server-id-1',
+        client_id: clientId,
+        user_id: 'user-1',
+        body: 'hi',
+        sent_at: '2026-04-23T14:03:17.000Z',
+      })
+    })
+
+    expect(result.current.messages).toHaveLength(1)
+    expect(result.current.messages[0].id).toBe('server-id-1')
+    expect(result.current.messages[0].pending).toBeFalsy()
+  })
+
+  it('deduplicates incoming chat_message with an id already in the list', async () => {
+    const { result, ws } = await joinedMeeting()
+    const payload = {
+      type: 'chat_message',
+      id: 'server-id-1',
+      user_id: 'remote-1',
+      body: 'from peer',
+      sent_at: '2026-04-23T14:03:17.000Z',
+    }
+    await act(async () => { ws._msg(payload) })
+    expect(result.current.messages).toHaveLength(1)
+    await act(async () => { ws._msg(payload) })
+    expect(result.current.messages).toHaveLength(1)
+  })
+
+  it('increments unreadCount for remote messages while panel is closed', async () => {
+    const { result, ws } = await joinedMeeting()
+    expect(result.current.isChatPanelOpen).toBe(false)
+    await act(async () => {
+      ws._msg({
+        type: 'chat_message',
+        id: 'm1', user_id: 'remote-1', body: 'ping', sent_at: '2026-04-23T14:03:17Z',
+      })
+    })
+    expect(result.current.unreadCount).toBe(1)
+  })
+
+  it('does NOT increment unreadCount for own sent messages', async () => {
+    const { result, ws } = await joinedMeeting()
+    act(() => result.current.sendChatMessage('own msg'))
+    const clientId = result.current.messages[0].clientId!
+    await act(async () => {
+      ws._msg({
+        type: 'chat_message',
+        id: 's1', client_id: clientId, user_id: 'user-1', body: 'own msg',
+        sent_at: '2026-04-23T14:03:17Z',
+      })
+    })
+    expect(result.current.unreadCount).toBe(0)
+  })
+
+  it('openChatPanel clears unreadCount', async () => {
+    const { result, ws } = await joinedMeeting()
+    await act(async () => {
+      ws._msg({
+        type: 'chat_message',
+        id: 'm1', user_id: 'remote-1', body: 'ping', sent_at: '2026-04-23T14:03:17Z',
+      })
+    })
+    expect(result.current.unreadCount).toBe(1)
+    act(() => result.current.openChatPanel())
+    expect(result.current.isChatPanelOpen).toBe(true)
+    expect(result.current.unreadCount).toBe(0)
+  })
+
+  it('surfaces a send error when the WS is not open', async () => {
+    const res = await renderMeeting()
+    const { result } = res
+    // Do NOT call ws._open() — readyState stays 0 (CONNECTING), not OPEN.
+    // Simulate entering in_meeting without a proper WS open.
+    await act(async () => {
+      res.ws._msg({ type: 'participant.joined', user_id: 'remote-1' })
+    })
+    act(() => result.current.sendChatMessage('should fail'))
+    expect(result.current.chatSendError).toMatch(/not connected/i)
+    expect(result.current.messages).toHaveLength(0)
   })
 })

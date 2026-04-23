@@ -69,4 +69,54 @@ describe('meetingService', () => {
     // In test env VITE_API_BASE_URL is undefined so base is /api/v1 (no protocol prefix).
     // In production it will be a ws:// URL. Just assert the path and token are correct.
   })
+
+  // ── listMessages ────────────────────────────────────────────────────────────
+
+  it('listMessages calls GET /meetings/:code/messages with no params', async () => {
+    vi.mocked(apiClient.get).mockResolvedValue({
+      data: { success: true, data: { messages: [], has_more: false } },
+    })
+    await meetingService.listMessages('abc-defg-hij')
+    expect(apiClient.get).toHaveBeenCalledWith('/meetings/abc-defg-hij/messages')
+  })
+
+  it('listMessages forwards before and limit query params', async () => {
+    vi.mocked(apiClient.get).mockResolvedValue({
+      data: { success: true, data: { messages: [], has_more: true } },
+    })
+    const before = '2026-04-23T14:00:00Z'
+    await meetingService.listMessages('abc-defg-hij', { before, limit: 25 })
+    expect(apiClient.get).toHaveBeenCalledWith(
+      `/meetings/abc-defg-hij/messages?before=${encodeURIComponent(before)}&limit=25`,
+    )
+  })
+
+  it('listMessages normalises raw snake_case rows to camelCase ChatMessage', async () => {
+    const sentAt = '2026-04-23T14:03:17.000Z'
+    vi.mocked(apiClient.get).mockResolvedValue({
+      data: {
+        success: true,
+        data: {
+          messages: [
+            { id: 'm1', meeting_id: 'meet', user_id: 'user-1', body: 'hi', sent_at: sentAt },
+          ],
+          has_more: false,
+        },
+      },
+    })
+    const result = await meetingService.listMessages('abc-defg-hij')
+    expect(result.messages).toHaveLength(1)
+    expect(result.messages[0]).toMatchObject({
+      id: 'm1',
+      userId: 'user-1',
+      body: 'hi',
+    })
+    expect(result.messages[0].sentAt).toBe(new Date(sentAt).getTime())
+    expect(result.has_more).toBe(false)
+  })
+
+  it('listMessages propagates network errors', async () => {
+    vi.mocked(apiClient.get).mockRejectedValue(new Error('boom'))
+    await expect(meetingService.listMessages('abc-defg-hij')).rejects.toThrow('boom')
+  })
 })

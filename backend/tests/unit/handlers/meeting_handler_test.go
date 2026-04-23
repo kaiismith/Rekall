@@ -33,8 +33,8 @@ func newMeetingService(mr *mockMeetingRepo, pr *mockParticipantRepo) *services.M
 }
 
 func newMeetingHandler(svc *services.MeetingService) *handlers.MeetingHandler {
-	manager := wsHub.NewHubManager(zap.NewNop())
-	return handlers.NewMeetingHandler(svc, manager, "http://rekall.test",
+	manager := wsHub.NewHubManager(nil, zap.NewNop())
+	return handlers.NewMeetingHandler(svc, nil, nil, manager, "http://rekall.test",
 		testSecret, testIssuer, zap.NewNop())
 }
 
