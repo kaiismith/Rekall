@@ -1,9 +1,10 @@
 import { useState } from 'react'
 import { Link as RouterLink, useNavigate, useSearchParams } from 'react-router-dom'
-import { Alert, Box, Button, Container, Link, TextField, Typography } from '@mui/material'
+import { Alert, Box, Link, Stack, Typography } from '@mui/material'
 import { authService } from '@/services/authService'
 import { ApiError } from '@/services/api'
 import { ROUTES } from '@/constants'
+import { ActionCard, GradientButton, HeroHeader, PasswordField } from '@/components/common/ui'
 
 export function ResetPasswordPage() {
   const navigate = useNavigate()
@@ -28,44 +29,83 @@ export function ResetPasswordPage() {
     }
   }
 
+  const containerSx = { display: 'flex', flexDirection: 'column', minHeight: '100vh' } as const
+  const innerSx = {
+    flex: 1,
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    px: { xs: 2, sm: 3 },
+    py: { xs: 4, sm: 8 },
+  }
+
   if (!token) {
     return (
-      <Container maxWidth="xs">
-        <Box sx={{ mt: 8, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 3 }}>
-          <Alert severity="error" sx={{ width: '100%' }}>
-            This reset link is invalid or has expired.
-          </Alert>
-          <Link component={RouterLink} to={ROUTES.FORGOT_PASSWORD} variant="body2">
-            Request a new reset link
-          </Link>
+      <Box sx={containerSx}>
+        <Box sx={innerSx}>
+          <Stack spacing={4} alignItems="center" sx={{ width: '100%', maxWidth: 440 }}>
+            <HeroHeader
+              title="Invalid reset link"
+              subtitle="This link is no longer valid."
+            />
+            <ActionCard maxWidth={440}>
+              <Stack spacing={2}>
+                <Alert severity="error">This reset link is invalid or has expired.</Alert>
+                <Link
+                  component={RouterLink}
+                  to={ROUTES.FORGOT_PASSWORD}
+                  variant="body2"
+                  underline="hover"
+                  sx={{ textAlign: 'center' }}
+                >
+                  Request a new reset link
+                </Link>
+              </Stack>
+            </ActionCard>
+          </Stack>
         </Box>
-      </Container>
+      </Box>
     )
   }
 
   return (
-    <Container maxWidth="xs">
-      <Box sx={{ mt: 8, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 3 }}>
-        <Typography variant="h4" fontWeight={700}>Set new password</Typography>
-
-        {error && <Alert severity="error" sx={{ width: '100%' }}>{error}</Alert>}
-
-        <Box component="form" onSubmit={handleSubmit} sx={{ width: '100%', display: 'flex', flexDirection: 'column', gap: 2 }}>
-          <TextField
-            label="New password"
-            type="password"
-            value={password}
-            onChange={(e) => setPassword(e.target.value)}
-            required
-            fullWidth
-            autoFocus
-            helperText="At least 8 characters with a letter and a digit"
+    <Box sx={containerSx}>
+      <Box sx={innerSx}>
+        <Stack spacing={4} alignItems="center" sx={{ width: '100%', maxWidth: 440 }}>
+          <HeroHeader
+            title="Set a new password"
+            subtitle="Choose a strong password you haven't used before."
           />
-          <Button type="submit" variant="contained" size="large" fullWidth disabled={loading}>
-            {loading ? 'Saving…' : 'Set new password'}
-          </Button>
-        </Box>
+          <ActionCard maxWidth={440}>
+            <Box
+              component="form"
+              onSubmit={handleSubmit}
+              sx={{ display: 'flex', flexDirection: 'column', gap: 2.5 }}
+            >
+              {error && <Alert severity="error">{error}</Alert>}
+              <PasswordField
+                label="New password"
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                required
+                fullWidth
+                autoFocus
+                autoComplete="new-password"
+                helperText="At least 8 characters with a letter and a digit"
+              />
+              <GradientButton type="submit" disabled={loading}>
+                {loading ? 'Saving…' : 'Set new password'}
+              </GradientButton>
+            </Box>
+          </ActionCard>
+          <Typography variant="body2" color="text.secondary">
+            Remembered it?{' '}
+            <Link component={RouterLink} to={ROUTES.LOGIN} underline="hover">
+              Back to sign in
+            </Link>
+          </Typography>
+        </Stack>
       </Box>
-    </Container>
+    </Box>
   )
 }

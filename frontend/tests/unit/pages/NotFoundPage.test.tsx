@@ -22,29 +22,36 @@ function renderPage() {
 }
 
 describe('NotFoundPage', () => {
-  it('renders the 404 heading', () => {
+  it('renders the Error 404 eyebrow', () => {
     renderPage()
-    expect(screen.getAllByText('404').length).toBeGreaterThan(0)
+    expect(screen.getByText(/error 404/i)).toBeInTheDocument()
   })
 
-  it('renders the "Page not found" message', () => {
+  it('renders the "can\'t find that page" heading', () => {
     renderPage()
-    expect(screen.getByText('Page not found')).toBeInTheDocument()
+    expect(screen.getByRole('heading', { name: /can't find that page/i })).toBeInTheDocument()
   })
 
   it('renders the descriptive subtitle', () => {
     renderPage()
-    expect(screen.getByText(/doesn't exist or has been moved/i)).toBeInTheDocument()
+    expect(screen.getByText(/may have been moved, renamed, or no longer/i)).toBeInTheDocument()
   })
 
-  it('renders a "Back to Dashboard" button', () => {
+  it('renders "Go back" and "Go to dashboard" buttons', () => {
     renderPage()
-    expect(screen.getByRole('button', { name: /back to dashboard/i })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: /go back/i })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: /go to dashboard/i })).toBeInTheDocument()
   })
 
-  it('navigates to dashboard when button is clicked', () => {
+  it('navigates to dashboard when primary button is clicked', () => {
     renderPage()
-    fireEvent.click(screen.getByRole('button', { name: /back to dashboard/i }))
-    expect(mockNavigate).toHaveBeenCalledWith(expect.stringContaining('/'))
+    fireEvent.click(screen.getByRole('button', { name: /go to dashboard/i }))
+    expect(mockNavigate).toHaveBeenCalledWith('/dashboard')
+  })
+
+  it('navigates back when secondary button is clicked', () => {
+    renderPage()
+    fireEvent.click(screen.getByRole('button', { name: /go back/i }))
+    expect(mockNavigate).toHaveBeenCalledWith(-1)
   })
 })

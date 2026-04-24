@@ -80,8 +80,8 @@ describe('VerifyEmailPage', () => {
     renderPage('valid-token')
 
     await waitFor(() => {
-      expect(screen.getByText(/email verified/i)).toBeInTheDocument()
-      expect(screen.getByText(/confirmed/i)).toBeInTheDocument()
+      expect(screen.getByRole('heading', { name: /email verified/i })).toBeInTheDocument()
+      expect(screen.getAllByText(/confirmed/i).length).toBeGreaterThan(0)
     })
   })
 
@@ -91,7 +91,7 @@ describe('VerifyEmailPage', () => {
     renderPage('valid-token')
 
     await waitFor(() => {
-      expect(screen.getByRole('link', { name: /sign in/i })).toBeInTheDocument()
+      expect(screen.getByRole('button', { name: /sign in/i })).toBeInTheDocument()
     })
   })
 

@@ -35,7 +35,7 @@ function renderPage() {
 
 // ── tests ─────────────────────────────────────────────────────────────────────
 
-describe('NewMeetingPage', () => {
+describe('NewMeetingPage — Rekall layout', () => {
   beforeEach(() => {
     vi.clearAllMocks()
     vi.mocked(meetingService.create).mockResolvedValue({
@@ -43,134 +43,123 @@ describe('NewMeetingPage', () => {
     } as never)
   })
 
-  it('renders the "New Meeting" heading', () => {
+  it('renders the Rekall Meeting hero', () => {
     renderPage()
-    expect(screen.getByText('New Meeting')).toBeInTheDocument()
+    expect(screen.getByRole('heading', { name: /rekall meeting/i })).toBeInTheDocument()
+    expect(screen.getByText(/create a new meeting or join with a code\./i)).toBeInTheDocument()
   })
 
-  it('renders the title input field', () => {
+  it('renders the Create meeting gradient button', () => {
     renderPage()
-    expect(screen.getByLabelText(/title/i)).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: /create meeting/i })).toBeInTheDocument()
   })
 
-  it('renders the meeting type select', () => {
+  it('renders the transcript language select', () => {
     renderPage()
-    // MUI Select renders a combobox div; find it via its visible role.
+    expect(screen.getByText(/transcript language/i)).toBeInTheDocument()
+    // MUI Select exposes a combobox role
     expect(screen.getByRole('combobox')).toBeInTheDocument()
   })
 
-  it('does not show helper text when type is "open" (default)', () => {
+  it('renders the Join a meeting section', () => {
     renderPage()
-    expect(screen.queryByText(/configure the scope/i)).not.toBeInTheDocument()
+    expect(screen.getByText(/join a meeting/i)).toBeInTheDocument()
+    expect(screen.getByLabelText(/meeting code/i)).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: /^join$/i })).toBeInTheDocument()
   })
 
-  it('shows helper text when type is switched to "private"', async () => {
+  it('Create meeting calls meetingService.create with defaults and navigates', async () => {
     renderPage()
-
-    // MUI Select — open by clicking the combobox div
-    fireEvent.mouseDown(screen.getByRole('combobox'))
-    const privateOption = await screen.findByText(/Private — org\/dept members only/i)
-    fireEvent.click(privateOption)
-
-    expect(await screen.findByText(/configure the scope/i)).toBeInTheDocument()
-  })
-
-  it('renders Cancel and Create & Join buttons', () => {
-    renderPage()
-    expect(screen.getByRole('button', { name: /cancel/i })).toBeInTheDocument()
-    expect(screen.getByRole('button', { name: /create & join/i })).toBeInTheDocument()
-  })
-
-  it('Cancel navigates back', () => {
-    renderPage()
-    fireEvent.click(screen.getByRole('button', { name: /cancel/i }))
-    expect(mockNavigate).toHaveBeenCalledWith(-1)
-  })
-
-  it('Create & Join calls meetingService.create with current title and type', async () => {
-    renderPage()
-
-    fireEvent.change(screen.getByLabelText(/title/i), { target: { value: 'Sprint Retro' } })
-    fireEvent.click(screen.getByRole('button', { name: /create & join/i }))
-
-    await waitFor(() => expect(meetingService.create).toHaveBeenCalledWith({ title: 'Sprint Retro', type: 'open' }))
-  })
-
-  it('navigates to /meeting/:code on successful create', async () => {
-    renderPage()
-    fireEvent.click(screen.getByRole('button', { name: /create & join/i }))
-
+    fireEvent.click(screen.getByRole('button', { name: /create meeting/i }))
+    await waitFor(() =>
+      expect(meetingService.create).toHaveBeenCalledWith({ title: '', type: 'open' }),
+    )
     await waitFor(() => expect(mockNavigate).toHaveBeenCalledWith('/meeting/abc123'))
   })
 
-  it('shows an error message when create fails with a structured response', async () => {
+  it('surfaces a structured error message on create failure', async () => {
     vi.mocked(meetingService.create).mockRejectedValue({
-      response: { data: { error: { message: 'Title too long.' } } },
+      response: { data: { error: { message: 'Rate-limited.' } } },
     })
     renderPage()
-    fireEvent.click(screen.getByRole('button', { name: /create & join/i }))
-
-    expect(await screen.findByText('Title too long.')).toBeInTheDocument()
+    fireEvent.click(screen.getByRole('button', { name: /create meeting/i }))
+    expect(await screen.findByText('Rate-limited.')).toBeInTheDocument()
   })
 
-  it('shows generic error message when create fails without a structured response', async () => {
+  it('falls back to generic error message when the response is unstructured', async () => {
     vi.mocked(meetingService.create).mockRejectedValue(new Error('Network failure'))
     renderPage()
-    fireEvent.click(screen.getByRole('button', { name: /create & join/i }))
-
-    expect(await screen.findByText('Failed to create meeting.')).toBeInTheDocument()
+    fireEvent.click(screen.getByRole('button', { name: /create meeting/i }))
+    // The page now surfaces errors in a modal Dialog with a fallback copy.
+    expect(
+      await screen.findByText(/Something went wrong\. Please try again\./i),
+    ).toBeInTheDocument()
   })
 
-  it('buttons are disabled while creating', async () => {
-    // Make create hang so we can inspect mid-flight state.
+  it('disables the Create button while a request is in flight', async () => {
     let resolve!: () => void
     vi.mocked(meetingService.create).mockReturnValue(
       new Promise((r) => { resolve = () => r({ data: { code: 'x' } } as never) }),
     )
-
     renderPage()
-    fireEvent.click(screen.getByRole('button', { name: /create & join/i }))
-
+    fireEvent.click(screen.getByRole('button', { name: /create meeting/i }))
     expect(screen.getByRole('button', { name: /creating/i })).toBeDisabled()
-    expect(screen.getByRole('button', { name: /cancel/i })).toBeDisabled()
-
     resolve()
     await waitFor(() => expect(mockNavigate).toHaveBeenCalled())
   })
 
-  it('shows "Creating…" text on the button while loading', async () => {
-    let resolve!: () => void
-    vi.mocked(meetingService.create).mockReturnValue(
-      new Promise((r) => { resolve = () => r({ data: { code: 'x' } } as never) }),
-    )
+  // ── Join section ────────────────────────────────────────────────────────────
 
+  it('Join button is disabled when the code is shorter than the minimum', () => {
     renderPage()
-    fireEvent.click(screen.getByRole('button', { name: /create & join/i }))
-
-    expect(screen.getByRole('button', { name: /creating/i })).toBeInTheDocument()
-
-    resolve()
-    await waitFor(() => expect(mockNavigate).toHaveBeenCalled())
+    const input = screen.getByLabelText(/meeting code/i)
+    fireEvent.change(input, { target: { value: 'abc' } })
+    expect(screen.getByRole('button', { name: /^join$/i })).toBeDisabled()
   })
 
-  it('re-enables buttons and hides "Creating…" after create resolves', async () => {
+  it('Join button is enabled when the code reaches the minimum length', () => {
     renderPage()
-    fireEvent.click(screen.getByRole('button', { name: /create & join/i }))
-    await waitFor(() => expect(mockNavigate).toHaveBeenCalled())
-    // Component would unmount after navigate in a real app; just verify create finished.
-    expect(meetingService.create).toHaveBeenCalledTimes(1)
+    const input = screen.getByLabelText(/meeting code/i)
+    fireEvent.change(input, { target: { value: 'abcdef' } })
+    expect(screen.getByRole('button', { name: /^join$/i })).toBeEnabled()
   })
 
-  it('error cleared on a second create attempt', async () => {
-    vi.mocked(meetingService.create)
-      .mockRejectedValueOnce(new Error('oops'))
-      .mockResolvedValueOnce({ data: { code: 'ok' } } as never)
-
+  it('clicking Join navigates to /meeting/<code>', () => {
     renderPage()
-    fireEvent.click(screen.getByRole('button', { name: /create & join/i }))
-    expect(await screen.findByText('Failed to create meeting.')).toBeInTheDocument()
+    const input = screen.getByLabelText(/meeting code/i)
+    fireEvent.change(input, { target: { value: 'abcdef' } })
+    fireEvent.click(screen.getByRole('button', { name: /^join$/i }))
+    expect(mockNavigate).toHaveBeenCalledWith('/meeting/abcdef')
+  })
 
-    fireEvent.click(screen.getByRole('button', { name: /create & join/i }))
-    await waitFor(() => expect(screen.queryByText('Failed to create meeting.')).not.toBeInTheDocument())
+  it('pressing Enter inside the code input navigates when valid', () => {
+    renderPage()
+    const input = screen.getByLabelText(/meeting code/i)
+    fireEvent.change(input, { target: { value: 'xyz123' } })
+    fireEvent.keyDown(input, { key: 'Enter' })
+    expect(mockNavigate).toHaveBeenCalledWith('/meeting/xyz123')
+  })
+
+  it('lowercases and trims whitespace from the code input', () => {
+    renderPage()
+    const input = screen.getByLabelText(/meeting code/i) as HTMLInputElement
+    fireEvent.change(input, { target: { value: '  ABCDEF  ' } })
+    expect(input.value).toBe('abcdef')
+  })
+
+  // ── Keyboard shortcut ───────────────────────────────────────────────────────
+
+  it('Ctrl+Shift+C triggers a create', async () => {
+    renderPage()
+    fireEvent.keyDown(document, { key: 'c', ctrlKey: true, shiftKey: true })
+    await waitFor(() => expect(meetingService.create).toHaveBeenCalled())
+  })
+
+  it('the shortcut is ignored while the user is typing in an input', () => {
+    renderPage()
+    const input = screen.getByLabelText(/meeting code/i)
+    input.focus()
+    fireEvent.keyDown(input, { key: 'c', ctrlKey: true, shiftKey: true })
+    expect(meetingService.create).not.toHaveBeenCalled()
   })
 })

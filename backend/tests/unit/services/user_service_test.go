@@ -126,6 +126,67 @@ func TestGetUser_NotFound(t *testing.T) {
 	assert.True(t, apperr.IsNotFound(err))
 }
 
+func TestGetUser_RepoError(t *testing.T) {
+	repo := new(mockUserRepo)
+	svc := newUserService(repo)
+	ctx := context.Background()
+	id := uuid.New()
+
+	repo.On("GetByID", ctx, id).Return(nil, assert.AnError)
+
+	_, err := svc.GetUser(ctx, id)
+	require.Error(t, err)
+	appErr, ok := apperr.AsAppError(err)
+	require.True(t, ok)
+	assert.Equal(t, 500, appErr.Status)
+}
+
+func TestCreateUser_RepoGetByEmailError(t *testing.T) {
+	repo := new(mockUserRepo)
+	svc := newUserService(repo)
+	ctx := context.Background()
+
+	repo.On("GetByEmail", ctx, "a@b.com").Return(nil, assert.AnError)
+
+	_, err := svc.CreateUser(ctx, "a@b.com", "Alice", "member")
+	require.Error(t, err)
+	appErr, ok := apperr.AsAppError(err)
+	require.True(t, ok)
+	assert.Equal(t, 500, appErr.Status)
+}
+
+func TestCreateUser_RepoCreateError(t *testing.T) {
+	repo := new(mockUserRepo)
+	svc := newUserService(repo)
+	ctx := context.Background()
+
+	repo.On("GetByEmail", ctx, "a@b.com").Return(nil, apperr.NotFound("User", "a@b.com"))
+	repo.On("Create", ctx, mock.AnythingOfType("*entities.User")).Return(nil, assert.AnError)
+
+	_, err := svc.CreateUser(ctx, "a@b.com", "Alice", "member")
+	require.Error(t, err)
+	appErr, ok := apperr.AsAppError(err)
+	require.True(t, ok)
+	assert.Equal(t, 500, appErr.Status)
+}
+
+func TestDeleteUser_SoftDeleteError(t *testing.T) {
+	repo := new(mockUserRepo)
+	svc := newUserService(repo)
+	ctx := context.Background()
+
+	id := uuid.New()
+	user := &entities.User{ID: id, Email: "a@b.com", Role: "member"}
+	repo.On("GetByID", ctx, id).Return(user, nil)
+	repo.On("SoftDelete", ctx, id).Return(assert.AnError)
+
+	err := svc.DeleteUser(ctx, id)
+	require.Error(t, err)
+	appErr, ok := apperr.AsAppError(err)
+	require.True(t, ok)
+	assert.Equal(t, 500, appErr.Status)
+}
+
 // ─── ListUsers ────────────────────────────────────────────────────────────────
 
 func TestListUsers_ReturnsPaginatedResults(t *testing.T) {

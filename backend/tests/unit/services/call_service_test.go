@@ -124,6 +124,21 @@ func TestCreateCall_NilMetadataDefaultsToEmpty(t *testing.T) {
 	repo.AssertExpectations(t)
 }
 
+func TestCreateCall_RepoCreateError(t *testing.T) {
+	repo := new(mockCallRepo)
+	svc := newTestCallService(repo)
+	ctx := context.Background()
+
+	userID := uuid.New()
+	repo.On("Create", ctx, mock.AnythingOfType("*entities.Call")).Return(nil, assert.AnError)
+
+	_, err := svc.CreateCall(ctx, services.CreateCallInput{UserID: userID, Title: "X"})
+	require.Error(t, err)
+	appErr, ok := apperr.AsAppError(err)
+	require.True(t, ok)
+	assert.Equal(t, 500, appErr.Status)
+}
+
 // ─── GetCall ──────────────────────────────────────────────────────────────────
 
 func TestGetCall_Success(t *testing.T) {
@@ -152,6 +167,21 @@ func TestGetCall_NotFound(t *testing.T) {
 
 	require.Error(t, err)
 	assert.True(t, apperr.IsNotFound(err))
+}
+
+func TestGetCall_RepoError(t *testing.T) {
+	repo := new(mockCallRepo)
+	svc := newTestCallService(repo)
+	ctx := context.Background()
+	id := uuid.New()
+
+	repo.On("GetByID", ctx, id).Return(nil, assert.AnError)
+
+	_, err := svc.GetCall(ctx, id)
+	require.Error(t, err)
+	appErr, ok := apperr.AsAppError(err)
+	require.True(t, ok)
+	assert.Equal(t, 500, appErr.Status)
 }
 
 // ─── ListCalls ────────────────────────────────────────────────────────────────

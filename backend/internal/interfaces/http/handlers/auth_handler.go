@@ -2,6 +2,7 @@ package handlers
 
 import (
 	"net/http"
+	"strings"
 	"time"
 
 	"github.com/gin-gonic/gin"
@@ -263,4 +264,85 @@ func (h *AuthHandler) Me(c *gin.Context) {
 	}
 
 	c.JSON(http.StatusOK, dto.OK(httputils.ToUserResponse(user)))
+}
+
+// UpdateMe handles PATCH /api/v1/auth/me.
+//
+// @Summary      Update current user
+// @Description  Updates the authenticated user's profile. Only the full_name field is editable via this endpoint; email, role, and verified status require different flows. Silently ignores any additional fields in the request body.
+// @Tags         Auth
+// @Accept       json
+// @Produce      json
+// @Security     BearerAuth
+// @Param        body  body      dto.UpdateMeRequest       true  "Profile fields to update"
+// @Success      200   {object}  dto.UserResponseEnvelope  "Updated user profile"
+// @Failure      401   {object}  dto.ErrorResponse         "Missing or invalid token"
+// @Failure      422   {object}  dto.ErrorResponse         "Validation error"
+// @Failure      500   {object}  dto.ErrorResponse         "Internal server error"
+// @Router       /api/v1/auth/me [patch]
+func (h *AuthHandler) UpdateMe(c *gin.Context) {
+	id, err := handlerhelpers.CallerID(c)
+	if err != nil {
+		handlerhelpers.RespondError(c, h.logger, err)
+		return
+	}
+
+	var req dto.UpdateMeRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		handlerhelpers.RespondError(c, h.logger, apperr.Unprocessable("invalid request body", err.Error()))
+		return
+	}
+	trimmed := strings.TrimSpace(req.FullName)
+	if trimmed == "" {
+		handlerhelpers.RespondError(c, h.logger, apperr.Unprocessable("invalid request body", "full_name must not be blank"))
+		return
+	}
+
+	user, err := h.service.UpdateMe(c.Request.Context(), id, trimmed)
+	if err != nil {
+		handlerhelpers.RespondError(c, h.logger, err)
+		return
+	}
+
+	c.JSON(http.StatusOK, dto.OK(httputils.ToUserResponse(user)))
+}
+
+// ChangePassword handles POST /api/v1/auth/password/change.
+//
+// @Summary      Change password
+// @Description  Verifies the authenticated user's current password and installs a new one. Revokes every OTHER refresh token for the user — forcing other devices to re-authenticate — while issuing a freshly rotated refresh cookie for the current browser so this session stays signed in. Password must be 8+ characters with at least one letter and one digit.
+// @Tags         Auth
+// @Accept       json
+// @Produce      json
+// @Security     BearerAuth
+// @Param        body  body      dto.ChangePasswordRequest  true  "Current and new password"
+// @Success      200   {object}  dto.OkResponse             "Password updated; other sessions signed out"
+// @Failure      400   {object}  dto.ErrorResponse          "Current password is incorrect (INVALID_CURRENT_PASSWORD)"
+// @Failure      401   {object}  dto.ErrorResponse          "Missing or invalid token"
+// @Failure      422   {object}  dto.ErrorResponse          "Validation error — new password policy not met"
+// @Failure      500   {object}  dto.ErrorResponse          "Internal server error"
+// @Router       /api/v1/auth/password/change [post]
+func (h *AuthHandler) ChangePassword(c *gin.Context) {
+	id, err := handlerhelpers.CallerID(c)
+	if err != nil {
+		handlerhelpers.RespondError(c, h.logger, err)
+		return
+	}
+
+	var req dto.ChangePasswordRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		handlerhelpers.RespondError(c, h.logger, apperr.Unprocessable("invalid request body", err.Error()))
+		return
+	}
+
+	accessToken, rawRefresh, err := h.service.ChangePassword(
+		c.Request.Context(), id, req.CurrentPassword, req.NewPassword,
+	)
+	if err != nil {
+		handlerhelpers.RespondError(c, h.logger, err)
+		return
+	}
+
+	handlerhelpers.SetRefreshCookie(c, rawRefresh, h.refreshTTL)
+	c.JSON(http.StatusOK, dto.OK(dto.ChangePasswordPayload{AccessToken: accessToken}))
 }

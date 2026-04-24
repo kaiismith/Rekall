@@ -32,10 +32,20 @@ const defaults = {
   toggleHand: vi.fn(),
   reactionQueue: [] as Array<{ id: string; userId: string; emoji: string; timestamp: number }>,
   sendEmojiReaction: vi.fn(),
-  laserState: null as { userId: string; x: number; y: number } | null,
-  isLaserActive: false,
-  toggleLaser: vi.fn(),
-  sendLaserMove: vi.fn(),
+  localPreviewStream: null as MediaStream | null,
+  joinNow: vi.fn(),
+  availableDevices: { cameras: [], mics: [], speakers: [] } as { cameras: MediaDeviceInfo[]; mics: MediaDeviceInfo[]; speakers: MediaDeviceInfo[] },
+  selectedDeviceIds: { camera: '', mic: '', speaker: '' },
+  switchCamera: vi.fn(),
+  switchMic: vi.fn(),
+  switchSpeaker: vi.fn(),
+  refreshDevices: vi.fn(),
+  messages: [] as Array<{ id: string; userId: string; body: string; sentAt: number }>,
+  participantDirectory: {} as Record<string, { full_name: string; initials: string }>,
+  sendChatMessage: vi.fn(),
+  retryChatMessage: vi.fn(),
+  unreadChatCount: 0,
+  resetUnreadChat: vi.fn(),
   activeBackground: { type: 'none' as const },
   bgSupported: true,
   setBackground: vi.fn(),
@@ -262,15 +272,6 @@ describe('MeetingRoomPage', () => {
     expect(screen.queryByText(/waiting to join/i)).not.toBeInTheDocument()
   })
 
-  // ── Laser pointer overlay ─────────────────────────────────────────────────
-
-  it('renders laser overlay when laserState is set', () => {
-    // When laserState is non-null, an overlay Box with pointer-events:none is rendered.
-    // Just verify the page renders without crashing and the meeting UI is present.
-    renderPage({ laserState: { userId: 'u1', x: 0.5, y: 0.5 } })
-    expect(screen.getByText('Sprint Sync')).toBeInTheDocument()
-  })
-
   // ── Remote tiles ──────────────────────────────────────────────────────────
 
   it('renders remote tiles for each peer', () => {
@@ -427,28 +428,6 @@ describe('MeetingRoomPage', () => {
   it('shows "Meeting" when meeting has no title', () => {
     renderPage({ meeting: { ...defaults.meeting, title: '' } })
     expect(screen.getByText('Meeting')).toBeInTheDocument()
-  })
-
-  // ── Cursor style for laser active ─────────────────────────────────────────
-
-  it('renders without error when laser is active', () => {
-    renderPage({ isLaserActive: true })
-    expect(screen.getByText('Sprint Sync')).toBeInTheDocument()
-  })
-
-  it('handleGridMouseMove calls sendLaserMove when laser is active', () => {
-    const sendLaserMove = vi.fn()
-    const { container } = renderPage({ isLaserActive: true, sendLaserMove })
-    // The video grid is the Box with onMouseMove — find it by grid display style
-    // It's the main content area; fire mouseMove on it
-    // MUI applies via sx (CSS class), so we fire on the main content area div
-    const mainArea = container.querySelector('main') ?? container.querySelector('[class*="MuiBox-root"]')
-    if (mainArea) {
-      fireEvent.mouseMove(mainArea, { clientX: 100, clientY: 200 })
-    }
-    // sendLaserMove may or may not be called depending on ref availability in jsdom.
-    // The main assertion is that it renders without crashing.
-    expect(screen.getByText('Sprint Sync')).toBeInTheDocument()
   })
 
   it('renders local video element when camera is on', () => {

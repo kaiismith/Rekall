@@ -1,5 +1,6 @@
 # ─── Stage 1: Build ───────────────────────────────────────────────────────────
-FROM golang:1.22-alpine AS builder
+# go.mod requires Go ≥ 1.25; keep this pin in sync with the toolchain directive.
+FROM golang:1.25-alpine AS builder
 
 WORKDIR /app
 

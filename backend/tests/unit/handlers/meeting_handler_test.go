@@ -3,16 +3,21 @@ package handlers_test
 import (
 	"encoding/json"
 	"net/http"
+	"net/http/httptest"
+	"strings"
 	"testing"
 	"time"
 
 	"github.com/gin-gonic/gin"
 	"github.com/golang-jwt/jwt/v5"
 	"github.com/google/uuid"
+	"context"
+
 	"github.com/rekall/backend/internal/application/services"
 	"github.com/rekall/backend/internal/domain/entities"
 	"github.com/rekall/backend/internal/domain/ports"
 	infraauth "github.com/rekall/backend/internal/infrastructure/auth"
+	"github.com/rekall/backend/internal/infrastructure/storage"
 	"github.com/rekall/backend/internal/interfaces/http/dto"
 	"github.com/rekall/backend/internal/interfaces/http/handlers"
 	wsHub "github.com/rekall/backend/internal/interfaces/http/ws"
@@ -31,9 +36,26 @@ func newMeetingService(mr *mockMeetingRepo, pr *mockParticipantRepo) *services.M
 }
 
 func newMeetingHandler(svc *services.MeetingService) *handlers.MeetingHandler {
-	manager := wsHub.NewHubManager(zap.NewNop())
-	return handlers.NewMeetingHandler(svc, manager, "http://rekall.test",
-		testSecret, testIssuer, zap.NewNop())
+	h, _ := newMeetingHandlerWithTicketStore(svc)
+	return h
+}
+
+// newMeetingHandlerWithTicketStore returns the handler plus the in-memory
+// ticket store so Connect tests can issue tickets before calling the upgrade.
+func newMeetingHandlerWithTicketStore(svc *services.MeetingService) (*handlers.MeetingHandler, *storage.MemoryWSTicketStore) {
+	manager := wsHub.NewHubManager(nil, zap.NewNop())
+	store := storage.NewMemoryWSTicketStore(zap.NewNop())
+	h := handlers.NewMeetingHandler(svc, nil, nil, manager, store, "http://rekall.test", zap.NewNop())
+	return h, store
+}
+
+// issueTestTicket mints a ticket for (code, userID) via the in-memory store
+// and returns the value. TTL is long enough for tests not to race on it.
+func issueTestTicket(t *testing.T, store *storage.MemoryWSTicketStore, code string, userID uuid.UUID) string {
+	t.Helper()
+	ticket, _, err := store.Issue(context.Background(), code, userID, 5*time.Minute)
+	require.NoError(t, err)
+	return ticket
 }
 
 // newMeetingRouter wires the meeting handler onto a gin engine.
@@ -369,28 +391,45 @@ func TestMeetingEndHandler_MeetingNotFound(t *testing.T) {
 
 // ─── Connect (WS pre-upgrade paths) ──────────────────────────────────────────
 
-func TestMeetingConnectHandler_MissingToken(t *testing.T) {
+func TestMeetingConnectHandler_MissingTicket(t *testing.T) {
 	mr := new(mockMeetingRepo)
 	pr := new(mockParticipantRepo)
 	h := newMeetingHandler(newMeetingService(mr, pr))
 	r := newMeetingRouter(h, uuid.New())
 
-	// No ?token= parameter → 401 before any repo call.
 	w := doRequest(r, http.MethodGet, "/meetings/abc-defg-hij/ws", nil)
 
 	assert.Equal(t, http.StatusUnauthorized, w.Code)
+	assert.Contains(t, w.Body.String(), "TICKET_REQUIRED")
 	mr.AssertNotCalled(t, "GetByCode")
 }
 
-func TestMeetingConnectHandler_InvalidToken(t *testing.T) {
+func TestMeetingConnectHandler_InvalidTicket(t *testing.T) {
 	mr := new(mockMeetingRepo)
 	pr := new(mockParticipantRepo)
 	h := newMeetingHandler(newMeetingService(mr, pr))
 	r := newMeetingRouter(h, uuid.New())
 
-	w := doRequest(r, http.MethodGet, "/meetings/abc-defg-hij/ws?token=not.a.valid.jwt", nil)
+	w := doRequest(r, http.MethodGet, "/meetings/abc-defg-hij/ws?ticket=bogus", nil)
 
 	assert.Equal(t, http.StatusUnauthorized, w.Code)
+	assert.Contains(t, w.Body.String(), "TICKET_INVALID")
+	mr.AssertNotCalled(t, "GetByCode")
+}
+
+func TestMeetingConnectHandler_TicketMismatch(t *testing.T) {
+	callerID := uuid.New()
+	mr := new(mockMeetingRepo)
+	pr := new(mockParticipantRepo)
+	h, store := newMeetingHandlerWithTicketStore(newMeetingService(mr, pr))
+	r := newMeetingRouter(h, callerID)
+
+	// Ticket issued for a DIFFERENT meeting code.
+	ticket := issueTestTicket(t, store, "other-code", callerID)
+	w := doRequest(r, http.MethodGet, "/meetings/abc-defg-hij/ws?ticket="+ticket, nil)
+
+	assert.Equal(t, http.StatusUnauthorized, w.Code)
+	assert.Contains(t, w.Body.String(), "TICKET_MISMATCH")
 	mr.AssertNotCalled(t, "GetByCode")
 }
 
@@ -398,14 +437,14 @@ func TestMeetingConnectHandler_MeetingNotFound(t *testing.T) {
 	callerID := uuid.New()
 	mr := new(mockMeetingRepo)
 	pr := new(mockParticipantRepo)
-	h := newMeetingHandler(newMeetingService(mr, pr))
+	h, store := newMeetingHandlerWithTicketStore(newMeetingService(mr, pr))
 	r := newMeetingRouter(h, callerID)
 
 	mr.On("GetByCode", mock.Anything, "abc-defg-hij").
 		Return(nil, apperr.NotFound("meeting", "abc-defg-hij"))
 
-	token := signToken(t, callerID, "member")
-	w := doRequest(r, http.MethodGet, "/meetings/abc-defg-hij/ws?token="+token, nil)
+	ticket := issueTestTicket(t, store, "abc-defg-hij", callerID)
+	w := doRequest(r, http.MethodGet, "/meetings/abc-defg-hij/ws?ticket="+ticket, nil)
 
 	assert.Equal(t, http.StatusNotFound, w.Code)
 	mr.AssertExpectations(t)
@@ -419,7 +458,7 @@ func TestMeetingConnectHandler_CanJoinError(t *testing.T) {
 	orgID := uuid.New()
 	mr := new(mockMeetingRepo)
 	pr := new(mockParticipantRepo)
-	h := newMeetingHandler(newMeetingService(mr, pr))
+	h, store := newMeetingHandlerWithTicketStore(newMeetingService(mr, pr))
 	r := newMeetingRouter(h, callerID)
 
 	scopeType := entities.MeetingScopeOrg
@@ -440,8 +479,8 @@ func TestMeetingConnectHandler_CanJoinError(t *testing.T) {
 	pr.On("CountActive", mock.Anything, private.ID).
 		Return(int64(0), assert.AnError) // error from the participant repo
 
-	token := signToken(t, callerID, "member")
-	w := doRequest(r, http.MethodGet, "/meetings/abc-defg-hij/ws?token="+token, nil)
+	ticket := issueTestTicket(t, store, "abc-defg-hij", callerID)
+	w := doRequest(r, http.MethodGet, "/meetings/abc-defg-hij/ws?ticket="+ticket, nil)
 
 	// Any 4xx/5xx is acceptable — the key assertion is that the handler does
 	// not return 200 or attempt a WS upgrade when CanJoin errors.
@@ -449,31 +488,89 @@ func TestMeetingConnectHandler_CanJoinError(t *testing.T) {
 	mr.AssertExpectations(t)
 }
 
-func TestMeetingConnectHandler_InvalidSubjectUUID(t *testing.T) {
-	// Sign a token with a non-UUID subject to hit the SubjectAsUUID error branch.
-	callerID := uuid.New()
+// injectBadClaims plants claims whose Subject is not a UUID, so SubjectAsUUID()
+// returns an error. Used to exercise the "invalid token subject" branch.
+func injectBadClaims(role string) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		claims := &infraauth.Claims{
+			RegisteredClaims: jwt.RegisteredClaims{Subject: "not-a-uuid"},
+			Email:            "test@example.com",
+			Role:             role,
+		}
+		c.Set("auth_claims", claims)
+		c.Next()
+	}
+}
+
+func TestMeetingCreateHandler_BadSubject(t *testing.T) {
 	mr := new(mockMeetingRepo)
 	pr := new(mockParticipantRepo)
 	h := newMeetingHandler(newMeetingService(mr, pr))
-	r := newMeetingRouter(h, callerID)
 
-	// Manually craft a token with a bogus subject.
-	claims := infraauth.Claims{
-		RegisteredClaims: jwt.RegisteredClaims{
-			Subject:   "not-a-uuid", // triggers SubjectAsUUID failure
-			Issuer:    testIssuer,
-			IssuedAt:  jwt.NewNumericDate(time.Now().UTC()),
-			ExpiresAt: jwt.NewNumericDate(time.Now().UTC().Add(15 * time.Minute)),
-		},
-		Email: "x@y.z",
-		Role:  "member",
-	}
-	tok := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
-	signed, err := tok.SignedString([]byte(testSecret))
-	require.NoError(t, err)
+	r := gin.New()
+	r.Use(injectBadClaims("member"))
+	r.POST("/meetings", h.Create)
 
-	w := doRequest(r, http.MethodGet, "/meetings/abc-defg-hij/ws?token="+signed, nil)
+	body := jsonBody(t, dto.CreateMeetingRequest{Type: "open", Title: "T"})
+	w := doRequest(r, http.MethodPost, "/meetings", body)
 	assert.Equal(t, http.StatusUnauthorized, w.Code)
+}
+
+func TestMeetingListMineHandler_BadSubject(t *testing.T) {
+	mr := new(mockMeetingRepo)
+	pr := new(mockParticipantRepo)
+	h := newMeetingHandler(newMeetingService(mr, pr))
+
+	r := gin.New()
+	r.Use(injectBadClaims("member"))
+	r.GET("/meetings/mine", h.ListMine)
+
+	w := doRequest(r, http.MethodGet, "/meetings/mine", nil)
+	assert.Equal(t, http.StatusUnauthorized, w.Code)
+}
+
+func TestMeetingEndHandler_BadSubject(t *testing.T) {
+	mr := new(mockMeetingRepo)
+	pr := new(mockParticipantRepo)
+	h := newMeetingHandler(newMeetingService(mr, pr))
+
+	r := gin.New()
+	r.Use(injectBadClaims("member"))
+	r.DELETE("/meetings/:code", h.End)
+
+	w := doRequest(r, http.MethodDelete, "/meetings/abc", nil)
+	assert.Equal(t, http.StatusUnauthorized, w.Code)
+}
+
+func TestMeetingCreateHandler_InvalidBody(t *testing.T) {
+	hostID := uuid.New()
+	mr := new(mockMeetingRepo)
+	pr := new(mockParticipantRepo)
+	h := newMeetingHandler(newMeetingService(mr, pr))
+	r := newMeetingRouter(h, hostID)
+
+	// Malformed JSON body.
+	req := httptest.NewRequest(http.MethodPost, "/meetings", strings.NewReader("not json"))
+	req.Header.Set("Content-Type", "application/json")
+	w := httptest.NewRecorder()
+	r.ServeHTTP(w, req)
+
+	assert.Equal(t, http.StatusBadRequest, w.Code)
+}
+
+func TestMeetingListMineHandler_ServiceError2(t *testing.T) {
+	// Service error → 5xx (different from existing ServiceError test).
+	hostID := uuid.New()
+	mr := new(mockMeetingRepo)
+	pr := new(mockParticipantRepo)
+	h := newMeetingHandler(newMeetingService(mr, pr))
+	r := newMeetingRouter(h, hostID)
+
+	mr.On("ListByUser", mock.Anything, hostID, mock.Anything).
+		Return([]*ports.MeetingListItem(nil), assert.AnError)
+
+	w := doRequest(r, http.MethodGet, "/meetings/mine", nil)
+	assert.NotEqual(t, http.StatusOK, w.Code)
 }
 
 func TestMeetingConnectHandler_AccessDenied(t *testing.T) {
@@ -481,7 +578,7 @@ func TestMeetingConnectHandler_AccessDenied(t *testing.T) {
 	callerID := uuid.New()
 	mr := new(mockMeetingRepo)
 	pr := new(mockParticipantRepo)
-	h := newMeetingHandler(newMeetingService(mr, pr))
+	h, store := newMeetingHandlerWithTicketStore(newMeetingService(mr, pr))
 	r := newMeetingRouter(h, callerID)
 
 	now := time.Now().UTC()
@@ -497,8 +594,8 @@ func TestMeetingConnectHandler_AccessDenied(t *testing.T) {
 	}
 	mr.On("GetByCode", mock.Anything, "abc-defg-hij").Return(ended, nil)
 
-	token := signToken(t, callerID, "member")
-	w := doRequest(r, http.MethodGet, "/meetings/abc-defg-hij/ws?token="+token, nil)
+	ticket := issueTestTicket(t, store, "abc-defg-hij", callerID)
+	w := doRequest(r, http.MethodGet, "/meetings/abc-defg-hij/ws?ticket="+ticket, nil)
 
 	assert.Equal(t, http.StatusForbidden, w.Code)
 	mr.AssertExpectations(t)

@@ -15,6 +15,10 @@ export default defineConfig({
       '/api': {
         target: process.env.VITE_API_BASE_URL ?? 'http://localhost:8080',
         changeOrigin: true,
+        // Forward WebSocket upgrades (the meeting signaling socket at
+        // /api/v1/meetings/:code/ws). Without this the browser opens
+        // ws://localhost:5173 and sits on "Connecting..." forever.
+        ws: true,
       },
     },
   },

@@ -23,6 +23,9 @@ const (
 
 	// Send buffer size per client.
 	sendBufferSize = 256
+
+	// Maximum length (in runes) of a single chat message body.
+	maxChatMessageLength = 2000
 )
 
 // Message types sent over the WebSocket connection.
@@ -59,9 +62,10 @@ const (
 	MsgTypeForceMute     = "force_mute"     // host mutes a participant
 	MsgTypeEmojiReaction = "emoji_reaction" // floating emoji animation
 	MsgTypeHandRaise     = "hand_raise"     // raise / lower hand
-	MsgTypeLaserMove     = "laser_move"     // laser pointer position
-	MsgTypeLaserStop     = "laser_stop"     // laser pointer deactivated
 	MsgTypeRoomState     = "room_state"     // full snapshot sent on join
+
+	// Chat
+	MsgTypeChatMessage = "chat_message" // persistent in-room text message
 )
 
 // InboundMessage is a generic envelope for messages received from a client.
@@ -76,18 +80,20 @@ type InboundMessage struct {
 	Audio    *bool      `json:"audio,omitempty"`     // media_state
 	Video    *bool      `json:"video,omitempty"`     // media_state
 	Raised   *bool      `json:"raised,omitempty"`    // hand_raise
-	X        *float64   `json:"x,omitempty"`         // laser_move
-	Y        *float64   `json:"y,omitempty"`         // laser_move
 	Emoji    string     `json:"emoji,omitempty"`     // emoji_reaction
+	// Chat
+	Body     string `json:"body,omitempty"`      // chat_message
+	ClientID string `json:"client_id,omitempty"` // chat_message (echoed back)
 }
 
 // RoomStateParticipant is a snapshot of one participant's ephemeral state.
 type RoomStateParticipant struct {
-	UserID      string `json:"user_id"`
-	Audio       bool   `json:"audio"`
-	Video       bool   `json:"video"`
-	HandRaised  bool   `json:"hand_raised"`
-	LaserActive bool   `json:"laser_active"`
+	UserID     string `json:"user_id"`
+	FullName   string `json:"full_name,omitempty"`
+	Initials   string `json:"initials,omitempty"`
+	Audio      bool   `json:"audio"`
+	Video      bool   `json:"video"`
+	HandRaised bool   `json:"hand_raised"`
 }
 
 // OutboundMessage is a generic envelope sent to a client.
@@ -97,15 +103,23 @@ type OutboundMessage struct {
 	KnockID  string      `json:"knock_id,omitempty"`
 	Approved *bool       `json:"approved,omitempty"`
 	UserID   *uuid.UUID  `json:"user_id,omitempty"`
+	// Display info for participant.joined / chat broadcasts — populated from
+	// the Client struct at join time. Omitempty so other message types stay
+	// unchanged.
+	FullName string      `json:"full_name,omitempty"`
+	Initials string      `json:"initials,omitempty"`
 	Payload  interface{} `json:"payload,omitempty"`
 	// In-room controls
 	Audio        *bool                  `json:"audio,omitempty"`
 	Video        *bool                  `json:"video,omitempty"`
 	Raised       *bool                  `json:"raised,omitempty"`
-	X            *float64               `json:"x,omitempty"`
-	Y            *float64               `json:"y,omitempty"`
 	Emoji        string                 `json:"emoji,omitempty"`
 	Participants []RoomStateParticipant `json:"participants,omitempty"`
+	// Chat
+	ID       *uuid.UUID `json:"id,omitempty"`        // chat_message (server-assigned)
+	ClientID string     `json:"client_id,omitempty"` // chat_message (echoed back)
+	Body     string     `json:"body,omitempty"`      // chat_message
+	SentAt   *time.Time `json:"sent_at,omitempty"`   // chat_message
 }
 
 // closeSignal carries a WebSocket close frame to be sent by writePump.
@@ -123,16 +137,60 @@ type Client struct {
 	send    chan []byte
 	closing chan closeSignal // signals writePump to send a close frame then exit
 	UserID  uuid.UUID
+
+	// Display name + initials — populated at connection time from the users
+	// table. Included in participant.joined and room_state broadcasts so peers
+	// can render sender names for chat messages without a per-user fetch.
+	FullName string
+	Initials string
+
+	// chatSendTimestamps is a ring of recent chat_message send timestamps used
+	// for server-side rate limiting. Owned exclusively by the hub run goroutine
+	// (handleChatMessage) — no mutex needed.
+	chatSendTimestamps []time.Time
+}
+
+// ChatRateLimit constants. Server-side enforcement is deliberately lenient so
+// well-behaved clients (who enforce 3/2s locally) never trigger it; it only
+// catches bad actors bypassing the UI.
+const (
+	ChatRateLimitWindow   = 10 * time.Second
+	ChatRateLimitMessages = 10
+)
+
+// allowChat reports whether this client may send another chat_message right
+// now. It prunes expired timestamps and records the attempt on allow.
+func (c *Client) allowChat(now time.Time) bool {
+	cutoff := now.Add(-ChatRateLimitWindow)
+	// Prune in place (preserves capacity, no allocation in the steady state).
+	j := 0
+	for _, t := range c.chatSendTimestamps {
+		if t.After(cutoff) {
+			c.chatSendTimestamps[j] = t
+			j++
+		}
+	}
+	c.chatSendTimestamps = c.chatSendTimestamps[:j]
+
+	if len(c.chatSendTimestamps) >= ChatRateLimitMessages {
+		return false
+	}
+	c.chatSendTimestamps = append(c.chatSendTimestamps, now)
+	return true
 }
 
 // NewClient creates a new Client and starts its read/write pumps.
-func NewClient(hub *Hub, conn *websocket.Conn, userID uuid.UUID) *Client {
+// fullName and initials are optional display info surfaced to peers in
+// participant.joined and room_state broadcasts.
+func NewClient(hub *Hub, conn *websocket.Conn, userID uuid.UUID, fullName, initials string) *Client {
 	return &Client{
-		hub:     hub,
-		conn:    conn,
-		send:    make(chan []byte, sendBufferSize),
-		closing: make(chan closeSignal, 1),
-		UserID:  userID,
+		hub:      hub,
+		conn:     conn,
+		send:     make(chan []byte, sendBufferSize),
+		closing:  make(chan closeSignal, 1),
+		UserID:   userID,
+		FullName: fullName,
+		Initials: initials,
 	}
 }
 

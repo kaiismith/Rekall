@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 	"time"
 
@@ -534,6 +535,66 @@ func TestDeptListByOrgHandler_MissingMembership(t *testing.T) {
 
 	w := doRequest(r, http.MethodGet, "/organizations/"+orgID.String()+"/departments", nil)
 	assert.Equal(t, http.StatusForbidden, w.Code)
+}
+
+func TestDeptCreateHandler_InvalidBody(t *testing.T) {
+	callerID := uuid.New()
+	h := handlers.NewDepartmentHandler(newDeptService(new(mockDeptRepo), new(mockDeptMemberRepo), new(mockMemberRepo)), zap.NewNop())
+	r := newDeptRouter(h, callerID)
+
+	// Empty body → ShouldBindJSON rejects required "name".
+	req := httptest.NewRequest(http.MethodPost, "/organizations/"+uuid.New().String()+"/departments", nil)
+	req.Header.Set("Content-Type", "application/json")
+	w := httptest.NewRecorder()
+	r.ServeHTTP(w, req)
+	assert.Equal(t, http.StatusUnprocessableEntity, w.Code)
+}
+
+func TestDeptGetHandler_NotOrgMember(t *testing.T) {
+	deptRepo := new(mockDeptRepo)
+	memberRepo := new(mockMemberRepo)
+	callerID := uuid.New()
+	h := handlers.NewDepartmentHandler(newDeptService(deptRepo, new(mockDeptMemberRepo), memberRepo), zap.NewNop())
+	r := newDeptRouter(h, callerID)
+
+	orgID := uuid.New()
+	dept := sampleDept(orgID, uuid.New())
+	deptRepo.On("GetByID", mock.Anything, dept.ID).Return(dept, nil)
+	memberRepo.On("GetByOrgAndUser", mock.Anything, orgID, callerID).Return(nil, apperr.NotFound("OrgMembership", ""))
+
+	w := doRequest(r, http.MethodGet, "/departments/"+dept.ID.String(), nil)
+	assert.Equal(t, http.StatusForbidden, w.Code)
+}
+
+func TestDeptAddMemberHandler_ServiceError(t *testing.T) {
+	deptRepo := new(mockDeptRepo)
+	deptMemberRepo := new(mockDeptMemberRepo)
+	memberRepo := new(mockMemberRepo)
+	callerID := uuid.New()
+	h := handlers.NewDepartmentHandler(newDeptService(deptRepo, deptMemberRepo, memberRepo), zap.NewNop())
+	r := newDeptRouter(h, callerID)
+
+	deptID := uuid.New()
+	deptRepo.On("GetByID", mock.Anything, deptID).Return(nil, apperr.NotFound("Department", deptID.String()))
+
+	w := doRequest(r, http.MethodPost,
+		"/departments/"+deptID.String()+"/members",
+		jsonBody(t, map[string]string{"user_id": uuid.New().String(), "role": "member"}))
+	assert.Equal(t, http.StatusNotFound, w.Code)
+}
+
+func TestDeptUpdateHandler_BadBodyType(t *testing.T) {
+	callerID := uuid.New()
+	h := handlers.NewDepartmentHandler(newDeptService(new(mockDeptRepo), new(mockDeptMemberRepo), new(mockMemberRepo)), zap.NewNop())
+	r := newDeptRouter(h, callerID)
+
+	req := httptest.NewRequest(http.MethodPatch, "/departments/"+uuid.New().String(),
+		strings.NewReader("not json"))
+	req.Header.Set("Content-Type", "application/json")
+	w := httptest.NewRecorder()
+	r.ServeHTTP(w, req)
+
+	assert.Equal(t, http.StatusUnprocessableEntity, w.Code)
 }
 
 func TestDeptCreateHandler_InvalidOrgUUID(t *testing.T) {

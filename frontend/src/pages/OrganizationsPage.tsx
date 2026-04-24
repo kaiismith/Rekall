@@ -12,14 +12,18 @@ import {
   DialogActions,
   DialogContent,
   DialogTitle,
+  Stack,
   TextField,
   Typography,
 } from '@mui/material'
 import AddIcon from '@mui/icons-material/Add'
+import ApartmentOutlinedIcon from '@mui/icons-material/ApartmentOutlined'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { organizationService } from '@/services/organizationService'
 import { ApiError } from '@/services/api'
 import { ROUTES } from '@/constants'
+import { EmptyState, GradientButton, PageHeader } from '@/components/common/ui'
+import { tokens } from '@/theme'
 
 export function OrganizationsPage() {
   const navigate = useNavigate()
@@ -52,39 +56,121 @@ export function OrganizationsPage() {
     createMutation.mutate(name)
   }
 
+  const openDialog = () => {
+    setCreateError('')
+    setCreateOpen(true)
+  }
+
+  const showEmpty = !isLoading && !error && orgs && orgs.length === 0
+
   return (
     <Box>
-      <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3 }}>
-        <Typography variant="h5" fontWeight={700}>Organizations</Typography>
-        <Button startIcon={<AddIcon />} variant="contained" onClick={() => setCreateOpen(true)}>
-          New organization
-        </Button>
-      </Box>
+      <PageHeader
+        title="Organizations"
+        subtitle="Workspaces you belong to. Manage members, departments, and invitations."
+        actions={
+          <GradientButton
+            size="small"
+            fullWidth={false}
+            startIcon={<AddIcon />}
+            onClick={openDialog}
+          >
+            New organization
+          </GradientButton>
+        }
+      />
 
-      {isLoading && <CircularProgress />}
-      {error && <Alert severity="error">{(error as ApiError).message}</Alert>}
-
-      {orgs && orgs.length === 0 && (
-        <Typography color="text.secondary">
-          You don&apos;t belong to any organizations yet. Create one to get started.
-        </Typography>
+      {isLoading && (
+        <Box display="flex" justifyContent="center" py={8}>
+          <CircularProgress />
+        </Box>
       )}
 
-      <Box sx={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(260px, 1fr))', gap: 2 }}>
-        {orgs?.map((org) => (
-          <Card key={org.id} variant="outlined">
-            <CardActionArea onClick={() => navigate(ROUTES.ORG_DETAIL.replace(':id', org.id))}>
-              <CardContent>
-                <Typography variant="h6">{org.name}</Typography>
-                <Typography variant="body2" color="text.secondary">/{org.slug}</Typography>
-              </CardContent>
-            </CardActionArea>
-          </Card>
-        ))}
-      </Box>
+      {error && <Alert severity="error" sx={{ mb: 3 }}>{(error as ApiError).message}</Alert>}
+
+      {showEmpty && (
+        <EmptyState
+          icon={<ApartmentOutlinedIcon />}
+          title="No organizations yet"
+          description="Create an organization to invite teammates, manage departments, and scope private meetings."
+          action={
+            <GradientButton
+              fullWidth={false}
+              startIcon={<AddIcon />}
+              onClick={openDialog}
+            >
+              Create an organization
+            </GradientButton>
+          }
+        />
+      )}
+
+      {orgs && orgs.length > 0 && (
+        <Box
+          sx={{
+            display: 'grid',
+            gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))',
+            gap: 2,
+          }}
+        >
+          {orgs.map((org) => (
+            <Card
+              key={org.id}
+              sx={{
+                transition: 'transform 160ms ease, border-color 160ms ease',
+                '&:hover': {
+                  transform: 'translateY(-1px)',
+                  borderColor: 'rgba(167,139,250,0.35)',
+                },
+              }}
+            >
+              <CardActionArea onClick={() => navigate(ROUTES.ORG_DETAIL.replace(':id', org.id))}>
+                <CardContent sx={{ p: 2.5 }}>
+                  <Stack direction="row" spacing={2} alignItems="center">
+                    <Box
+                      sx={{
+                        width: 44,
+                        height: 44,
+                        borderRadius: '10px',
+                        bgcolor: 'rgba(129,140,248,0.12)',
+                        color: '#a78bfa',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        fontWeight: 700,
+                        fontSize: '1.125rem',
+                        flexShrink: 0,
+                      }}
+                    >
+                      {org.name.slice(0, 1).toUpperCase()}
+                    </Box>
+                    <Box sx={{ minWidth: 0 }}>
+                      <Typography
+                        variant="subtitle1"
+                        fontWeight={600}
+                        noWrap
+                        title={org.name}
+                      >
+                        {org.name}
+                      </Typography>
+                      <Typography
+                        variant="caption"
+                        color="text.secondary"
+                        sx={{ fontFamily: tokens.fonts.mono }}
+                      >
+                        /{org.slug}
+                      </Typography>
+                    </Box>
+                  </Stack>
+                </CardContent>
+              </CardActionArea>
+            </Card>
+          ))}
+        </Box>
+      )}
 
       <Dialog open={createOpen} onClose={() => setCreateOpen(false)} maxWidth="xs" fullWidth>
-        <DialogTitle>Create organization</DialogTitle>
+        <DialogTitle sx={{ fontWeight: 600 }}>Create organization</DialogTitle>
         <DialogContent sx={{ display: 'flex', flexDirection: 'column', gap: 2, pt: '16px !important' }}>
           {createError && <Alert severity="error">{createError}</Alert>}
           <TextField
@@ -97,15 +183,15 @@ export function OrganizationsPage() {
             onKeyDown={(e) => e.key === 'Enter' && handleCreate()}
           />
         </DialogContent>
-        <DialogActions>
+        <DialogActions sx={{ px: 3, pb: 2 }}>
           <Button onClick={() => setCreateOpen(false)}>Cancel</Button>
-          <Button
+          <GradientButton
             onClick={handleCreate}
-            variant="contained"
+            fullWidth={false}
             disabled={!name.trim() || createMutation.isPending}
           >
             {createMutation.isPending ? 'Creating…' : 'Create'}
-          </Button>
+          </GradientButton>
         </DialogActions>
       </Dialog>
     </Box>
