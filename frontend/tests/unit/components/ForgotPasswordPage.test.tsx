@@ -43,7 +43,7 @@ describe('ForgotPasswordPage', () => {
   it('renders the reset password heading', () => {
     renderPage()
 
-    expect(screen.getByText(/reset password/i)).toBeInTheDocument()
+    expect(screen.getByRole('heading', { name: /reset your password/i })).toBeInTheDocument()
   })
 
   it('renders an email input field', () => {

@@ -55,7 +55,7 @@ describe('LoginPage', () => {
   it('renders email and password fields', () => {
     renderPage(<LoginPage />)
     expect(screen.getByLabelText(/email/i)).toBeInTheDocument()
-    expect(screen.getByLabelText(/password/i)).toBeInTheDocument()
+    expect(screen.getByLabelText(/^password/i)).toBeInTheDocument()
   })
 
   it('redirects to dashboard on successful login', async () => {
@@ -66,7 +66,7 @@ describe('LoginPage', () => {
     renderPage(<LoginPage />)
 
     fireEvent.change(screen.getByLabelText(/email/i), { target: { value: 'alice@example.com' } })
-    fireEvent.change(screen.getByLabelText(/password/i), { target: { value: 'password1' } })
+    fireEvent.change(screen.getByLabelText(/^password/i), { target: { value: 'password1' } })
     fireEvent.click(screen.getByRole('button', { name: /sign in/i }))
 
     await waitFor(() => {
@@ -83,7 +83,7 @@ describe('LoginPage', () => {
     renderPage(<LoginPage />)
 
     fireEvent.change(screen.getByLabelText(/email/i), { target: { value: 'alice@example.com' } })
-    fireEvent.change(screen.getByLabelText(/password/i), { target: { value: 'wrongpass' } })
+    fireEvent.change(screen.getByLabelText(/^password/i), { target: { value: 'wrongpass' } })
     fireEvent.click(screen.getByRole('button', { name: /sign in/i }))
 
     await waitFor(() => {
@@ -101,7 +101,7 @@ describe('RegisterPage', () => {
     renderPage(<RegisterPage />)
     expect(screen.getByLabelText(/full name/i)).toBeInTheDocument()
     expect(screen.getByLabelText(/email/i)).toBeInTheDocument()
-    expect(screen.getByLabelText(/password/i)).toBeInTheDocument()
+    expect(screen.getByLabelText(/^password/i)).toBeInTheDocument()
   })
 
   it('shows success screen after successful registration', async () => {
@@ -111,7 +111,8 @@ describe('RegisterPage', () => {
 
     fireEvent.change(screen.getByLabelText(/full name/i), { target: { value: 'Alice' } })
     fireEvent.change(screen.getByLabelText(/email/i), { target: { value: 'alice@example.com' } })
-    fireEvent.change(screen.getByLabelText(/password/i), { target: { value: 'password1' } })
+    fireEvent.change(screen.getByLabelText(/^password/i), { target: { value: 'password1' } })
+    fireEvent.change(screen.getByLabelText(/confirm password/i), { target: { value: 'password1' } })
     fireEvent.click(screen.getByRole('button', { name: /create account/i }))
 
     await waitFor(() => {

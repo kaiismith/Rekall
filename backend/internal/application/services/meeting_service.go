@@ -168,6 +168,13 @@ func (s *MeetingService) CanJoin(ctx context.Context, meeting *entities.Meeting,
 		return CanJoinDenied, nil
 	}
 
+	// The host always joins directly — no knock, no scope check, no capacity
+	// guard. They created the meeting; making them wait for an admitter
+	// (often nobody else is there) would be a UX dead-end.
+	if meeting.HostID == userID {
+		return CanJoinDirect, nil
+	}
+
 	// Check capacity (only counts current active participants from DB; the hub
 	// may have an in-flight count — that is fine as a secondary guard).
 	count, err := s.participantRepo.CountActive(ctx, meeting.ID)

@@ -64,6 +64,8 @@ func NewRouter(deps RouterDeps) *gin.Engine {
 	{
 		// Current user
 		protected.GET("/auth/me", deps.AuthH.Me)
+		protected.PATCH("/auth/me", deps.AuthH.UpdateMe)
+		protected.POST("/auth/password/change", deps.AuthH.ChangePassword)
 
 		// Calls
 		calls := protected.Group("/calls")
@@ -115,8 +117,12 @@ func NewRouter(deps RouterDeps) *gin.Engine {
 				meetings.GET("/mine", deps.MeetingH.ListMine)
 				meetings.GET("/:code", deps.MeetingH.GetByCode)
 				meetings.DELETE("/:code", deps.MeetingH.End)
+				meetings.GET("/:code/messages", deps.MeetingH.ListMessages)
+				// Ticket endpoint — authenticated via bearer; returns a short-lived
+				// ticket that the WS upgrade consumes in place of the JWT.
+				meetings.POST("/:code/ws-ticket", deps.MeetingH.IssueWSTicket)
 			}
-			// WebSocket — no JWT middleware (token passed as query param)
+			// WebSocket — no JWT middleware; authenticates via the ticket.
 			v1.GET("/meetings/:code/ws", deps.MeetingH.Connect)
 		}
 

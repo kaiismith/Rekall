@@ -1,6 +1,6 @@
 basePath: /
 definitions:
-  dto.AcceptInvitationRequest:
+  github_com_rekall_backend_internal_interfaces_http_dto.AcceptInvitationRequest:
     properties:
       token:
         example: a3f2c1d4e5b6c7d8e9f0a1b2c3d4e5f6...
@@ -8,15 +8,15 @@ definitions:
     required:
     - token
     type: object
-  dto.AccessTokenResponse:
+  github_com_rekall_backend_internal_interfaces_http_dto.AccessTokenResponse:
     properties:
       data:
-        $ref: '#/definitions/dto.TokenObj'
+        $ref: '#/definitions/github_com_rekall_backend_internal_interfaces_http_dto.TokenObj'
       success:
         example: true
         type: boolean
     type: object
-  dto.AddDeptMemberRequest:
+  github_com_rekall_backend_internal_interfaces_http_dto.AddDeptMemberRequest:
     properties:
       role:
         enum:
@@ -30,19 +30,19 @@ definitions:
     required:
     - user_id
     type: object
-  dto.CallListResponse:
+  github_com_rekall_backend_internal_interfaces_http_dto.CallListResponse:
     properties:
       data:
         items:
-          $ref: '#/definitions/dto.CallResponse'
+          $ref: '#/definitions/github_com_rekall_backend_internal_interfaces_http_dto.CallResponse'
         type: array
       meta:
-        $ref: '#/definitions/dto.Meta'
+        $ref: '#/definitions/github_com_rekall_backend_internal_interfaces_http_dto.Meta'
       success:
         example: true
         type: boolean
     type: object
-  dto.CallResponse:
+  github_com_rekall_backend_internal_interfaces_http_dto.CallResponse:
     properties:
       created_at:
         example: "2026-01-15T09:00:00Z"
@@ -84,15 +84,45 @@ definitions:
         example: 00000000-0000-0000-0000-000000000001
         type: string
     type: object
-  dto.CallResponseEnvelope:
+  github_com_rekall_backend_internal_interfaces_http_dto.CallResponseEnvelope:
     properties:
       data:
-        $ref: '#/definitions/dto.CallResponse'
+        $ref: '#/definitions/github_com_rekall_backend_internal_interfaces_http_dto.CallResponse'
       success:
         example: true
         type: boolean
     type: object
-  dto.CreateCallRequest:
+  github_com_rekall_backend_internal_interfaces_http_dto.ChatMessage:
+    properties:
+      body:
+        type: string
+      id:
+        type: string
+      meeting_id:
+        type: string
+      sent_at:
+        type: string
+      user_id:
+        type: string
+    type: object
+  github_com_rekall_backend_internal_interfaces_http_dto.ChatMessageListPayload:
+    properties:
+      has_more:
+        type: boolean
+      messages:
+        items:
+          $ref: '#/definitions/github_com_rekall_backend_internal_interfaces_http_dto.ChatMessage'
+        type: array
+    type: object
+  github_com_rekall_backend_internal_interfaces_http_dto.ChatMessageListResponse:
+    properties:
+      data:
+        $ref: '#/definitions/github_com_rekall_backend_internal_interfaces_http_dto.ChatMessageListPayload'
+      success:
+        example: true
+        type: boolean
+    type: object
+  github_com_rekall_backend_internal_interfaces_http_dto.CreateCallRequest:
     properties:
       metadata:
         type: object
@@ -108,7 +138,7 @@ definitions:
     - title
     - user_id
     type: object
-  dto.CreateDeptRequest:
+  github_com_rekall_backend_internal_interfaces_http_dto.CreateDeptRequest:
     properties:
       description:
         example: Backend and frontend engineers
@@ -119,7 +149,7 @@ definitions:
     required:
     - name
     type: object
-  dto.CreateMeetingRequest:
+  github_com_rekall_backend_internal_interfaces_http_dto.CreateMeetingRequest:
     properties:
       scope_id:
         type: string
@@ -135,7 +165,7 @@ definitions:
     required:
     - type
     type: object
-  dto.CreateOrgRequest:
+  github_com_rekall_backend_internal_interfaces_http_dto.CreateOrgRequest:
     properties:
       name:
         example: Acme Corp
@@ -143,27 +173,27 @@ definitions:
     required:
     - name
     type: object
-  dto.DeptListResponse:
+  github_com_rekall_backend_internal_interfaces_http_dto.DeptListResponse:
     properties:
       data:
         items:
-          $ref: '#/definitions/dto.DeptResponse'
+          $ref: '#/definitions/github_com_rekall_backend_internal_interfaces_http_dto.DeptResponse'
         type: array
       success:
         example: true
         type: boolean
     type: object
-  dto.DeptMemberListResponse:
+  github_com_rekall_backend_internal_interfaces_http_dto.DeptMemberListResponse:
     properties:
       data:
         items:
-          $ref: '#/definitions/dto.DeptMemberResponse'
+          $ref: '#/definitions/github_com_rekall_backend_internal_interfaces_http_dto.DeptMemberResponse'
         type: array
       success:
         example: true
         type: boolean
     type: object
-  dto.DeptMemberResponse:
+  github_com_rekall_backend_internal_interfaces_http_dto.DeptMemberResponse:
     properties:
       department_id:
         example: 00000000-0000-0000-0000-000000000020
@@ -181,7 +211,7 @@ definitions:
         example: 00000000-0000-0000-0000-000000000001
         type: string
     type: object
-  dto.DeptResponse:
+  github_com_rekall_backend_internal_interfaces_http_dto.DeptResponse:
     properties:
       created_at:
         example: "2026-01-15T09:00:00Z"
@@ -205,15 +235,15 @@ definitions:
         example: "2026-01-15T09:00:00Z"
         type: string
     type: object
-  dto.DeptResponseEnvelope:
+  github_com_rekall_backend_internal_interfaces_http_dto.DeptResponseEnvelope:
     properties:
       data:
-        $ref: '#/definitions/dto.DeptResponse'
+        $ref: '#/definitions/github_com_rekall_backend_internal_interfaces_http_dto.DeptResponse'
       success:
         example: true
         type: boolean
     type: object
-  dto.ErrorBody:
+  github_com_rekall_backend_internal_interfaces_http_dto.ErrorBody:
     properties:
       code:
         example: CALL_NOT_FOUND
@@ -223,15 +253,15 @@ definitions:
         example: call with the given ID was not found
         type: string
     type: object
-  dto.ErrorResponse:
+  github_com_rekall_backend_internal_interfaces_http_dto.ErrorResponse:
     properties:
       error:
-        $ref: '#/definitions/dto.ErrorBody'
+        $ref: '#/definitions/github_com_rekall_backend_internal_interfaces_http_dto.ErrorBody'
       success:
         example: false
         type: boolean
     type: object
-  dto.ForgotPasswordRequest:
+  github_com_rekall_backend_internal_interfaces_http_dto.ForgotPasswordRequest:
     properties:
       email:
         example: alice@example.com
@@ -239,7 +269,7 @@ definitions:
     required:
     - email
     type: object
-  dto.InviteUserRequest:
+  github_com_rekall_backend_internal_interfaces_http_dto.InviteUserRequest:
     properties:
       email:
         example: bob@example.com
@@ -253,7 +283,7 @@ definitions:
     required:
     - email
     type: object
-  dto.LoginRequest:
+  github_com_rekall_backend_internal_interfaces_http_dto.LoginRequest:
     properties:
       email:
         example: alice@example.com
@@ -265,33 +295,33 @@ definitions:
     - email
     - password
     type: object
-  dto.LoginResponse:
+  github_com_rekall_backend_internal_interfaces_http_dto.LoginResponse:
     properties:
       access_token:
         example: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIwMDAwMDAwMC0wMDAwLTAwMDAtMDAwMC0wMDAwMDAwMDAwMDEifQ.signature
         type: string
       user:
-        $ref: '#/definitions/dto.UserResponse'
+        $ref: '#/definitions/github_com_rekall_backend_internal_interfaces_http_dto.UserResponse'
     type: object
-  dto.LoginResponseEnvelope:
+  github_com_rekall_backend_internal_interfaces_http_dto.LoginResponseEnvelope:
     properties:
       data:
-        $ref: '#/definitions/dto.LoginResponse'
+        $ref: '#/definitions/github_com_rekall_backend_internal_interfaces_http_dto.LoginResponse'
       success:
         example: true
         type: boolean
     type: object
-  dto.MeetingListResponse:
+  github_com_rekall_backend_internal_interfaces_http_dto.MeetingListResponse:
     properties:
       data:
         items:
-          $ref: '#/definitions/dto.MeetingResponse'
+          $ref: '#/definitions/github_com_rekall_backend_internal_interfaces_http_dto.MeetingResponse'
         type: array
       success:
         example: true
         type: boolean
     type: object
-  dto.MeetingResponse:
+  github_com_rekall_backend_internal_interfaces_http_dto.MeetingResponse:
     properties:
       code:
         type: string
@@ -311,7 +341,7 @@ definitions:
         type: integer
       participant_previews:
         items:
-          $ref: '#/definitions/dto.ParticipantPreview'
+          $ref: '#/definitions/github_com_rekall_backend_internal_interfaces_http_dto.ParticipantPreview'
         type: array
       scope_id:
         type: string
@@ -326,25 +356,25 @@ definitions:
       type:
         type: string
     type: object
-  dto.MeetingResponseEnvelope:
+  github_com_rekall_backend_internal_interfaces_http_dto.MeetingResponseEnvelope:
     properties:
       data:
-        $ref: '#/definitions/dto.MeetingResponse'
+        $ref: '#/definitions/github_com_rekall_backend_internal_interfaces_http_dto.MeetingResponse'
       success:
         example: true
         type: boolean
     type: object
-  dto.MemberListResponse:
+  github_com_rekall_backend_internal_interfaces_http_dto.MemberListResponse:
     properties:
       data:
         items:
-          $ref: '#/definitions/dto.MemberResponse'
+          $ref: '#/definitions/github_com_rekall_backend_internal_interfaces_http_dto.MemberResponse'
         type: array
       success:
         example: true
         type: boolean
     type: object
-  dto.MemberResponse:
+  github_com_rekall_backend_internal_interfaces_http_dto.MemberResponse:
     properties:
       joined_at:
         example: "2026-01-15T09:00:00Z"
@@ -363,15 +393,15 @@ definitions:
         example: 00000000-0000-0000-0000-000000000001
         type: string
     type: object
-  dto.MessageResponse:
+  github_com_rekall_backend_internal_interfaces_http_dto.MessageResponse:
     properties:
       data:
-        $ref: '#/definitions/dto.MsgObj'
+        $ref: '#/definitions/github_com_rekall_backend_internal_interfaces_http_dto.MsgObj'
       success:
         example: true
         type: boolean
     type: object
-  dto.Meta:
+  github_com_rekall_backend_internal_interfaces_http_dto.Meta:
     properties:
       page:
         example: 1
@@ -383,23 +413,23 @@ definitions:
         example: 150
         type: integer
     type: object
-  dto.MsgObj:
+  github_com_rekall_backend_internal_interfaces_http_dto.MsgObj:
     properties:
       message:
         example: operation completed successfully
         type: string
     type: object
-  dto.OrgListResponse:
+  github_com_rekall_backend_internal_interfaces_http_dto.OrgListResponse:
     properties:
       data:
         items:
-          $ref: '#/definitions/dto.OrgResponse'
+          $ref: '#/definitions/github_com_rekall_backend_internal_interfaces_http_dto.OrgResponse'
         type: array
       success:
         example: true
         type: boolean
     type: object
-  dto.OrgResponse:
+  github_com_rekall_backend_internal_interfaces_http_dto.OrgResponse:
     properties:
       created_at:
         example: "2026-01-15T09:00:00Z"
@@ -420,15 +450,15 @@ definitions:
         example: "2026-01-15T09:00:00Z"
         type: string
     type: object
-  dto.OrgResponseEnvelope:
+  github_com_rekall_backend_internal_interfaces_http_dto.OrgResponseEnvelope:
     properties:
       data:
-        $ref: '#/definitions/dto.OrgResponse'
+        $ref: '#/definitions/github_com_rekall_backend_internal_interfaces_http_dto.OrgResponse'
       success:
         example: true
         type: boolean
     type: object
-  dto.ParticipantPreview:
+  github_com_rekall_backend_internal_interfaces_http_dto.ParticipantPreview:
     properties:
       full_name:
         type: string
@@ -437,7 +467,7 @@ definitions:
       user_id:
         type: string
     type: object
-  dto.RegisterRequest:
+  github_com_rekall_backend_internal_interfaces_http_dto.RegisterRequest:
     properties:
       email:
         example: alice@example.com
@@ -453,7 +483,7 @@ definitions:
     - full_name
     - password
     type: object
-  dto.ResendVerificationRequest:
+  github_com_rekall_backend_internal_interfaces_http_dto.ResendVerificationRequest:
     properties:
       email:
         example: alice@example.com
@@ -461,7 +491,7 @@ definitions:
     required:
     - email
     type: object
-  dto.ResetPasswordRequest:
+  github_com_rekall_backend_internal_interfaces_http_dto.ResetPasswordRequest:
     properties:
       password:
         example: NewP@ssw0rd123
@@ -473,13 +503,13 @@ definitions:
     - password
     - token
     type: object
-  dto.TokenObj:
+  github_com_rekall_backend_internal_interfaces_http_dto.TokenObj:
     properties:
       access_token:
         example: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...
         type: string
     type: object
-  dto.UpdateCallRequest:
+  github_com_rekall_backend_internal_interfaces_http_dto.UpdateCallRequest:
     properties:
       ended_at:
         example: "2026-01-15T09:30:23Z"
@@ -509,7 +539,7 @@ definitions:
         example: 'Alice: Hello, this is Alice from Rekall...'
         type: string
     type: object
-  dto.UpdateDeptMemberRoleRequest:
+  github_com_rekall_backend_internal_interfaces_http_dto.UpdateDeptMemberRoleRequest:
     properties:
       role:
         enum:
@@ -520,7 +550,7 @@ definitions:
     required:
     - role
     type: object
-  dto.UpdateDeptRequest:
+  github_com_rekall_backend_internal_interfaces_http_dto.UpdateDeptRequest:
     properties:
       description:
         example: Backend, frontend, and platform engineers
@@ -531,7 +561,7 @@ definitions:
     required:
     - name
     type: object
-  dto.UpdateMemberRoleRequest:
+  github_com_rekall_backend_internal_interfaces_http_dto.UpdateMemberRoleRequest:
     properties:
       role:
         enum:
@@ -542,7 +572,7 @@ definitions:
     required:
     - role
     type: object
-  dto.UpdateOrgRequest:
+  github_com_rekall_backend_internal_interfaces_http_dto.UpdateOrgRequest:
     properties:
       name:
         example: Acme Corp (renamed)
@@ -550,19 +580,19 @@ definitions:
     required:
     - name
     type: object
-  dto.UserListResponse:
+  github_com_rekall_backend_internal_interfaces_http_dto.UserListResponse:
     properties:
       data:
         items:
-          $ref: '#/definitions/dto.UserResponse'
+          $ref: '#/definitions/github_com_rekall_backend_internal_interfaces_http_dto.UserResponse'
         type: array
       meta:
-        $ref: '#/definitions/dto.Meta'
+        $ref: '#/definitions/github_com_rekall_backend_internal_interfaces_http_dto.Meta'
       success:
         example: true
         type: boolean
     type: object
-  dto.UserResponse:
+  github_com_rekall_backend_internal_interfaces_http_dto.UserResponse:
     properties:
       created_at:
         example: "2026-01-15T09:00:00Z"
@@ -586,15 +616,15 @@ definitions:
         example: member
         type: string
     type: object
-  dto.UserResponseEnvelope:
+  github_com_rekall_backend_internal_interfaces_http_dto.UserResponseEnvelope:
     properties:
       data:
-        $ref: '#/definitions/dto.UserResponse'
+        $ref: '#/definitions/github_com_rekall_backend_internal_interfaces_http_dto.UserResponse'
       success:
         example: true
         type: boolean
     type: object
-  handlers.CreateUserRequest:
+  internal_interfaces_http_handlers.CreateUserRequest:
     properties:
       email:
         example: bob@example.com
@@ -658,30 +688,30 @@ paths:
         name: body
         required: true
         schema:
-          $ref: '#/definitions/dto.LoginRequest'
+          $ref: '#/definitions/github_com_rekall_backend_internal_interfaces_http_dto.LoginRequest'
       produces:
       - application/json
       responses:
         "200":
           description: Authenticated successfully
           schema:
-            $ref: '#/definitions/dto.LoginResponseEnvelope'
+            $ref: '#/definitions/github_com_rekall_backend_internal_interfaces_http_dto.LoginResponseEnvelope'
         "401":
           description: Invalid credentials (INVALID_CREDENTIALS)
           schema:
-            $ref: '#/definitions/dto.ErrorResponse'
+            $ref: '#/definitions/github_com_rekall_backend_internal_interfaces_http_dto.ErrorResponse'
         "403":
           description: Email address not yet verified (EMAIL_NOT_VERIFIED)
           schema:
-            $ref: '#/definitions/dto.ErrorResponse'
+            $ref: '#/definitions/github_com_rekall_backend_internal_interfaces_http_dto.ErrorResponse'
         "422":
           description: Validation error
           schema:
-            $ref: '#/definitions/dto.ErrorResponse'
+            $ref: '#/definitions/github_com_rekall_backend_internal_interfaces_http_dto.ErrorResponse'
         "500":
           description: Internal server error
           schema:
-            $ref: '#/definitions/dto.ErrorResponse'
+            $ref: '#/definitions/github_com_rekall_backend_internal_interfaces_http_dto.ErrorResponse'
       summary: Sign in
       tags:
       - Auth
@@ -698,7 +728,7 @@ paths:
         "500":
           description: Internal server error
           schema:
-            $ref: '#/definitions/dto.ErrorResponse'
+            $ref: '#/definitions/github_com_rekall_backend_internal_interfaces_http_dto.ErrorResponse'
       summary: Sign out
       tags:
       - Auth
@@ -712,19 +742,19 @@ paths:
         "200":
           description: Authenticated user profile
           schema:
-            $ref: '#/definitions/dto.UserResponseEnvelope'
+            $ref: '#/definitions/github_com_rekall_backend_internal_interfaces_http_dto.UserResponseEnvelope'
         "401":
           description: Missing or invalid token (MISSING_TOKEN / INVALID_TOKEN)
           schema:
-            $ref: '#/definitions/dto.ErrorResponse'
+            $ref: '#/definitions/github_com_rekall_backend_internal_interfaces_http_dto.ErrorResponse'
         "403":
           description: Email address not verified (EMAIL_NOT_VERIFIED)
           schema:
-            $ref: '#/definitions/dto.ErrorResponse'
+            $ref: '#/definitions/github_com_rekall_backend_internal_interfaces_http_dto.ErrorResponse'
         "500":
           description: Internal server error
           schema:
-            $ref: '#/definitions/dto.ErrorResponse'
+            $ref: '#/definitions/github_com_rekall_backend_internal_interfaces_http_dto.ErrorResponse'
       security:
       - BearerAuth: []
       summary: Get current user
@@ -743,22 +773,22 @@ paths:
         name: body
         required: true
         schema:
-          $ref: '#/definitions/dto.ForgotPasswordRequest'
+          $ref: '#/definitions/github_com_rekall_backend_internal_interfaces_http_dto.ForgotPasswordRequest'
       produces:
       - application/json
       responses:
         "200":
           description: Reset email dispatched (if account exists)
           schema:
-            $ref: '#/definitions/dto.MessageResponse'
+            $ref: '#/definitions/github_com_rekall_backend_internal_interfaces_http_dto.MessageResponse'
         "422":
           description: Validation error
           schema:
-            $ref: '#/definitions/dto.ErrorResponse'
+            $ref: '#/definitions/github_com_rekall_backend_internal_interfaces_http_dto.ErrorResponse'
         "500":
           description: Internal server error
           schema:
-            $ref: '#/definitions/dto.ErrorResponse'
+            $ref: '#/definitions/github_com_rekall_backend_internal_interfaces_http_dto.ErrorResponse'
       summary: Request password reset
       tags:
       - Auth
@@ -776,26 +806,26 @@ paths:
         name: body
         required: true
         schema:
-          $ref: '#/definitions/dto.ResetPasswordRequest'
+          $ref: '#/definitions/github_com_rekall_backend_internal_interfaces_http_dto.ResetPasswordRequest'
       produces:
       - application/json
       responses:
         "200":
           description: Password updated — all sessions terminated
           schema:
-            $ref: '#/definitions/dto.MessageResponse'
+            $ref: '#/definitions/github_com_rekall_backend_internal_interfaces_http_dto.MessageResponse'
         "400":
           description: Token invalid, expired, or already used (INVALID_OR_EXPIRED_TOKEN)
           schema:
-            $ref: '#/definitions/dto.ErrorResponse'
+            $ref: '#/definitions/github_com_rekall_backend_internal_interfaces_http_dto.ErrorResponse'
         "422":
           description: Validation error — password complexity requirements not met
           schema:
-            $ref: '#/definitions/dto.ErrorResponse'
+            $ref: '#/definitions/github_com_rekall_backend_internal_interfaces_http_dto.ErrorResponse'
         "500":
           description: Internal server error
           schema:
-            $ref: '#/definitions/dto.ErrorResponse'
+            $ref: '#/definitions/github_com_rekall_backend_internal_interfaces_http_dto.ErrorResponse'
       summary: Reset password
       tags:
       - Auth
@@ -810,15 +840,15 @@ paths:
         "200":
           description: New access token issued
           schema:
-            $ref: '#/definitions/dto.AccessTokenResponse'
+            $ref: '#/definitions/github_com_rekall_backend_internal_interfaces_http_dto.AccessTokenResponse'
         "401":
           description: Refresh token invalid, expired, or revoked (INVALID_REFRESH_TOKEN)
           schema:
-            $ref: '#/definitions/dto.ErrorResponse'
+            $ref: '#/definitions/github_com_rekall_backend_internal_interfaces_http_dto.ErrorResponse'
         "500":
           description: Internal server error
           schema:
-            $ref: '#/definitions/dto.ErrorResponse'
+            $ref: '#/definitions/github_com_rekall_backend_internal_interfaces_http_dto.ErrorResponse'
       summary: Refresh access token
       tags:
       - Auth
@@ -834,26 +864,26 @@ paths:
         name: body
         required: true
         schema:
-          $ref: '#/definitions/dto.RegisterRequest'
+          $ref: '#/definitions/github_com_rekall_backend_internal_interfaces_http_dto.RegisterRequest'
       produces:
       - application/json
       responses:
         "201":
           description: Account created — check email for a verification link
           schema:
-            $ref: '#/definitions/dto.UserResponseEnvelope'
+            $ref: '#/definitions/github_com_rekall_backend_internal_interfaces_http_dto.UserResponseEnvelope'
         "409":
           description: Email already registered (EMAIL_ALREADY_REGISTERED)
           schema:
-            $ref: '#/definitions/dto.ErrorResponse'
+            $ref: '#/definitions/github_com_rekall_backend_internal_interfaces_http_dto.ErrorResponse'
         "422":
           description: Validation error — see details for field-level errors
           schema:
-            $ref: '#/definitions/dto.ErrorResponse'
+            $ref: '#/definitions/github_com_rekall_backend_internal_interfaces_http_dto.ErrorResponse'
         "500":
           description: Internal server error
           schema:
-            $ref: '#/definitions/dto.ErrorResponse'
+            $ref: '#/definitions/github_com_rekall_backend_internal_interfaces_http_dto.ErrorResponse'
       summary: Register a new user
       tags:
       - Auth
@@ -873,15 +903,15 @@ paths:
         "200":
           description: Email verified successfully
           schema:
-            $ref: '#/definitions/dto.MessageResponse'
+            $ref: '#/definitions/github_com_rekall_backend_internal_interfaces_http_dto.MessageResponse'
         "400":
           description: Token missing, invalid, expired, or already used (INVALID_OR_EXPIRED_TOKEN)
           schema:
-            $ref: '#/definitions/dto.ErrorResponse'
+            $ref: '#/definitions/github_com_rekall_backend_internal_interfaces_http_dto.ErrorResponse'
         "500":
           description: Internal server error
           schema:
-            $ref: '#/definitions/dto.ErrorResponse'
+            $ref: '#/definitions/github_com_rekall_backend_internal_interfaces_http_dto.ErrorResponse'
       summary: Verify email address
       tags:
       - Auth
@@ -897,26 +927,26 @@ paths:
         name: body
         required: true
         schema:
-          $ref: '#/definitions/dto.ResendVerificationRequest'
+          $ref: '#/definitions/github_com_rekall_backend_internal_interfaces_http_dto.ResendVerificationRequest'
       produces:
       - application/json
       responses:
         "200":
           description: Verification email sent (if the address is registered and unverified)
           schema:
-            $ref: '#/definitions/dto.MessageResponse'
+            $ref: '#/definitions/github_com_rekall_backend_internal_interfaces_http_dto.MessageResponse'
         "400":
           description: Email is already verified (EMAIL_ALREADY_VERIFIED)
           schema:
-            $ref: '#/definitions/dto.ErrorResponse'
+            $ref: '#/definitions/github_com_rekall_backend_internal_interfaces_http_dto.ErrorResponse'
         "422":
           description: Validation error
           schema:
-            $ref: '#/definitions/dto.ErrorResponse'
+            $ref: '#/definitions/github_com_rekall_backend_internal_interfaces_http_dto.ErrorResponse'
         "500":
           description: Internal server error
           schema:
-            $ref: '#/definitions/dto.ErrorResponse'
+            $ref: '#/definitions/github_com_rekall_backend_internal_interfaces_http_dto.ErrorResponse'
       summary: Resend verification email
       tags:
       - Auth
@@ -958,19 +988,19 @@ paths:
         "200":
           description: Paginated list of calls
           schema:
-            $ref: '#/definitions/dto.CallListResponse'
+            $ref: '#/definitions/github_com_rekall_backend_internal_interfaces_http_dto.CallListResponse'
         "400":
           description: Invalid query parameter (e.g. malformed UUID)
           schema:
-            $ref: '#/definitions/dto.ErrorResponse'
+            $ref: '#/definitions/github_com_rekall_backend_internal_interfaces_http_dto.ErrorResponse'
         "401":
           description: Missing or invalid token
           schema:
-            $ref: '#/definitions/dto.ErrorResponse'
+            $ref: '#/definitions/github_com_rekall_backend_internal_interfaces_http_dto.ErrorResponse'
         "500":
           description: Internal server error
           schema:
-            $ref: '#/definitions/dto.ErrorResponse'
+            $ref: '#/definitions/github_com_rekall_backend_internal_interfaces_http_dto.ErrorResponse'
       security:
       - BearerAuth: []
       summary: List calls
@@ -988,26 +1018,26 @@ paths:
         name: body
         required: true
         schema:
-          $ref: '#/definitions/dto.CreateCallRequest'
+          $ref: '#/definitions/github_com_rekall_backend_internal_interfaces_http_dto.CreateCallRequest'
       produces:
       - application/json
       responses:
         "201":
           description: Call created
           schema:
-            $ref: '#/definitions/dto.CallResponseEnvelope'
+            $ref: '#/definitions/github_com_rekall_backend_internal_interfaces_http_dto.CallResponseEnvelope'
         "401":
           description: Missing or invalid token
           schema:
-            $ref: '#/definitions/dto.ErrorResponse'
+            $ref: '#/definitions/github_com_rekall_backend_internal_interfaces_http_dto.ErrorResponse'
         "422":
           description: Validation error
           schema:
-            $ref: '#/definitions/dto.ErrorResponse'
+            $ref: '#/definitions/github_com_rekall_backend_internal_interfaces_http_dto.ErrorResponse'
         "500":
           description: Internal server error
           schema:
-            $ref: '#/definitions/dto.ErrorResponse'
+            $ref: '#/definitions/github_com_rekall_backend_internal_interfaces_http_dto.ErrorResponse'
       security:
       - BearerAuth: []
       summary: Create a call
@@ -1033,19 +1063,19 @@ paths:
         "400":
           description: Invalid UUID format
           schema:
-            $ref: '#/definitions/dto.ErrorResponse'
+            $ref: '#/definitions/github_com_rekall_backend_internal_interfaces_http_dto.ErrorResponse'
         "401":
           description: Missing or invalid token
           schema:
-            $ref: '#/definitions/dto.ErrorResponse'
+            $ref: '#/definitions/github_com_rekall_backend_internal_interfaces_http_dto.ErrorResponse'
         "404":
           description: Call not found (CALL_NOT_FOUND)
           schema:
-            $ref: '#/definitions/dto.ErrorResponse'
+            $ref: '#/definitions/github_com_rekall_backend_internal_interfaces_http_dto.ErrorResponse'
         "500":
           description: Internal server error
           schema:
-            $ref: '#/definitions/dto.ErrorResponse'
+            $ref: '#/definitions/github_com_rekall_backend_internal_interfaces_http_dto.ErrorResponse'
       security:
       - BearerAuth: []
       summary: Delete a call
@@ -1067,23 +1097,23 @@ paths:
         "200":
           description: Call record
           schema:
-            $ref: '#/definitions/dto.CallResponseEnvelope'
+            $ref: '#/definitions/github_com_rekall_backend_internal_interfaces_http_dto.CallResponseEnvelope'
         "400":
           description: Invalid UUID format
           schema:
-            $ref: '#/definitions/dto.ErrorResponse'
+            $ref: '#/definitions/github_com_rekall_backend_internal_interfaces_http_dto.ErrorResponse'
         "401":
           description: Missing or invalid token
           schema:
-            $ref: '#/definitions/dto.ErrorResponse'
+            $ref: '#/definitions/github_com_rekall_backend_internal_interfaces_http_dto.ErrorResponse'
         "404":
           description: Call not found (CALL_NOT_FOUND)
           schema:
-            $ref: '#/definitions/dto.ErrorResponse'
+            $ref: '#/definitions/github_com_rekall_backend_internal_interfaces_http_dto.ErrorResponse'
         "500":
           description: Internal server error
           schema:
-            $ref: '#/definitions/dto.ErrorResponse'
+            $ref: '#/definitions/github_com_rekall_backend_internal_interfaces_http_dto.ErrorResponse'
       security:
       - BearerAuth: []
       summary: Get a call
@@ -1107,34 +1137,34 @@ paths:
         name: body
         required: true
         schema:
-          $ref: '#/definitions/dto.UpdateCallRequest'
+          $ref: '#/definitions/github_com_rekall_backend_internal_interfaces_http_dto.UpdateCallRequest'
       produces:
       - application/json
       responses:
         "200":
           description: Updated call record
           schema:
-            $ref: '#/definitions/dto.CallResponseEnvelope'
+            $ref: '#/definitions/github_com_rekall_backend_internal_interfaces_http_dto.CallResponseEnvelope'
         "400":
           description: Invalid UUID format
           schema:
-            $ref: '#/definitions/dto.ErrorResponse'
+            $ref: '#/definitions/github_com_rekall_backend_internal_interfaces_http_dto.ErrorResponse'
         "401":
           description: Missing or invalid token
           schema:
-            $ref: '#/definitions/dto.ErrorResponse'
+            $ref: '#/definitions/github_com_rekall_backend_internal_interfaces_http_dto.ErrorResponse'
         "404":
           description: Call not found (CALL_NOT_FOUND)
           schema:
-            $ref: '#/definitions/dto.ErrorResponse'
+            $ref: '#/definitions/github_com_rekall_backend_internal_interfaces_http_dto.ErrorResponse'
         "422":
           description: Validation error
           schema:
-            $ref: '#/definitions/dto.ErrorResponse'
+            $ref: '#/definitions/github_com_rekall_backend_internal_interfaces_http_dto.ErrorResponse'
         "500":
           description: Internal server error
           schema:
-            $ref: '#/definitions/dto.ErrorResponse'
+            $ref: '#/definitions/github_com_rekall_backend_internal_interfaces_http_dto.ErrorResponse'
       security:
       - BearerAuth: []
       summary: Update a call
@@ -1160,23 +1190,23 @@ paths:
         "400":
           description: Invalid UUID format
           schema:
-            $ref: '#/definitions/dto.ErrorResponse'
+            $ref: '#/definitions/github_com_rekall_backend_internal_interfaces_http_dto.ErrorResponse'
         "401":
           description: Missing or invalid token
           schema:
-            $ref: '#/definitions/dto.ErrorResponse'
+            $ref: '#/definitions/github_com_rekall_backend_internal_interfaces_http_dto.ErrorResponse'
         "403":
           description: Insufficient role (FORBIDDEN)
           schema:
-            $ref: '#/definitions/dto.ErrorResponse'
+            $ref: '#/definitions/github_com_rekall_backend_internal_interfaces_http_dto.ErrorResponse'
         "404":
           description: Department not found (DEPARTMENT_NOT_FOUND)
           schema:
-            $ref: '#/definitions/dto.ErrorResponse'
+            $ref: '#/definitions/github_com_rekall_backend_internal_interfaces_http_dto.ErrorResponse'
         "500":
           description: Internal server error
           schema:
-            $ref: '#/definitions/dto.ErrorResponse'
+            $ref: '#/definitions/github_com_rekall_backend_internal_interfaces_http_dto.ErrorResponse'
       security:
       - BearerAuth: []
       summary: Delete a department
@@ -1199,23 +1229,23 @@ paths:
         "200":
           description: Department details
           schema:
-            $ref: '#/definitions/dto.DeptResponseEnvelope'
+            $ref: '#/definitions/github_com_rekall_backend_internal_interfaces_http_dto.DeptResponseEnvelope'
         "400":
           description: Invalid UUID format
           schema:
-            $ref: '#/definitions/dto.ErrorResponse'
+            $ref: '#/definitions/github_com_rekall_backend_internal_interfaces_http_dto.ErrorResponse'
         "401":
           description: Missing or invalid token
           schema:
-            $ref: '#/definitions/dto.ErrorResponse'
+            $ref: '#/definitions/github_com_rekall_backend_internal_interfaces_http_dto.ErrorResponse'
         "404":
           description: Department not found (DEPARTMENT_NOT_FOUND)
           schema:
-            $ref: '#/definitions/dto.ErrorResponse'
+            $ref: '#/definitions/github_com_rekall_backend_internal_interfaces_http_dto.ErrorResponse'
         "500":
           description: Internal server error
           schema:
-            $ref: '#/definitions/dto.ErrorResponse'
+            $ref: '#/definitions/github_com_rekall_backend_internal_interfaces_http_dto.ErrorResponse'
       security:
       - BearerAuth: []
       summary: Get a department
@@ -1239,38 +1269,38 @@ paths:
         name: body
         required: true
         schema:
-          $ref: '#/definitions/dto.UpdateDeptRequest'
+          $ref: '#/definitions/github_com_rekall_backend_internal_interfaces_http_dto.UpdateDeptRequest'
       produces:
       - application/json
       responses:
         "200":
           description: Updated department
           schema:
-            $ref: '#/definitions/dto.DeptResponseEnvelope'
+            $ref: '#/definitions/github_com_rekall_backend_internal_interfaces_http_dto.DeptResponseEnvelope'
         "400":
           description: Invalid UUID format
           schema:
-            $ref: '#/definitions/dto.ErrorResponse'
+            $ref: '#/definitions/github_com_rekall_backend_internal_interfaces_http_dto.ErrorResponse'
         "401":
           description: Missing or invalid token
           schema:
-            $ref: '#/definitions/dto.ErrorResponse'
+            $ref: '#/definitions/github_com_rekall_backend_internal_interfaces_http_dto.ErrorResponse'
         "403":
           description: Insufficient role (FORBIDDEN)
           schema:
-            $ref: '#/definitions/dto.ErrorResponse'
+            $ref: '#/definitions/github_com_rekall_backend_internal_interfaces_http_dto.ErrorResponse'
         "404":
           description: Department not found (DEPARTMENT_NOT_FOUND)
           schema:
-            $ref: '#/definitions/dto.ErrorResponse'
+            $ref: '#/definitions/github_com_rekall_backend_internal_interfaces_http_dto.ErrorResponse'
         "422":
           description: Validation error
           schema:
-            $ref: '#/definitions/dto.ErrorResponse'
+            $ref: '#/definitions/github_com_rekall_backend_internal_interfaces_http_dto.ErrorResponse'
         "500":
           description: Internal server error
           schema:
-            $ref: '#/definitions/dto.ErrorResponse'
+            $ref: '#/definitions/github_com_rekall_backend_internal_interfaces_http_dto.ErrorResponse'
       security:
       - BearerAuth: []
       summary: Update a department
@@ -1293,23 +1323,23 @@ paths:
         "200":
           description: List of department members
           schema:
-            $ref: '#/definitions/dto.DeptMemberListResponse'
+            $ref: '#/definitions/github_com_rekall_backend_internal_interfaces_http_dto.DeptMemberListResponse'
         "400":
           description: Invalid UUID format
           schema:
-            $ref: '#/definitions/dto.ErrorResponse'
+            $ref: '#/definitions/github_com_rekall_backend_internal_interfaces_http_dto.ErrorResponse'
         "401":
           description: Missing or invalid token
           schema:
-            $ref: '#/definitions/dto.ErrorResponse'
+            $ref: '#/definitions/github_com_rekall_backend_internal_interfaces_http_dto.ErrorResponse'
         "404":
           description: Department not found (DEPARTMENT_NOT_FOUND)
           schema:
-            $ref: '#/definitions/dto.ErrorResponse'
+            $ref: '#/definitions/github_com_rekall_backend_internal_interfaces_http_dto.ErrorResponse'
         "500":
           description: Internal server error
           schema:
-            $ref: '#/definitions/dto.ErrorResponse'
+            $ref: '#/definitions/github_com_rekall_backend_internal_interfaces_http_dto.ErrorResponse'
       security:
       - BearerAuth: []
       summary: List department members
@@ -1333,7 +1363,7 @@ paths:
         name: body
         required: true
         schema:
-          $ref: '#/definitions/dto.AddDeptMemberRequest'
+          $ref: '#/definitions/github_com_rekall_backend_internal_interfaces_http_dto.AddDeptMemberRequest'
       produces:
       - application/json
       responses:
@@ -1342,31 +1372,31 @@ paths:
         "400":
           description: Invalid UUID format
           schema:
-            $ref: '#/definitions/dto.ErrorResponse'
+            $ref: '#/definitions/github_com_rekall_backend_internal_interfaces_http_dto.ErrorResponse'
         "401":
           description: Missing or invalid token
           schema:
-            $ref: '#/definitions/dto.ErrorResponse'
+            $ref: '#/definitions/github_com_rekall_backend_internal_interfaces_http_dto.ErrorResponse'
         "403":
           description: Insufficient role (FORBIDDEN)
           schema:
-            $ref: '#/definitions/dto.ErrorResponse'
+            $ref: '#/definitions/github_com_rekall_backend_internal_interfaces_http_dto.ErrorResponse'
         "404":
           description: Department or user not found
           schema:
-            $ref: '#/definitions/dto.ErrorResponse'
+            $ref: '#/definitions/github_com_rekall_backend_internal_interfaces_http_dto.ErrorResponse'
         "409":
           description: User is already a department member (ALREADY_A_MEMBER)
           schema:
-            $ref: '#/definitions/dto.ErrorResponse'
+            $ref: '#/definitions/github_com_rekall_backend_internal_interfaces_http_dto.ErrorResponse'
         "422":
           description: Validation error
           schema:
-            $ref: '#/definitions/dto.ErrorResponse'
+            $ref: '#/definitions/github_com_rekall_backend_internal_interfaces_http_dto.ErrorResponse'
         "500":
           description: Internal server error
           schema:
-            $ref: '#/definitions/dto.ErrorResponse'
+            $ref: '#/definitions/github_com_rekall_backend_internal_interfaces_http_dto.ErrorResponse'
       security:
       - BearerAuth: []
       summary: Add a member to a department
@@ -1399,23 +1429,23 @@ paths:
         "400":
           description: Invalid UUID format
           schema:
-            $ref: '#/definitions/dto.ErrorResponse'
+            $ref: '#/definitions/github_com_rekall_backend_internal_interfaces_http_dto.ErrorResponse'
         "401":
           description: Missing or invalid token
           schema:
-            $ref: '#/definitions/dto.ErrorResponse'
+            $ref: '#/definitions/github_com_rekall_backend_internal_interfaces_http_dto.ErrorResponse'
         "403":
           description: Insufficient role (FORBIDDEN)
           schema:
-            $ref: '#/definitions/dto.ErrorResponse'
+            $ref: '#/definitions/github_com_rekall_backend_internal_interfaces_http_dto.ErrorResponse'
         "404":
           description: Department or member not found
           schema:
-            $ref: '#/definitions/dto.ErrorResponse'
+            $ref: '#/definitions/github_com_rekall_backend_internal_interfaces_http_dto.ErrorResponse'
         "500":
           description: Internal server error
           schema:
-            $ref: '#/definitions/dto.ErrorResponse'
+            $ref: '#/definitions/github_com_rekall_backend_internal_interfaces_http_dto.ErrorResponse'
       security:
       - BearerAuth: []
       summary: Remove a member from a department
@@ -1446,7 +1476,7 @@ paths:
         name: body
         required: true
         schema:
-          $ref: '#/definitions/dto.UpdateDeptMemberRoleRequest'
+          $ref: '#/definitions/github_com_rekall_backend_internal_interfaces_http_dto.UpdateDeptMemberRoleRequest'
       produces:
       - application/json
       responses:
@@ -1455,27 +1485,27 @@ paths:
         "400":
           description: Invalid UUID format
           schema:
-            $ref: '#/definitions/dto.ErrorResponse'
+            $ref: '#/definitions/github_com_rekall_backend_internal_interfaces_http_dto.ErrorResponse'
         "401":
           description: Missing or invalid token
           schema:
-            $ref: '#/definitions/dto.ErrorResponse'
+            $ref: '#/definitions/github_com_rekall_backend_internal_interfaces_http_dto.ErrorResponse'
         "403":
           description: Insufficient role (FORBIDDEN)
           schema:
-            $ref: '#/definitions/dto.ErrorResponse'
+            $ref: '#/definitions/github_com_rekall_backend_internal_interfaces_http_dto.ErrorResponse'
         "404":
           description: Department or member not found
           schema:
-            $ref: '#/definitions/dto.ErrorResponse'
+            $ref: '#/definitions/github_com_rekall_backend_internal_interfaces_http_dto.ErrorResponse'
         "422":
           description: Validation error
           schema:
-            $ref: '#/definitions/dto.ErrorResponse'
+            $ref: '#/definitions/github_com_rekall_backend_internal_interfaces_http_dto.ErrorResponse'
         "500":
           description: Internal server error
           schema:
-            $ref: '#/definitions/dto.ErrorResponse'
+            $ref: '#/definitions/github_com_rekall_backend_internal_interfaces_http_dto.ErrorResponse'
       security:
       - BearerAuth: []
       summary: Update a department member's role
@@ -1494,34 +1524,34 @@ paths:
         name: body
         required: true
         schema:
-          $ref: '#/definitions/dto.AcceptInvitationRequest'
+          $ref: '#/definitions/github_com_rekall_backend_internal_interfaces_http_dto.AcceptInvitationRequest'
       produces:
       - application/json
       responses:
         "200":
           description: Joined organization successfully
           schema:
-            $ref: '#/definitions/dto.OrgResponseEnvelope'
+            $ref: '#/definitions/github_com_rekall_backend_internal_interfaces_http_dto.OrgResponseEnvelope'
         "400":
           description: Token invalid, expired, or already accepted (INVALID_OR_EXPIRED_INVITATION)
           schema:
-            $ref: '#/definitions/dto.ErrorResponse'
+            $ref: '#/definitions/github_com_rekall_backend_internal_interfaces_http_dto.ErrorResponse'
         "401":
           description: Missing or invalid token
           schema:
-            $ref: '#/definitions/dto.ErrorResponse'
+            $ref: '#/definitions/github_com_rekall_backend_internal_interfaces_http_dto.ErrorResponse'
         "403":
           description: Authenticated user email does not match invitation email (INVITATION_EMAIL_MISMATCH)
           schema:
-            $ref: '#/definitions/dto.ErrorResponse'
+            $ref: '#/definitions/github_com_rekall_backend_internal_interfaces_http_dto.ErrorResponse'
         "422":
           description: Validation error
           schema:
-            $ref: '#/definitions/dto.ErrorResponse'
+            $ref: '#/definitions/github_com_rekall_backend_internal_interfaces_http_dto.ErrorResponse'
         "500":
           description: Internal server error
           schema:
-            $ref: '#/definitions/dto.ErrorResponse'
+            $ref: '#/definitions/github_com_rekall_backend_internal_interfaces_http_dto.ErrorResponse'
       security:
       - BearerAuth: []
       summary: Accept an organization invitation
@@ -1540,26 +1570,26 @@ paths:
         name: body
         required: true
         schema:
-          $ref: '#/definitions/dto.CreateMeetingRequest'
+          $ref: '#/definitions/github_com_rekall_backend_internal_interfaces_http_dto.CreateMeetingRequest'
       produces:
       - application/json
       responses:
         "201":
           description: Meeting created
           schema:
-            $ref: '#/definitions/dto.MeetingResponseEnvelope'
+            $ref: '#/definitions/github_com_rekall_backend_internal_interfaces_http_dto.MeetingResponseEnvelope'
         "400":
           description: Invalid request body or host meeting limit reached
           schema:
-            $ref: '#/definitions/dto.ErrorResponse'
+            $ref: '#/definitions/github_com_rekall_backend_internal_interfaces_http_dto.ErrorResponse'
         "401":
           description: Missing or invalid token
           schema:
-            $ref: '#/definitions/dto.ErrorResponse'
+            $ref: '#/definitions/github_com_rekall_backend_internal_interfaces_http_dto.ErrorResponse'
         "500":
           description: Internal server error
           schema:
-            $ref: '#/definitions/dto.ErrorResponse'
+            $ref: '#/definitions/github_com_rekall_backend_internal_interfaces_http_dto.ErrorResponse'
       security:
       - BearerAuth: []
       summary: Create a meeting
@@ -1582,23 +1612,23 @@ paths:
         "200":
           description: Meeting ended
           schema:
-            $ref: '#/definitions/dto.MessageResponse'
+            $ref: '#/definitions/github_com_rekall_backend_internal_interfaces_http_dto.MessageResponse'
         "401":
           description: Missing or invalid token
           schema:
-            $ref: '#/definitions/dto.ErrorResponse'
+            $ref: '#/definitions/github_com_rekall_backend_internal_interfaces_http_dto.ErrorResponse'
         "403":
           description: Caller is not the host
           schema:
-            $ref: '#/definitions/dto.ErrorResponse'
+            $ref: '#/definitions/github_com_rekall_backend_internal_interfaces_http_dto.ErrorResponse'
         "404":
           description: Meeting not found
           schema:
-            $ref: '#/definitions/dto.ErrorResponse'
+            $ref: '#/definitions/github_com_rekall_backend_internal_interfaces_http_dto.ErrorResponse'
         "500":
           description: Internal server error
           schema:
-            $ref: '#/definitions/dto.ErrorResponse'
+            $ref: '#/definitions/github_com_rekall_backend_internal_interfaces_http_dto.ErrorResponse'
       security:
       - BearerAuth: []
       summary: End a meeting
@@ -1620,16 +1650,71 @@ paths:
         "200":
           description: Meeting record
           schema:
-            $ref: '#/definitions/dto.MeetingResponseEnvelope'
+            $ref: '#/definitions/github_com_rekall_backend_internal_interfaces_http_dto.MeetingResponseEnvelope'
         "404":
           description: Meeting not found
           schema:
-            $ref: '#/definitions/dto.ErrorResponse'
+            $ref: '#/definitions/github_com_rekall_backend_internal_interfaces_http_dto.ErrorResponse'
         "500":
           description: Internal server error
           schema:
-            $ref: '#/definitions/dto.ErrorResponse'
+            $ref: '#/definitions/github_com_rekall_backend_internal_interfaces_http_dto.ErrorResponse'
       summary: Get a meeting
+      tags:
+      - Meetings
+  /api/v1/meetings/{code}/messages:
+    get:
+      description: Returns the chat history for a meeting, ordered by sent_at ascending.
+        Supports cursor-based pagination via the `before` query parameter (messages
+        strictly older than the cursor are returned). Accessible to the host and to
+        anyone who has ever been an admitted participant.
+      parameters:
+      - description: Meeting code
+        example: abc-defg-hij
+        in: path
+        name: code
+        required: true
+        type: string
+      - description: RFC3339 cursor — returns messages strictly older
+        example: "2026-04-23T14:03:17Z"
+        in: query
+        name: before
+        type: string
+      - default: 50
+        description: Page size (default 50, max 100)
+        in: query
+        name: limit
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Chat history page
+          schema:
+            $ref: '#/definitions/github_com_rekall_backend_internal_interfaces_http_dto.ChatMessageListResponse'
+        "400":
+          description: Invalid `before` or `limit`
+          schema:
+            $ref: '#/definitions/github_com_rekall_backend_internal_interfaces_http_dto.ErrorResponse'
+        "401":
+          description: Missing or invalid token
+          schema:
+            $ref: '#/definitions/github_com_rekall_backend_internal_interfaces_http_dto.ErrorResponse'
+        "403":
+          description: Requester is not a participant (NOT_A_PARTICIPANT)
+          schema:
+            $ref: '#/definitions/github_com_rekall_backend_internal_interfaces_http_dto.ErrorResponse'
+        "404":
+          description: Meeting not found
+          schema:
+            $ref: '#/definitions/github_com_rekall_backend_internal_interfaces_http_dto.ErrorResponse'
+        "500":
+          description: Internal server error
+          schema:
+            $ref: '#/definitions/github_com_rekall_backend_internal_interfaces_http_dto.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: List chat messages for a meeting
       tags:
       - Meetings
   /api/v1/meetings/{code}/ws:
@@ -1661,19 +1746,19 @@ paths:
         "401":
           description: Missing or invalid token
           schema:
-            $ref: '#/definitions/dto.ErrorResponse'
+            $ref: '#/definitions/github_com_rekall_backend_internal_interfaces_http_dto.ErrorResponse'
         "403":
           description: Access denied (meeting ended or at capacity)
           schema:
-            $ref: '#/definitions/dto.ErrorResponse'
+            $ref: '#/definitions/github_com_rekall_backend_internal_interfaces_http_dto.ErrorResponse'
         "404":
           description: Meeting not found
           schema:
-            $ref: '#/definitions/dto.ErrorResponse'
+            $ref: '#/definitions/github_com_rekall_backend_internal_interfaces_http_dto.ErrorResponse'
         "500":
           description: Internal server error
           schema:
-            $ref: '#/definitions/dto.ErrorResponse'
+            $ref: '#/definitions/github_com_rekall_backend_internal_interfaces_http_dto.ErrorResponse'
       summary: Join meeting via WebSocket
       tags:
       - Meetings
@@ -1710,15 +1795,15 @@ paths:
         "200":
           description: List of meetings
           schema:
-            $ref: '#/definitions/dto.MeetingListResponse'
+            $ref: '#/definitions/github_com_rekall_backend_internal_interfaces_http_dto.MeetingListResponse'
         "401":
           description: Missing or invalid token
           schema:
-            $ref: '#/definitions/dto.ErrorResponse'
+            $ref: '#/definitions/github_com_rekall_backend_internal_interfaces_http_dto.ErrorResponse'
         "500":
           description: Internal server error
           schema:
-            $ref: '#/definitions/dto.ErrorResponse'
+            $ref: '#/definitions/github_com_rekall_backend_internal_interfaces_http_dto.ErrorResponse'
       security:
       - BearerAuth: []
       summary: List my meetings
@@ -1735,15 +1820,15 @@ paths:
         "200":
           description: List of organizations
           schema:
-            $ref: '#/definitions/dto.OrgListResponse'
+            $ref: '#/definitions/github_com_rekall_backend_internal_interfaces_http_dto.OrgListResponse'
         "401":
           description: Missing or invalid token
           schema:
-            $ref: '#/definitions/dto.ErrorResponse'
+            $ref: '#/definitions/github_com_rekall_backend_internal_interfaces_http_dto.ErrorResponse'
         "500":
           description: Internal server error
           schema:
-            $ref: '#/definitions/dto.ErrorResponse'
+            $ref: '#/definitions/github_com_rekall_backend_internal_interfaces_http_dto.ErrorResponse'
       security:
       - BearerAuth: []
       summary: List my organizations
@@ -1760,30 +1845,30 @@ paths:
         name: body
         required: true
         schema:
-          $ref: '#/definitions/dto.CreateOrgRequest'
+          $ref: '#/definitions/github_com_rekall_backend_internal_interfaces_http_dto.CreateOrgRequest'
       produces:
       - application/json
       responses:
         "201":
           description: Organization created
           schema:
-            $ref: '#/definitions/dto.OrgResponseEnvelope'
+            $ref: '#/definitions/github_com_rekall_backend_internal_interfaces_http_dto.OrgResponseEnvelope'
         "401":
           description: Missing or invalid token
           schema:
-            $ref: '#/definitions/dto.ErrorResponse'
+            $ref: '#/definitions/github_com_rekall_backend_internal_interfaces_http_dto.ErrorResponse'
         "409":
           description: Slug already taken (SLUG_ALREADY_TAKEN)
           schema:
-            $ref: '#/definitions/dto.ErrorResponse'
+            $ref: '#/definitions/github_com_rekall_backend_internal_interfaces_http_dto.ErrorResponse'
         "422":
           description: Validation error
           schema:
-            $ref: '#/definitions/dto.ErrorResponse'
+            $ref: '#/definitions/github_com_rekall_backend_internal_interfaces_http_dto.ErrorResponse'
         "500":
           description: Internal server error
           schema:
-            $ref: '#/definitions/dto.ErrorResponse'
+            $ref: '#/definitions/github_com_rekall_backend_internal_interfaces_http_dto.ErrorResponse'
       security:
       - BearerAuth: []
       summary: Create an organization
@@ -1809,23 +1894,23 @@ paths:
         "400":
           description: Invalid UUID format
           schema:
-            $ref: '#/definitions/dto.ErrorResponse'
+            $ref: '#/definitions/github_com_rekall_backend_internal_interfaces_http_dto.ErrorResponse'
         "401":
           description: Missing or invalid token
           schema:
-            $ref: '#/definitions/dto.ErrorResponse'
+            $ref: '#/definitions/github_com_rekall_backend_internal_interfaces_http_dto.ErrorResponse'
         "403":
           description: Insufficient role — owner required (FORBIDDEN)
           schema:
-            $ref: '#/definitions/dto.ErrorResponse'
+            $ref: '#/definitions/github_com_rekall_backend_internal_interfaces_http_dto.ErrorResponse'
         "404":
           description: Organization not found or access denied
           schema:
-            $ref: '#/definitions/dto.ErrorResponse'
+            $ref: '#/definitions/github_com_rekall_backend_internal_interfaces_http_dto.ErrorResponse'
         "500":
           description: Internal server error
           schema:
-            $ref: '#/definitions/dto.ErrorResponse'
+            $ref: '#/definitions/github_com_rekall_backend_internal_interfaces_http_dto.ErrorResponse'
       security:
       - BearerAuth: []
       summary: Delete an organization
@@ -1848,23 +1933,23 @@ paths:
         "200":
           description: Organization details
           schema:
-            $ref: '#/definitions/dto.OrgResponseEnvelope'
+            $ref: '#/definitions/github_com_rekall_backend_internal_interfaces_http_dto.OrgResponseEnvelope'
         "400":
           description: Invalid UUID format
           schema:
-            $ref: '#/definitions/dto.ErrorResponse'
+            $ref: '#/definitions/github_com_rekall_backend_internal_interfaces_http_dto.ErrorResponse'
         "401":
           description: Missing or invalid token
           schema:
-            $ref: '#/definitions/dto.ErrorResponse'
+            $ref: '#/definitions/github_com_rekall_backend_internal_interfaces_http_dto.ErrorResponse'
         "404":
           description: Organization not found or access denied
           schema:
-            $ref: '#/definitions/dto.ErrorResponse'
+            $ref: '#/definitions/github_com_rekall_backend_internal_interfaces_http_dto.ErrorResponse'
         "500":
           description: Internal server error
           schema:
-            $ref: '#/definitions/dto.ErrorResponse'
+            $ref: '#/definitions/github_com_rekall_backend_internal_interfaces_http_dto.ErrorResponse'
       security:
       - BearerAuth: []
       summary: Get an organization
@@ -1888,38 +1973,38 @@ paths:
         name: body
         required: true
         schema:
-          $ref: '#/definitions/dto.UpdateOrgRequest'
+          $ref: '#/definitions/github_com_rekall_backend_internal_interfaces_http_dto.UpdateOrgRequest'
       produces:
       - application/json
       responses:
         "200":
           description: Updated organization
           schema:
-            $ref: '#/definitions/dto.OrgResponseEnvelope'
+            $ref: '#/definitions/github_com_rekall_backend_internal_interfaces_http_dto.OrgResponseEnvelope'
         "400":
           description: Invalid UUID format
           schema:
-            $ref: '#/definitions/dto.ErrorResponse'
+            $ref: '#/definitions/github_com_rekall_backend_internal_interfaces_http_dto.ErrorResponse'
         "401":
           description: Missing or invalid token
           schema:
-            $ref: '#/definitions/dto.ErrorResponse'
+            $ref: '#/definitions/github_com_rekall_backend_internal_interfaces_http_dto.ErrorResponse'
         "403":
           description: Insufficient role — owner or admin required (FORBIDDEN)
           schema:
-            $ref: '#/definitions/dto.ErrorResponse'
+            $ref: '#/definitions/github_com_rekall_backend_internal_interfaces_http_dto.ErrorResponse'
         "404":
           description: Organization not found or access denied
           schema:
-            $ref: '#/definitions/dto.ErrorResponse'
+            $ref: '#/definitions/github_com_rekall_backend_internal_interfaces_http_dto.ErrorResponse'
         "422":
           description: Validation error
           schema:
-            $ref: '#/definitions/dto.ErrorResponse'
+            $ref: '#/definitions/github_com_rekall_backend_internal_interfaces_http_dto.ErrorResponse'
         "500":
           description: Internal server error
           schema:
-            $ref: '#/definitions/dto.ErrorResponse'
+            $ref: '#/definitions/github_com_rekall_backend_internal_interfaces_http_dto.ErrorResponse'
       security:
       - BearerAuth: []
       summary: Update an organization
@@ -1943,23 +2028,23 @@ paths:
         "200":
           description: List of departments
           schema:
-            $ref: '#/definitions/dto.DeptListResponse'
+            $ref: '#/definitions/github_com_rekall_backend_internal_interfaces_http_dto.DeptListResponse'
         "400":
           description: Invalid UUID format
           schema:
-            $ref: '#/definitions/dto.ErrorResponse'
+            $ref: '#/definitions/github_com_rekall_backend_internal_interfaces_http_dto.ErrorResponse'
         "401":
           description: Missing or invalid token
           schema:
-            $ref: '#/definitions/dto.ErrorResponse'
+            $ref: '#/definitions/github_com_rekall_backend_internal_interfaces_http_dto.ErrorResponse'
         "404":
           description: Organization not found or access denied
           schema:
-            $ref: '#/definitions/dto.ErrorResponse'
+            $ref: '#/definitions/github_com_rekall_backend_internal_interfaces_http_dto.ErrorResponse'
         "500":
           description: Internal server error
           schema:
-            $ref: '#/definitions/dto.ErrorResponse'
+            $ref: '#/definitions/github_com_rekall_backend_internal_interfaces_http_dto.ErrorResponse'
       security:
       - BearerAuth: []
       summary: List departments in an organization
@@ -1983,38 +2068,38 @@ paths:
         name: body
         required: true
         schema:
-          $ref: '#/definitions/dto.CreateDeptRequest'
+          $ref: '#/definitions/github_com_rekall_backend_internal_interfaces_http_dto.CreateDeptRequest'
       produces:
       - application/json
       responses:
         "201":
           description: Department created
           schema:
-            $ref: '#/definitions/dto.DeptResponseEnvelope'
+            $ref: '#/definitions/github_com_rekall_backend_internal_interfaces_http_dto.DeptResponseEnvelope'
         "400":
           description: Invalid UUID format
           schema:
-            $ref: '#/definitions/dto.ErrorResponse'
+            $ref: '#/definitions/github_com_rekall_backend_internal_interfaces_http_dto.ErrorResponse'
         "401":
           description: Missing or invalid token
           schema:
-            $ref: '#/definitions/dto.ErrorResponse'
+            $ref: '#/definitions/github_com_rekall_backend_internal_interfaces_http_dto.ErrorResponse'
         "403":
           description: Insufficient role (FORBIDDEN)
           schema:
-            $ref: '#/definitions/dto.ErrorResponse'
+            $ref: '#/definitions/github_com_rekall_backend_internal_interfaces_http_dto.ErrorResponse'
         "404":
           description: Organization not found or access denied
           schema:
-            $ref: '#/definitions/dto.ErrorResponse'
+            $ref: '#/definitions/github_com_rekall_backend_internal_interfaces_http_dto.ErrorResponse'
         "422":
           description: Validation error
           schema:
-            $ref: '#/definitions/dto.ErrorResponse'
+            $ref: '#/definitions/github_com_rekall_backend_internal_interfaces_http_dto.ErrorResponse'
         "500":
           description: Internal server error
           schema:
-            $ref: '#/definitions/dto.ErrorResponse'
+            $ref: '#/definitions/github_com_rekall_backend_internal_interfaces_http_dto.ErrorResponse'
       security:
       - BearerAuth: []
       summary: Create a department
@@ -2040,42 +2125,42 @@ paths:
         name: body
         required: true
         schema:
-          $ref: '#/definitions/dto.InviteUserRequest'
+          $ref: '#/definitions/github_com_rekall_backend_internal_interfaces_http_dto.InviteUserRequest'
       produces:
       - application/json
       responses:
         "202":
           description: Invitation sent
           schema:
-            $ref: '#/definitions/dto.MessageResponse'
+            $ref: '#/definitions/github_com_rekall_backend_internal_interfaces_http_dto.MessageResponse'
         "400":
           description: Invalid UUID format
           schema:
-            $ref: '#/definitions/dto.ErrorResponse'
+            $ref: '#/definitions/github_com_rekall_backend_internal_interfaces_http_dto.ErrorResponse'
         "401":
           description: Missing or invalid token
           schema:
-            $ref: '#/definitions/dto.ErrorResponse'
+            $ref: '#/definitions/github_com_rekall_backend_internal_interfaces_http_dto.ErrorResponse'
         "403":
           description: Insufficient role (FORBIDDEN)
           schema:
-            $ref: '#/definitions/dto.ErrorResponse'
+            $ref: '#/definitions/github_com_rekall_backend_internal_interfaces_http_dto.ErrorResponse'
         "404":
           description: Organization not found or access denied
           schema:
-            $ref: '#/definitions/dto.ErrorResponse'
+            $ref: '#/definitions/github_com_rekall_backend_internal_interfaces_http_dto.ErrorResponse'
         "409":
           description: User is already a member (ALREADY_A_MEMBER)
           schema:
-            $ref: '#/definitions/dto.ErrorResponse'
+            $ref: '#/definitions/github_com_rekall_backend_internal_interfaces_http_dto.ErrorResponse'
         "422":
           description: Validation error
           schema:
-            $ref: '#/definitions/dto.ErrorResponse'
+            $ref: '#/definitions/github_com_rekall_backend_internal_interfaces_http_dto.ErrorResponse'
         "500":
           description: Internal server error
           schema:
-            $ref: '#/definitions/dto.ErrorResponse'
+            $ref: '#/definitions/github_com_rekall_backend_internal_interfaces_http_dto.ErrorResponse'
       security:
       - BearerAuth: []
       summary: Invite a user to an organization
@@ -2099,23 +2184,23 @@ paths:
         "200":
           description: List of members
           schema:
-            $ref: '#/definitions/dto.MemberListResponse'
+            $ref: '#/definitions/github_com_rekall_backend_internal_interfaces_http_dto.MemberListResponse'
         "400":
           description: Invalid UUID format
           schema:
-            $ref: '#/definitions/dto.ErrorResponse'
+            $ref: '#/definitions/github_com_rekall_backend_internal_interfaces_http_dto.ErrorResponse'
         "401":
           description: Missing or invalid token
           schema:
-            $ref: '#/definitions/dto.ErrorResponse'
+            $ref: '#/definitions/github_com_rekall_backend_internal_interfaces_http_dto.ErrorResponse'
         "404":
           description: Organization not found or access denied
           schema:
-            $ref: '#/definitions/dto.ErrorResponse'
+            $ref: '#/definitions/github_com_rekall_backend_internal_interfaces_http_dto.ErrorResponse'
         "500":
           description: Internal server error
           schema:
-            $ref: '#/definitions/dto.ErrorResponse'
+            $ref: '#/definitions/github_com_rekall_backend_internal_interfaces_http_dto.ErrorResponse'
       security:
       - BearerAuth: []
       summary: List organization members
@@ -2149,23 +2234,23 @@ paths:
         "400":
           description: Cannot remove the owner (CANNOT_REMOVE_OWNER)
           schema:
-            $ref: '#/definitions/dto.ErrorResponse'
+            $ref: '#/definitions/github_com_rekall_backend_internal_interfaces_http_dto.ErrorResponse'
         "401":
           description: Missing or invalid token
           schema:
-            $ref: '#/definitions/dto.ErrorResponse'
+            $ref: '#/definitions/github_com_rekall_backend_internal_interfaces_http_dto.ErrorResponse'
         "403":
           description: Insufficient role (FORBIDDEN)
           schema:
-            $ref: '#/definitions/dto.ErrorResponse'
+            $ref: '#/definitions/github_com_rekall_backend_internal_interfaces_http_dto.ErrorResponse'
         "404":
           description: Organization or member not found
           schema:
-            $ref: '#/definitions/dto.ErrorResponse'
+            $ref: '#/definitions/github_com_rekall_backend_internal_interfaces_http_dto.ErrorResponse'
         "500":
           description: Internal server error
           schema:
-            $ref: '#/definitions/dto.ErrorResponse'
+            $ref: '#/definitions/github_com_rekall_backend_internal_interfaces_http_dto.ErrorResponse'
       security:
       - BearerAuth: []
       summary: Remove a member
@@ -2197,7 +2282,7 @@ paths:
         name: body
         required: true
         schema:
-          $ref: '#/definitions/dto.UpdateMemberRoleRequest'
+          $ref: '#/definitions/github_com_rekall_backend_internal_interfaces_http_dto.UpdateMemberRoleRequest'
       produces:
       - application/json
       responses:
@@ -2206,27 +2291,27 @@ paths:
         "400":
           description: Cannot remove or demote the owner (CANNOT_REMOVE_OWNER)
           schema:
-            $ref: '#/definitions/dto.ErrorResponse'
+            $ref: '#/definitions/github_com_rekall_backend_internal_interfaces_http_dto.ErrorResponse'
         "401":
           description: Missing or invalid token
           schema:
-            $ref: '#/definitions/dto.ErrorResponse'
+            $ref: '#/definitions/github_com_rekall_backend_internal_interfaces_http_dto.ErrorResponse'
         "403":
           description: Insufficient role (FORBIDDEN)
           schema:
-            $ref: '#/definitions/dto.ErrorResponse'
+            $ref: '#/definitions/github_com_rekall_backend_internal_interfaces_http_dto.ErrorResponse'
         "404":
           description: Organization or member not found
           schema:
-            $ref: '#/definitions/dto.ErrorResponse'
+            $ref: '#/definitions/github_com_rekall_backend_internal_interfaces_http_dto.ErrorResponse'
         "422":
           description: Validation error
           schema:
-            $ref: '#/definitions/dto.ErrorResponse'
+            $ref: '#/definitions/github_com_rekall_backend_internal_interfaces_http_dto.ErrorResponse'
         "500":
           description: Internal server error
           schema:
-            $ref: '#/definitions/dto.ErrorResponse'
+            $ref: '#/definitions/github_com_rekall_backend_internal_interfaces_http_dto.ErrorResponse'
       security:
       - BearerAuth: []
       summary: Update a member's role
@@ -2256,19 +2341,19 @@ paths:
         "200":
           description: Paginated user list
           schema:
-            $ref: '#/definitions/dto.UserListResponse'
+            $ref: '#/definitions/github_com_rekall_backend_internal_interfaces_http_dto.UserListResponse'
         "401":
           description: Missing or invalid token
           schema:
-            $ref: '#/definitions/dto.ErrorResponse'
+            $ref: '#/definitions/github_com_rekall_backend_internal_interfaces_http_dto.ErrorResponse'
         "403":
           description: Insufficient role — admin required (FORBIDDEN)
           schema:
-            $ref: '#/definitions/dto.ErrorResponse'
+            $ref: '#/definitions/github_com_rekall_backend_internal_interfaces_http_dto.ErrorResponse'
         "500":
           description: Internal server error
           schema:
-            $ref: '#/definitions/dto.ErrorResponse'
+            $ref: '#/definitions/github_com_rekall_backend_internal_interfaces_http_dto.ErrorResponse'
       security:
       - BearerAuth: []
       summary: List users  [admin]
@@ -2285,34 +2370,34 @@ paths:
         name: body
         required: true
         schema:
-          $ref: '#/definitions/handlers.CreateUserRequest'
+          $ref: '#/definitions/internal_interfaces_http_handlers.CreateUserRequest'
       produces:
       - application/json
       responses:
         "201":
           description: User created
           schema:
-            $ref: '#/definitions/dto.UserResponseEnvelope'
+            $ref: '#/definitions/github_com_rekall_backend_internal_interfaces_http_dto.UserResponseEnvelope'
         "401":
           description: Missing or invalid token
           schema:
-            $ref: '#/definitions/dto.ErrorResponse'
+            $ref: '#/definitions/github_com_rekall_backend_internal_interfaces_http_dto.ErrorResponse'
         "403":
           description: Insufficient role — admin required (FORBIDDEN)
           schema:
-            $ref: '#/definitions/dto.ErrorResponse'
+            $ref: '#/definitions/github_com_rekall_backend_internal_interfaces_http_dto.ErrorResponse'
         "409":
           description: Email already registered (EMAIL_ALREADY_REGISTERED)
           schema:
-            $ref: '#/definitions/dto.ErrorResponse'
+            $ref: '#/definitions/github_com_rekall_backend_internal_interfaces_http_dto.ErrorResponse'
         "422":
           description: Validation error
           schema:
-            $ref: '#/definitions/dto.ErrorResponse'
+            $ref: '#/definitions/github_com_rekall_backend_internal_interfaces_http_dto.ErrorResponse'
         "500":
           description: Internal server error
           schema:
-            $ref: '#/definitions/dto.ErrorResponse'
+            $ref: '#/definitions/github_com_rekall_backend_internal_interfaces_http_dto.ErrorResponse'
       security:
       - BearerAuth: []
       summary: Create a user  [admin]
@@ -2337,23 +2422,23 @@ paths:
         "400":
           description: Invalid UUID format
           schema:
-            $ref: '#/definitions/dto.ErrorResponse'
+            $ref: '#/definitions/github_com_rekall_backend_internal_interfaces_http_dto.ErrorResponse'
         "401":
           description: Missing or invalid token
           schema:
-            $ref: '#/definitions/dto.ErrorResponse'
+            $ref: '#/definitions/github_com_rekall_backend_internal_interfaces_http_dto.ErrorResponse'
         "403":
           description: Insufficient role — admin required (FORBIDDEN)
           schema:
-            $ref: '#/definitions/dto.ErrorResponse'
+            $ref: '#/definitions/github_com_rekall_backend_internal_interfaces_http_dto.ErrorResponse'
         "404":
           description: User not found (USER_NOT_FOUND)
           schema:
-            $ref: '#/definitions/dto.ErrorResponse'
+            $ref: '#/definitions/github_com_rekall_backend_internal_interfaces_http_dto.ErrorResponse'
         "500":
           description: Internal server error
           schema:
-            $ref: '#/definitions/dto.ErrorResponse'
+            $ref: '#/definitions/github_com_rekall_backend_internal_interfaces_http_dto.ErrorResponse'
       security:
       - BearerAuth: []
       summary: Delete a user  [admin]
@@ -2375,27 +2460,27 @@ paths:
         "200":
           description: User profile
           schema:
-            $ref: '#/definitions/dto.UserResponseEnvelope'
+            $ref: '#/definitions/github_com_rekall_backend_internal_interfaces_http_dto.UserResponseEnvelope'
         "400":
           description: Invalid UUID format
           schema:
-            $ref: '#/definitions/dto.ErrorResponse'
+            $ref: '#/definitions/github_com_rekall_backend_internal_interfaces_http_dto.ErrorResponse'
         "401":
           description: Missing or invalid token
           schema:
-            $ref: '#/definitions/dto.ErrorResponse'
+            $ref: '#/definitions/github_com_rekall_backend_internal_interfaces_http_dto.ErrorResponse'
         "403":
           description: Insufficient role — admin required (FORBIDDEN)
           schema:
-            $ref: '#/definitions/dto.ErrorResponse'
+            $ref: '#/definitions/github_com_rekall_backend_internal_interfaces_http_dto.ErrorResponse'
         "404":
           description: User not found (USER_NOT_FOUND)
           schema:
-            $ref: '#/definitions/dto.ErrorResponse'
+            $ref: '#/definitions/github_com_rekall_backend_internal_interfaces_http_dto.ErrorResponse'
         "500":
           description: Internal server error
           schema:
-            $ref: '#/definitions/dto.ErrorResponse'
+            $ref: '#/definitions/github_com_rekall_backend_internal_interfaces_http_dto.ErrorResponse'
       security:
       - BearerAuth: []
       summary: Get a user  [admin]
@@ -2442,7 +2527,7 @@ paths:
         "503":
           description: Database unavailable (DB_UNAVAILABLE)
           schema:
-            $ref: '#/definitions/dto.ErrorResponse'
+            $ref: '#/definitions/github_com_rekall_backend_internal_interfaces_http_dto.ErrorResponse'
       summary: Readiness probe
       tags:
       - Health

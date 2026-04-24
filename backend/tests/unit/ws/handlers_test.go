@@ -96,7 +96,7 @@ func TestHub_ForceMute_NonHostIgnored(t *testing.T) {
 	hostID := uuid.New()
 	clientID := uuid.New()
 	meetingID := uuid.New()
-	hub := wsHub.NewHub(meetingID, hostID, nil, zap.NewNop())
+	hub := wsHub.NewHub(meetingID, hostID, nil, nil, zap.NewNop())
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 	go hub.Run(ctx)
@@ -104,7 +104,7 @@ func TestHub_ForceMute_NonHostIgnored(t *testing.T) {
 	var clientConn *websocket.Conn
 	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		conn, _ := testUpgrader.Upgrade(w, r, nil)
-		c := wsHub.NewClient(hub, conn, clientID)
+		c := wsHub.NewClient(hub, conn, clientID, "", "")
 		hub.Register(c, true, "")
 		c.Start()
 	})
@@ -230,78 +230,6 @@ func TestHub_HandRaise_NilRaisedIgnored(t *testing.T) {
 	require.Error(t, err, "nil Raised field should be ignored")
 }
 
-// ─── laser_move / laser_stop ──────────────────────────────────────────────────
-
-func TestHub_LaserMove_BroadcastsPosition(t *testing.T) {
-	p1ID := uuid.New()
-	hub, p1Conn, cancel := makeClientPair(t, p1ID)
-	defer cancel()
-	readUntil(t, p1Conn, wsHub.MsgTypeParticipantJoined)
-
-	_, p2Conn := addAdmittedPeer(t, hub, p1Conn)
-
-	x, y := 0.5, 0.25
-	msg, _ := json.Marshal(wsHub.InboundMessage{
-		Type: wsHub.MsgTypeLaserMove,
-		X:    &x,
-		Y:    &y,
-	})
-	require.NoError(t, p1Conn.WriteMessage(websocket.TextMessage, msg))
-
-	received := readUntil(t, p2Conn, wsHub.MsgTypeLaserMove)
-	require.NotNil(t, received.UserID)
-	assert.Equal(t, p1ID, *received.UserID)
-	require.NotNil(t, received.X)
-	assert.InDelta(t, 0.5, *received.X, 0.001)
-	require.NotNil(t, received.Y)
-	assert.InDelta(t, 0.25, *received.Y, 0.001)
-}
-
-func TestHub_LaserMove_NilCoordsIgnored(t *testing.T) {
-	p1ID := uuid.New()
-	hub, p1Conn, cancel := makeClientPair(t, p1ID)
-	defer cancel()
-	readUntil(t, p1Conn, wsHub.MsgTypeParticipantJoined)
-
-	_, p2Conn := addAdmittedPeer(t, hub, p1Conn)
-
-	// Missing X and Y → drop.
-	msg, _ := json.Marshal(wsHub.InboundMessage{Type: wsHub.MsgTypeLaserMove})
-	require.NoError(t, p1Conn.WriteMessage(websocket.TextMessage, msg))
-
-	time.Sleep(150 * time.Millisecond)
-	p2Conn.SetReadDeadline(time.Now().Add(150 * time.Millisecond))
-	_, _, err := p2Conn.ReadMessage()
-	require.Error(t, err)
-}
-
-func TestHub_LaserMove_TakeoverFromPreviousOwner(t *testing.T) {
-	// p1 owns laser → p2 takes over → p1 should receive laser_stop broadcast,
-	// and p2's laser_move should also be broadcast.
-	p1ID := uuid.New()
-	hub, p1Conn, cancel := makeClientPair(t, p1ID)
-	defer cancel()
-	readUntil(t, p1Conn, wsHub.MsgTypeParticipantJoined)
-
-	_, p2Conn := addAdmittedPeer(t, hub, p1Conn)
-
-	x, y := 0.1, 0.1
-	// p1 claims the laser.
-	msg1, _ := json.Marshal(wsHub.InboundMessage{Type: wsHub.MsgTypeLaserMove, X: &x, Y: &y})
-	require.NoError(t, p1Conn.WriteMessage(websocket.TextMessage, msg1))
-	// Drain p2's laser_move from p1.
-	readUntil(t, p2Conn, wsHub.MsgTypeLaserMove)
-
-	// p2 takes over.
-	x2, y2 := 0.8, 0.9
-	msg2, _ := json.Marshal(wsHub.InboundMessage{Type: wsHub.MsgTypeLaserMove, X: &x2, Y: &y2})
-	require.NoError(t, p2Conn.WriteMessage(websocket.TextMessage, msg2))
-
-	// p1 should now receive: laser_stop (for p1's own laser) then laser_move (from p2)
-	received := readUntil(t, p1Conn, wsHub.MsgTypeLaserStop)
-	assert.Equal(t, wsHub.MsgTypeLaserStop, received.Type)
-}
-
 // ─── broadcastAll with pending knocker ───────────────────────────────────────
 
 func TestHub_BroadcastAll_NotifiesPendingKnockers(t *testing.T) {
@@ -319,7 +247,7 @@ func TestHub_BroadcastAll_NotifiesPendingKnockers(t *testing.T) {
 	knockID := "knock-bcall"
 	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		conn, _ := testUpgrader.Upgrade(w, r, nil)
-		c := wsHub.NewClient(hub, conn, knockerID)
+		c := wsHub.NewClient(hub, conn, knockerID, "", "")
 		hub.Register(c, false, knockID)
 		c.Start()
 	})
@@ -364,7 +292,7 @@ func TestHub_KnockTimeout_TriggeredByInternalMessage(t *testing.T) {
 	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		conn, _ := testUpgrader.Upgrade(w, r, nil)
 		knockerConn = conn
-		c := wsHub.NewClient(hub, conn, knockerID)
+		c := wsHub.NewClient(hub, conn, knockerID, "", "")
 		hub.Register(c, false, knockID)
 		c.Start()
 	})
@@ -397,28 +325,5 @@ func TestHub_KnockTimeout_TriggeredByInternalMessage(t *testing.T) {
 	// Hub should no longer have the knocker pending.
 	time.Sleep(50 * time.Millisecond)
 	assert.Equal(t, 1, hub.ActiveCount()) // only the participant remains
-}
-
-func TestHub_LaserStop_ClearsOwnership(t *testing.T) {
-	p1ID := uuid.New()
-	hub, p1Conn, cancel := makeClientPair(t, p1ID)
-	defer cancel()
-	readUntil(t, p1Conn, wsHub.MsgTypeParticipantJoined)
-
-	_, p2Conn := addAdmittedPeer(t, hub, p1Conn)
-
-	x, y := 0.5, 0.5
-	// p1 claims the laser.
-	mv, _ := json.Marshal(wsHub.InboundMessage{Type: wsHub.MsgTypeLaserMove, X: &x, Y: &y})
-	require.NoError(t, p1Conn.WriteMessage(websocket.TextMessage, mv))
-	readUntil(t, p2Conn, wsHub.MsgTypeLaserMove)
-
-	// p1 stops.
-	stopMsg, _ := json.Marshal(wsHub.InboundMessage{Type: wsHub.MsgTypeLaserStop})
-	require.NoError(t, p1Conn.WriteMessage(websocket.TextMessage, stopMsg))
-
-	received := readUntil(t, p2Conn, wsHub.MsgTypeLaserStop)
-	require.NotNil(t, received.UserID)
-	assert.Equal(t, p1ID, *received.UserID)
 }
 

@@ -75,7 +75,7 @@ describe('OrganizationsPage', () => {
     renderPage()
 
     await waitFor(() => {
-      expect(screen.getByText(/don't belong to any organizations/i)).toBeInTheDocument()
+      expect(screen.getByText(/no organizations yet/i)).toBeInTheDocument()
     })
   })
 

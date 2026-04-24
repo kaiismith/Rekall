@@ -1,13 +1,15 @@
+import { useMemo } from 'react'
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { ReactQueryDevtools } from '@tanstack/react-query-devtools'
-import { ThemeProvider } from '@mui/material/styles'
+import { ThemeProvider, createTheme } from '@mui/material/styles'
 import CssBaseline from '@mui/material/CssBaseline'
-import theme from './theme'
+import baseTheme from './theme'
 import { Layout } from '@/components/layout/Layout'
 import { ErrorBoundary } from '@/components/common/ErrorBoundary'
 import { ProtectedRoute } from '@/components/common/ProtectedRoute'
 import { useBootstrap } from '@/hooks/useBootstrap'
+import { useUIPreferencesStore } from '@/store/uiPreferencesStore'
 import { DashboardPage } from '@/pages/DashboardPage'
 import { CallsPage } from '@/pages/CallsPage'
 import { NotFoundPage } from '@/pages/NotFoundPage'
@@ -22,6 +24,9 @@ import { InviteAcceptPage } from '@/pages/InviteAcceptPage'
 import { MeetingsPage } from '@/pages/MeetingsPage'
 import { NewMeetingPage } from '@/pages/NewMeetingPage'
 import { MeetingRoomPage } from '@/pages/MeetingRoomPage'
+import { ProfilePage } from '@/pages/ProfilePage'
+import { SettingsPage } from '@/pages/SettingsPage'
+import { HelpPage } from '@/pages/HelpPage'
 import { ROUTES } from '@/constants'
 
 // Import authStore to wire the Axios interceptors for token injection + refresh.
@@ -65,8 +70,20 @@ function AppRoutes() {
         <Route path={ROUTES.ORGANIZATIONS} element={<OrganizationsPage />} />
         <Route path={ROUTES.ORG_DETAIL} element={<OrgDetailPage />} />
         <Route path={ROUTES.MEETINGS} element={<MeetingsPage />} />
-        <Route path={ROUTES.NEW_MEETING} element={<NewMeetingPage />} />
+        <Route path={ROUTES.PROFILE} element={<ProfilePage />} />
+        <Route path={ROUTES.SETTINGS} element={<SettingsPage />} />
+        <Route path={ROUTES.HELP} element={<HelpPage />} />
       </Route>
+
+      {/* Rekall landing — full-screen, no sidebar chrome, still requires auth */}
+      <Route
+        path={ROUTES.NEW_MEETING}
+        element={
+          <ProtectedRoute>
+            <NewMeetingPage />
+          </ProtectedRoute>
+        }
+      />
 
       {/* Meeting room — full-screen, no sidebar chrome, still requires auth */}
       <Route
@@ -84,17 +101,42 @@ function AppRoutes() {
   )
 }
 
+/**
+ * Wraps MUI's ThemeProvider with a reduced-motion override read from the
+ * UI preferences store. When the user opts in, MUI transitions are
+ * short-circuited globally without rebuilding the base theme.
+ */
+function ThemedApp({ children }: { children: React.ReactNode }) {
+  const reducedMotion = useUIPreferencesStore((s) => s.reducedMotion)
+
+  const theme = useMemo(() => {
+    if (!reducedMotion) return baseTheme
+    return createTheme(baseTheme, {
+      transitions: {
+        create: () => 'none',
+        duration: {
+          shortest: 0, shorter: 0, short: 0,
+          standard: 0, complex: 0,
+          enteringScreen: 0, leavingScreen: 0,
+        },
+      },
+    })
+  }, [reducedMotion])
+
+  return <ThemeProvider theme={theme}>{children}</ThemeProvider>
+}
+
 export default function App() {
   return (
     <QueryClientProvider client={queryClient}>
-      <ThemeProvider theme={theme}>
+      <ThemedApp>
         <CssBaseline />
         <ErrorBoundary>
           <BrowserRouter>
             <AppRoutes />
           </BrowserRouter>
         </ErrorBoundary>
-      </ThemeProvider>
+      </ThemedApp>
       {import.meta.env.DEV && <ReactQueryDevtools initialIsOpen={false} />}
     </QueryClientProvider>
   )

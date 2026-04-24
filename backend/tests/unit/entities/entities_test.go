@@ -271,6 +271,14 @@ func TestJSONMap_Value_PopulatedMap(t *testing.T) {
 	assert.Contains(t, v.(string), `"num":42`)
 }
 
+func TestJSONMap_Value_MarshalError(t *testing.T) {
+	// Channels cannot be marshalled to JSON — triggers json.Marshal failure.
+	j := entities.JSONMap{"bad": make(chan int)}
+	_, err := j.Value()
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "JSONMap.Value")
+}
+
 func TestJSONMap_Scan_Nil(t *testing.T) {
 	var j entities.JSONMap
 	require.NoError(t, j.Scan(nil))

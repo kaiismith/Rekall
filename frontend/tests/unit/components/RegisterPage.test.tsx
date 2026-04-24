@@ -80,6 +80,7 @@ describe('RegisterPage', () => {
     fireEvent.change(screen.getByLabelText(/full name/i), { target: { value: 'Alice' } })
     fireEvent.change(screen.getByLabelText(/email/i), { target: { value: 'alice@example.com' } })
     fireEvent.change(screen.getByLabelText(/^password/i), { target: { value: 'Password1!' } })
+    fireEvent.change(screen.getByLabelText(/confirm password/i), { target: { value: 'Password1!' } })
     fireEvent.click(screen.getByRole('button', { name: /create account/i }))
 
     await waitFor(() => {
@@ -104,6 +105,7 @@ describe('RegisterPage', () => {
     fireEvent.change(screen.getByLabelText(/full name/i), { target: { value: 'Alice' } })
     fireEvent.change(screen.getByLabelText(/email/i), { target: { value: 'alice@example.com' } })
     fireEvent.change(screen.getByLabelText(/^password/i), { target: { value: 'Password1!' } })
+    fireEvent.change(screen.getByLabelText(/confirm password/i), { target: { value: 'Password1!' } })
     fireEvent.click(screen.getByRole('button', { name: /create account/i }))
 
     await waitFor(() => {
@@ -122,6 +124,7 @@ describe('RegisterPage', () => {
     fireEvent.change(screen.getByLabelText(/full name/i), { target: { value: 'Alice' } })
     fireEvent.change(screen.getByLabelText(/email/i), { target: { value: 'alice@example.com' } })
     fireEvent.change(screen.getByLabelText(/^password/i), { target: { value: 'Password1!' } })
+    fireEvent.change(screen.getByLabelText(/confirm password/i), { target: { value: 'Password1!' } })
     fireEvent.click(screen.getByRole('button', { name: /create account/i }))
 
     await waitFor(() => {
@@ -140,6 +143,7 @@ describe('RegisterPage', () => {
     fireEvent.change(screen.getByLabelText(/full name/i), { target: { value: 'Alice' } })
     fireEvent.change(screen.getByLabelText(/email/i), { target: { value: 'alice@example.com' } })
     fireEvent.change(screen.getByLabelText(/^password/i), { target: { value: 'Password1!' } })
+    fireEvent.change(screen.getByLabelText(/confirm password/i), { target: { value: 'Password1!' } })
     fireEvent.click(screen.getByRole('button', { name: /create account/i }))
 
     await waitFor(() => {
@@ -159,6 +163,7 @@ describe('RegisterPage', () => {
     fireEvent.change(screen.getByLabelText(/full name/i), { target: { value: 'Alice' } })
     fireEvent.change(screen.getByLabelText(/email/i), { target: { value: 'alice@example.com' } })
     fireEvent.change(screen.getByLabelText(/^password/i), { target: { value: 'Password1!' } })
+    fireEvent.change(screen.getByLabelText(/confirm password/i), { target: { value: 'Password1!' } })
     fireEvent.click(screen.getByRole('button', { name: /create account/i }))
 
     await waitFor(() => {
@@ -177,6 +182,7 @@ describe('RegisterPage', () => {
     fireEvent.change(screen.getByLabelText(/full name/i), { target: { value: 'Alice' } })
     fireEvent.change(screen.getByLabelText(/email/i), { target: { value: 'alice@example.com' } })
     fireEvent.change(screen.getByLabelText(/^password/i), { target: { value: 'Password1!' } })
+    fireEvent.change(screen.getByLabelText(/confirm password/i), { target: { value: 'Password1!' } })
     fireEvent.click(screen.getByRole('button', { name: /create account/i }))
 
     await waitFor(() => {
@@ -194,6 +200,7 @@ describe('RegisterPage', () => {
     fireEvent.change(screen.getByLabelText(/full name/i), { target: { value: 'Alice' } })
     fireEvent.change(screen.getByLabelText(/email/i), { target: { value: 'alice@example.com' } })
     fireEvent.change(screen.getByLabelText(/^password/i), { target: { value: 'Password1!' } })
+    fireEvent.change(screen.getByLabelText(/confirm password/i), { target: { value: 'Password1!' } })
     fireEvent.click(screen.getByRole('button', { name: /create account/i }))
 
     await waitFor(() => {
@@ -214,6 +221,7 @@ describe('RegisterPage', () => {
     fireEvent.change(screen.getByLabelText(/full name/i), { target: { value: 'Alice' } })
     fireEvent.change(screen.getByLabelText(/email/i), { target: { value: 'alice@example.com' } })
     fireEvent.change(screen.getByLabelText(/^password/i), { target: { value: 'Password1!' } })
+    fireEvent.change(screen.getByLabelText(/confirm password/i), { target: { value: 'Password1!' } })
     fireEvent.click(screen.getByRole('button', { name: /create account/i }))
 
     expect(screen.getByRole('button', { name: /creating account/i })).toBeDisabled()

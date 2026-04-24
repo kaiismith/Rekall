@@ -222,6 +222,11 @@ func TestNewRefreshToken_Success(t *testing.T) {
 	assert.WithinDuration(t, time.Now().Add(time.Hour), tok.ExpiresAt, 5*time.Second)
 }
 
+// Note: crypto/rand.Read in Go 1.24+ panics on failure instead of returning an
+// error, making the error-return branches of GenerateRawToken (and its callers
+// NewRefreshToken / SendVerificationEmail) unreachable from tests. This is a
+// runtime-level limitation, not a missing test.
+
 // ─── SendVerificationEmail ───────────────────────────────────────────────────
 
 func TestSendVerificationEmail_Success(t *testing.T) {

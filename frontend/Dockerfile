@@ -3,9 +3,11 @@ FROM node:20-alpine AS builder
 
 WORKDIR /app
 
-# Install deps first (layer cache)
+# Install deps first (layer cache).
+# --legacy-peer-deps tolerates the @eslint/js@10 ↔ eslint@9 peer-dep skew in
+# package-lock.json; npm 7+ is strict by default and would otherwise ERESOLVE.
 COPY package.json package-lock.json* ./
-RUN npm ci --frozen-lockfile
+RUN npm ci --legacy-peer-deps
 
 # Build args injected at build time
 ARG VITE_API_BASE_URL=/api/v1

@@ -5,6 +5,7 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+	"github.com/rekall/backend/internal/domain/ports"
 	"go.uber.org/zap"
 )
 
@@ -27,7 +28,6 @@ type ParticipantState struct {
 	AudioEnabled bool
 	VideoEnabled bool
 	HandRaised   bool
-	LaserActive  bool
 }
 
 // KnockRequest represents a user waiting in the waiting room.
@@ -42,6 +42,14 @@ type KnockRequest struct {
 type inboundEnvelope struct {
 	client *Client
 	msg    InboundMessage
+}
+
+// identity pairs a user's display name + initials. Kept alongside ephemeral
+// mediaState so participant.joined and room_state broadcasts can surface
+// human-readable names to chat consumers without per-message DB lookups.
+type identity struct {
+	FullName string
+	Initials string
 }
 
 // Hub manages all clients for a single meeting. One goroutine (run) owns all
@@ -64,13 +72,18 @@ type Hub struct {
 	// keyed by userID string. Populated on admit; deleted on unregister.
 	mediaState map[string]*ParticipantState
 
-	// laserOwner is the userID string of the participant currently holding the
-	// laser pointer, or "" if no laser is active.
-	laserOwner string
+	// identities maps userID string → display name/initials for every
+	// admitted participant. Populated at admit time from the Client struct.
+	identities map[string]identity
 
 	// handlers is a registry of message-type → handler function.
 	// Adding a new in-room message type only requires registering here.
 	handlers map[string]handlerFn
+
+	// chatRepo persists chat messages before they are broadcast. Nil-safe:
+	// when unset (e.g. in WS unit tests that don't exercise chat), the chat
+	// handler silently drops inbound messages.
+	chatRepo ports.MeetingMessageRepository
 
 	// channels
 	register   chan registerRequest
@@ -91,8 +104,14 @@ type registerRequest struct {
 	knockID string // pre-generated ID for the knock request
 }
 
-// NewHub creates a Hub for the given meeting.
-func NewHub(meetingID, hostID uuid.UUID, onEnd func(uuid.UUID), logger *zap.Logger) *Hub {
+// NewHub creates a Hub for the given meeting. chatRepo may be nil — handlers
+// that depend on it (handleChatMessage) will no-op when it is unset.
+func NewHub(
+	meetingID, hostID uuid.UUID,
+	chatRepo ports.MeetingMessageRepository,
+	onEnd func(uuid.UUID),
+	logger *zap.Logger,
+) *Hub {
 	h := &Hub{
 		meetingID:  meetingID,
 		hostID:     hostID,
@@ -100,6 +119,8 @@ func NewHub(meetingID, hostID uuid.UUID, onEnd func(uuid.UUID), logger *zap.Logg
 		pending:    make(map[*Client]*KnockRequest),
 		knocks:     make(map[string]*KnockRequest),
 		mediaState: make(map[string]*ParticipantState),
+		identities: make(map[string]identity),
+		chatRepo:   chatRepo,
 		register:   make(chan registerRequest, 8),
 		unregister: make(chan *Client, 8),
 		inbound:    make(chan inboundEnvelope, 64),
@@ -112,8 +133,7 @@ func NewHub(meetingID, hostID uuid.UUID, onEnd func(uuid.UUID), logger *zap.Logg
 		MsgTypeForceMute:     handleForceMute,
 		MsgTypeEmojiReaction: handleEmojiReaction,
 		MsgTypeHandRaise:     handleHandRaise,
-		MsgTypeLaserMove:     handleLaserMove,
-		MsgTypeLaserStop:     handleLaserStop,
+		MsgTypeChatMessage:   handleChatMessage,
 	}
 	return h
 }
@@ -157,10 +177,19 @@ func (h *Hub) Done() <-chan struct{} { return h.done }
 
 func (h *Hub) admitDirect(c *Client) {
 	h.clients[c] = struct{}{}
+	h.logger.Info("admitDirect: entered", zap.String("user_id", c.UserID.String()))
 	h.promoteToActive(c)
 	uid := c.UserID
-	h.broadcastAll(OutboundMessage{Type: MsgTypeParticipantJoined, UserID: &uid})
-	h.logger.Info("client admitted directly", zap.String("user_id", uid.String()))
+	ok := h.broadcastAllReport(OutboundMessage{
+		Type:     MsgTypeParticipantJoined,
+		UserID:   &uid,
+		FullName: c.FullName,
+		Initials: c.Initials,
+	})
+	h.logger.Info("admitDirect: broadcast participant.joined",
+		zap.String("user_id", uid.String()),
+		zap.Bool("send_ok_for_self", ok),
+	)
 }
 
 // promoteToActive sends a room_state snapshot to the newly admitted client and
@@ -170,13 +199,43 @@ func (h *Hub) promoteToActive(c *Client) {
 	// Build snapshot of all currently admitted participants (excluding c, who
 	// is already in h.clients but not yet in h.mediaState).
 	snapshot := h.buildRoomStateSnapshot()
-	c.Send(OutboundMessage{Type: MsgTypeRoomState, Participants: snapshot})
+	ok := c.Send(OutboundMessage{Type: MsgTypeRoomState, Participants: snapshot})
+	h.logger.Info("promoteToActive: sent room_state",
+		zap.String("user_id", c.UserID.String()),
+		zap.Int("snapshot_size", len(snapshot)),
+		zap.Bool("send_ok", ok),
+	)
 
 	// Initialise this participant's state (defaults: audio on, video on).
-	h.mediaState[c.UserID.String()] = &ParticipantState{
+	uidStr := c.UserID.String()
+	h.mediaState[uidStr] = &ParticipantState{
 		AudioEnabled: true,
 		VideoEnabled: true,
 	}
+	h.identities[uidStr] = identity{FullName: c.FullName, Initials: c.Initials}
+}
+
+// broadcastAllReport is broadcastAll plus a return flag indicating whether
+// the named client (the joiner themselves) successfully received the broadcast.
+// Used only for diagnostic logging in admitDirect; production callers can keep
+// using broadcastAll.
+func (h *Hub) broadcastAllReport(msg OutboundMessage) bool {
+	selfOk := false
+	uid := msg.UserID
+	for c := range h.clients {
+		ok := c.Send(msg)
+		if uid != nil && c.UserID == *uid {
+			selfOk = ok
+		}
+		if !ok {
+			delete(h.clients, c)
+			c.conn.Close()
+		}
+	}
+	for c := range h.pending {
+		c.Send(msg)
+	}
+	return selfOk
 }
 
 // buildRoomStateSnapshot returns the current state of all admitted participants
@@ -184,12 +243,14 @@ func (h *Hub) promoteToActive(c *Client) {
 func (h *Hub) buildRoomStateSnapshot() []RoomStateParticipant {
 	result := make([]RoomStateParticipant, 0, len(h.mediaState))
 	for uid, ps := range h.mediaState {
+		id := h.identities[uid]
 		result = append(result, RoomStateParticipant{
-			UserID:      uid,
-			Audio:       ps.AudioEnabled,
-			Video:       ps.VideoEnabled,
-			HandRaised:  ps.HandRaised,
-			LaserActive: h.laserOwner == uid,
+			UserID:     uid,
+			FullName:   id.FullName,
+			Initials:   id.Initials,
+			Audio:      ps.AudioEnabled,
+			Video:      ps.VideoEnabled,
+			HandRaised: ps.HandRaised,
 		})
 	}
 	return result
@@ -236,14 +297,9 @@ func (h *Hub) handleUnregister(c *Client) {
 		uid := c.UserID
 		uidStr := uid.String()
 
-		// If this participant held the laser, clear it and notify others.
-		if h.laserOwner == uidStr {
-			h.laserOwner = ""
-			h.broadcastClients(OutboundMessage{Type: MsgTypeLaserStop, UserID: &uid})
-		}
-
 		// Clean up ephemeral state.
 		delete(h.mediaState, uidStr)
+		delete(h.identities, uidStr)
 		delete(h.clients, c)
 
 		h.broadcastAll(OutboundMessage{Type: MsgTypeParticipantLeft, UserID: &uid})
@@ -334,7 +390,12 @@ func (h *Hub) handleKnockRespond(responder *Client, msg InboundMessage) {
 		uid := kr.UserID
 		t := true
 		kr.Client.Send(OutboundMessage{Type: MsgTypeKnockApproved, KnockID: kr.ID})
-		h.broadcastAll(OutboundMessage{Type: MsgTypeParticipantJoined, UserID: &uid})
+		h.broadcastAll(OutboundMessage{
+			Type:     MsgTypeParticipantJoined,
+			UserID:   &uid,
+			FullName: kr.Client.FullName,
+			Initials: kr.Client.Initials,
+		})
 		h.broadcastAll(OutboundMessage{Type: MsgTypeKnockResolved, KnockID: kr.ID, Approved: &t, UserID: &uid})
 		h.logger.Info("knock approved", zap.String("user_id", uid.String()))
 	} else {

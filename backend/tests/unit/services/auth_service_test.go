@@ -259,6 +259,141 @@ func TestRegister_CreateError(t *testing.T) {
 	assert.Equal(t, 500, appErr.Status)
 }
 
+func TestVerifyEmail_SetVerifiedError(t *testing.T) {
+	userRepo := new(mockUserRepo)
+	tokenRepo := new(mockTokenRepo)
+	svc := newAuthService(userRepo, tokenRepo, new(mockMailer))
+
+	userID := uuid.New()
+	tokenRepo.On("GetVerificationToken", mock.Anything, mock.AnythingOfType("string")).Return(
+		&entities.EmailVerificationToken{
+			UserID:    userID,
+			TokenHash: "h",
+			ExpiresAt: time.Now().Add(time.Hour),
+		}, nil)
+	userRepo.On("SetEmailVerified", mock.Anything, userID, true).Return(assert.AnError)
+
+	err := svc.VerifyEmail(context.Background(), "raw-token")
+	require.Error(t, err)
+	appErr, ok := apperr.AsAppError(err)
+	require.True(t, ok)
+	assert.Equal(t, 500, appErr.Status)
+}
+
+func TestVerifyEmail_MarkUsedError_SoftFail(t *testing.T) {
+	// Marking the token used is non-fatal — verification still succeeds.
+	userRepo := new(mockUserRepo)
+	tokenRepo := new(mockTokenRepo)
+	svc := newAuthService(userRepo, tokenRepo, new(mockMailer))
+
+	userID := uuid.New()
+	tokenRepo.On("GetVerificationToken", mock.Anything, mock.Anything).Return(
+		&entities.EmailVerificationToken{UserID: userID, TokenHash: "h", ExpiresAt: time.Now().Add(time.Hour)}, nil)
+	userRepo.On("SetEmailVerified", mock.Anything, userID, true).Return(nil)
+	tokenRepo.On("MarkVerificationTokenUsed", mock.Anything, mock.Anything).Return(assert.AnError)
+
+	require.NoError(t, svc.VerifyEmail(context.Background(), "raw-token"))
+}
+
+func TestResendVerification_RepoLookupError(t *testing.T) {
+	userRepo := new(mockUserRepo)
+	svc := newAuthService(userRepo, new(mockTokenRepo), new(mockMailer))
+
+	userRepo.On("GetByEmail", mock.Anything, "a@b.com").Return(nil, assert.AnError)
+
+	err := svc.ResendVerification(context.Background(), "a@b.com")
+	require.Error(t, err)
+	appErr, ok := apperr.AsAppError(err)
+	require.True(t, ok)
+	assert.Equal(t, 500, appErr.Status)
+}
+
+func TestForgotPassword_Success(t *testing.T) {
+	// Full happy path: user exists → InvalidatePending → CreateToken → Send.
+	userRepo := new(mockUserRepo)
+	tokenRepo := new(mockTokenRepo)
+	mailer := new(mockMailer)
+	svc := newAuthService(userRepo, tokenRepo, mailer)
+
+	userID := uuid.New()
+	userRepo.On("GetByEmail", mock.Anything, "a@b.com").Return(&entities.User{
+		ID: userID, Email: "a@b.com", FullName: "A",
+	}, nil)
+	tokenRepo.On("InvalidatePendingPasswordResetTokens", mock.Anything, userID).Return(nil)
+	tokenRepo.On("CreatePasswordResetToken", mock.Anything, mock.AnythingOfType("*entities.PasswordResetToken")).Return(nil)
+	mailer.On("Send", mock.Anything, mock.AnythingOfType("ports.EmailMessage")).Return(nil)
+
+	require.NoError(t, svc.ForgotPassword(context.Background(), "a@b.com"))
+	mailer.AssertExpectations(t)
+}
+
+func TestForgotPassword_CreateTokenError_SilentlySucceeds(t *testing.T) {
+	userRepo := new(mockUserRepo)
+	tokenRepo := new(mockTokenRepo)
+	svc := newAuthService(userRepo, tokenRepo, new(mockMailer))
+
+	userID := uuid.New()
+	userRepo.On("GetByEmail", mock.Anything, "a@b.com").Return(&entities.User{
+		ID: userID, Email: "a@b.com", FullName: "A",
+	}, nil)
+	tokenRepo.On("InvalidatePendingPasswordResetTokens", mock.Anything, userID).Return(nil)
+	tokenRepo.On("CreatePasswordResetToken", mock.Anything, mock.Anything).Return(assert.AnError)
+
+	// Token creation error is swallowed to prevent user enumeration.
+	require.NoError(t, svc.ForgotPassword(context.Background(), "a@b.com"))
+}
+
+func TestLogin_RepoError(t *testing.T) {
+	userRepo := new(mockUserRepo)
+	svc := newAuthService(userRepo, new(mockTokenRepo), new(mockMailer))
+
+	// Non-NotFound error from GetByEmail — should return 500.
+	userRepo.On("GetByEmail", mock.Anything, "a@b.com").Return(nil, assert.AnError)
+
+	_, _, _, err := svc.Login(context.Background(), "a@b.com", "Password1")
+	require.Error(t, err)
+	appErr, ok := apperr.AsAppError(err)
+	require.True(t, ok)
+	assert.Equal(t, 500, appErr.Status)
+}
+
+func TestLogin_CreateRefreshTokenError(t *testing.T) {
+	userRepo := new(mockUserRepo)
+	tokenRepo := new(mockTokenRepo)
+	svc := newAuthService(userRepo, tokenRepo, new(mockMailer))
+
+	userID := uuid.New()
+	hash, _ := bcrypt.GenerateFromPassword([]byte("Password1!"), 4)
+	userRepo.On("GetByEmail", mock.Anything, "a@b.com").Return(&entities.User{
+		ID: userID, Email: "a@b.com", FullName: "A", Role: "member",
+		PasswordHash: string(hash), EmailVerified: true,
+	}, nil)
+	tokenRepo.On("CreateRefreshToken", mock.Anything, mock.AnythingOfType("*entities.RefreshToken")).Return(assert.AnError)
+
+	_, _, _, err := svc.Login(context.Background(), "a@b.com", "Password1!")
+	require.Error(t, err)
+	appErr, ok := apperr.AsAppError(err)
+	require.True(t, ok)
+	assert.Equal(t, 500, appErr.Status)
+}
+
+func TestResetPassword_UserLookupError(t *testing.T) {
+	userRepo := new(mockUserRepo)
+	tokenRepo := new(mockTokenRepo)
+	svc := newAuthService(userRepo, tokenRepo, new(mockMailer))
+
+	userID := uuid.New()
+	tokenRepo.On("GetPasswordResetToken", mock.Anything, mock.Anything).Return(
+		&entities.PasswordResetToken{UserID: userID, TokenHash: "h", ExpiresAt: time.Now().Add(time.Hour)}, nil)
+	userRepo.On("UpdatePassword", mock.Anything, userID, mock.AnythingOfType("string")).Return(assert.AnError)
+
+	err := svc.ResetPassword(context.Background(), "raw-token", "NewPassword1")
+	require.Error(t, err)
+	appErr, ok := apperr.AsAppError(err)
+	require.True(t, ok)
+	assert.Equal(t, 500, appErr.Status)
+}
+
 func TestRegister_VerificationEmailFailure_StillSucceeds(t *testing.T) {
 	// Verification email failures should NOT fail registration — the user
 	// exists and can resend the verification later.
