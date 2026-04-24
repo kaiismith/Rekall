@@ -10,7 +10,6 @@ import type {
   KnockEntry,
   MediaState,
   EmojiReaction,
-  LaserState,
   BackgroundOption,
   ChatMessage,
   ParticipantDirectoryEntry,
@@ -23,7 +22,6 @@ import {
   PENDING_MESSAGE_TIMEOUT_MS,
 } from '@/config/chat'
 
-const LASER_THROTTLE_MS = 33  // ~30 fps
 const EMOJI_RATE_LIMIT_MS = 500
 const MAX_ACTIVE_REACTIONS = 10
 const BG_STORAGE_KEY = 'rekall_bg_preference'
@@ -45,8 +43,14 @@ export interface UseMeetingReturn {
   remoteSpeaking: Record<string, boolean>
   knocks: KnockEntry[]
   localStream: MediaStream | null
+  /** Mirror of the active outbound video track (screen > virtual-bg canvas
+   *  > raw camera) for the local preview tile. */
+  localPreviewStream: MediaStream | null
   peers: Record<string, RTCPeerConnection>
   respondToKnock: (knockId: string, approved: boolean) => void
+  /** Called from the device-check screen to confirm device choices and
+   *  open the meeting WebSocket. No-op once already past the check. */
+  joinNow: () => void
   endMeeting: () => Promise<void>
   leave: () => void
   // ── media controls ──────────────────────────────────────────────────────────
@@ -58,6 +62,19 @@ export interface UseMeetingReturn {
   shareScreen: () => Promise<void>
   stopScreenShare: () => void
   forceMute: (userId: string) => void
+  // ── device selection ────────────────────────────────────────────────────────
+  /** Available input/output devices, refreshed on demand. */
+  availableDevices: { cameras: MediaDeviceInfo[]; mics: MediaDeviceInfo[]; speakers: MediaDeviceInfo[] }
+  /** Currently selected device IDs (empty string = browser default). */
+  selectedDeviceIds: { camera: string; mic: string; speaker: string }
+  /** Re-enumerates devices via navigator.mediaDevices.enumerateDevices. */
+  refreshDevices: () => Promise<void>
+  /** Re-acquires media with the chosen camera deviceId, replacing tracks on peers. */
+  switchCamera: (deviceId: string) => Promise<void>
+  /** Re-acquires media with the chosen mic deviceId, replacing tracks on peers. */
+  switchMic: (deviceId: string) => Promise<void>
+  /** Sets the speaker output for local + remote video elements via setSinkId. */
+  switchSpeaker: (deviceId: string) => Promise<void>
   // ── hand raise ──────────────────────────────────────────────────────────────
   isHandRaised: boolean
   handRaisedUsers: Set<string>
@@ -66,11 +83,6 @@ export interface UseMeetingReturn {
   // ── emoji reactions ─────────────────────────────────────────────────────────
   reactionQueue: EmojiReaction[]
   sendEmojiReaction: (emoji: string) => void
-  // ── laser pointer ───────────────────────────────────────────────────────────
-  laserState: LaserState | null
-  isLaserActive: boolean
-  toggleLaser: () => void
-  sendLaserMove: (x: number, y: number) => void
   // ── virtual background ──────────────────────────────────────────────────────
   activeBackground: BackgroundOption
   bgSupported: boolean
@@ -127,30 +139,45 @@ function loadCustomBgSrc(): string | null {
   try { return localStorage.getItem(CUSTOM_BG_KEY) } catch { return null }
 }
 
+// Lightweight tagged logger for the meeting lifecycle. Easy to grep in
+// devtools (filter on `[meeting]`). Remove once the flow is stable.
+function mlog(tag: string, ...args: unknown[]): void {
+  console.log(`%c[meeting] ${tag}`, 'color:#a78bfa;font-weight:600', ...args)
+}
+
 export function useMeeting({ code, onEnd }: UseMeetingOptions): UseMeetingReturn {
   const { accessToken, user } = useAuthStore()
 
   // ── core state ─────────────────────────────────────────────────────────────
   const [meeting, setMeeting] = useState<Meeting | null>(null)
-  const [roomState, setRoomState] = useState<MeetingRoomState>('connecting')
+  // Start in 'device_check' so the user previews their camera/mic before the
+  // WebSocket opens. Tracks default to disabled in that screen so the camera
+  // stays dark until the user explicitly enables it.
+  const [roomState, setRoomState] = useState<MeetingRoomState>('device_check')
   const [isSpeaking, setIsSpeaking] = useState(false)
   const [audioLevel, setAudioLevel] = useState(0)
   const [remoteSpeaking, setRemoteSpeaking] = useState<Record<string, boolean>>({})
   const [knocks, setKnocks] = useState<KnockEntry[]>([])
   const [localStream, setLocalStream] = useState<MediaStream | null>(null)
+  // localPreviewStream is what the user sees in their OWN tile. It mirrors
+  // whichever video track is currently being sent to peers (screen-share >
+  // virtual-background canvas > raw camera) so the local preview matches the
+  // remote view. Distinct from localStream (always the raw camera) because
+  // VAD and the bg pipeline read from the unmodified camera input.
+  const [localPreviewStream, setLocalPreviewStream] = useState<MediaStream | null>(null)
   const [peers, setPeers] = useState<Record<string, RTCPeerConnection>>({})
 
   // ── media control state ────────────────────────────────────────────────────
-  const [isMuted, setIsMuted] = useState(false)
-  const [isCameraOff, setIsCameraOff] = useState(false)
+  // Default off — the device-check screen requires an explicit toggle to
+  // enable the camera or mic before the user joins.
+  const [isMuted, setIsMuted] = useState(true)
+  const [isCameraOff, setIsCameraOff] = useState(true)
   const [isScreenSharing, setIsScreenSharing] = useState(false)
 
-  // ── hand + emoji + laser state ─────────────────────────────────────────────
+  // ── hand + emoji state ─────────────────────────────────────────────────────
   const [isHandRaised, setIsHandRaised] = useState(false)
   const [handRaisedUsers, setHandRaisedUsers] = useState<Set<string>>(new Set())
   const [reactionQueue, setReactionQueue] = useState<EmojiReaction[]>([])
-  const [laserState, setLaserState] = useState<LaserState | null>(null)
-  const [isLaserActive, setIsLaserActive] = useState(false)
 
   // ── virtual background state ───────────────────────────────────────────────
   const [activeBackground, setActiveBackgroundState] = useState<BackgroundOption>(loadStoredBackground)
@@ -182,7 +209,6 @@ export function useMeeting({ code, onEnd }: UseMeetingOptions): UseMeetingReturn
     screenTrack: MediaStreamTrack | null  // screen capture track
     canvasTrack: MediaStreamTrack | null  // virtual BG canvas track
   }>({ audioTrack: null, videoTrack: null, screenTrack: null, canvasTrack: null })
-  const lastLaserSentRef = useRef(0)
   const lastEmojiSentRef = useRef(0)
   const chatSendTimestampsRef = useRef<number[]>([])
   const localUserIdRef = useRef<string | null>(null)
@@ -195,14 +221,12 @@ export function useMeeting({ code, onEnd }: UseMeetingOptions): UseMeetingReturn
   const isCameraOffRef = useRef(false)
   const isScreenSharingRef = useRef(false)
   const isHandRaisedRef = useRef(false)
-  const isLaserActiveRef = useRef(false)
 
   // Sync refs with state.
   useEffect(() => { isMutedRef.current = isMuted }, [isMuted])
   useEffect(() => { isCameraOffRef.current = isCameraOff }, [isCameraOff])
   useEffect(() => { isScreenSharingRef.current = isScreenSharing }, [isScreenSharing])
   useEffect(() => { isHandRaisedRef.current = isHandRaised }, [isHandRaised])
-  useEffect(() => { isLaserActiveRef.current = isLaserActive }, [isLaserActive])
   useEffect(() => { localUserIdRef.current = user?.id ?? null }, [user])
   useEffect(() => { isChatPanelOpenRef.current = isChatPanelOpen }, [isChatPanelOpen])
 
@@ -226,12 +250,30 @@ export function useMeeting({ code, onEnd }: UseMeetingOptions): UseMeetingReturn
         sender.replaceTrack(newTrack).catch(() => { /* connection may be closed */ })
       }
     })
+    // Mirror the active video track in the LOCAL preview so the user sees
+    // exactly what their peers see (raw camera, blurred bg, image bg, or
+    // screen share). Combine with the existing audio track for a complete
+    // single-stream preview the <video> element can attach to.
+    const audio = localTracksRef.current.audioTrack
+    if (newTrack) {
+      const next = new MediaStream()
+      next.addTrack(newTrack)
+      if (audio) next.addTrack(audio)
+      setLocalPreviewStream(next)
+    } else if (audio) {
+      const next = new MediaStream()
+      next.addTrack(audio)
+      setLocalPreviewStream(next)
+    } else {
+      setLocalPreviewStream(null)
+    }
   }, [])
 
   // ── Peer connection helpers ────────────────────────────────────────────────
   const getPeer = useCallback((userId: string): RTCPeerConnection => {
     if (peersRef.current[userId]) return peersRef.current[userId]
 
+    mlog('getPeer: creating', { userId })
     const pc = new RTCPeerConnection(RTC_CONFIG)
 
     pc.onicecandidate = (e) => {
@@ -241,9 +283,13 @@ export function useMeeting({ code, onEnd }: UseMeetingOptions): UseMeetingReturn
     }
 
     pc.onnegotiationneeded = async () => {
-      const offer = await pc.createOffer()
-      await pc.setLocalDescription(offer)
-      send({ type: 'offer', to: userId, payload: offer })
+      try {
+        const offer = await pc.createOffer()
+        await pc.setLocalDescription(offer)
+        send({ type: 'offer', to: userId, payload: offer })
+      } catch (err) {
+        mlog('getPeer: onnegotiationneeded FAILED', { userId, err })
+      }
     }
 
     peersRef.current[userId] = pc
@@ -273,16 +319,34 @@ export function useMeeting({ code, onEnd }: UseMeetingOptions): UseMeetingReturn
 
   // ── Media acquisition ─────────────────────────────────────────────────────
   const acquireMedia = useCallback(async (): Promise<MediaStream> => {
-    const stream = await navigator.mediaDevices.getUserMedia({
-      audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true },
-      video: { width: 1280, height: 720, frameRate: 30 },
-    })
+    mlog('acquireMedia →')
+    let stream: MediaStream
+    try {
+      stream = await navigator.mediaDevices.getUserMedia({
+        audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true },
+        video: { width: 1280, height: 720, frameRate: 30 },
+      })
+    } catch (err) {
+      mlog('acquireMedia FAILED', { name: (err as Error)?.name, message: (err as Error)?.message })
+      throw err
+    }
     const [audioTrack] = stream.getAudioTracks()
     const [videoTrack] = stream.getVideoTracks()
+    mlog('acquireMedia ←', { audio: !!audioTrack, video: !!videoTrack })
     localTracksRef.current.audioTrack = audioTrack ?? null
     localTracksRef.current.videoTrack = videoTrack ?? null
 
+    // Honour the user's current mute / camera-off preferences when the tracks
+    // are first obtained. The device-check screen seeds these to true so
+    // joining users start with both tracks dark; re-acquisition mid-meeting
+    // (background change, etc.) preserves whatever state the user is in.
+    if (audioTrack) audioTrack.enabled = !isMutedRef.current
+    if (videoTrack) videoTrack.enabled = !isCameraOffRef.current
+
     setLocalStream(stream)
+    // Initial preview = raw camera. Background pipeline / screen share will
+    // overwrite this via replaceVideoTrack() when activated.
+    setLocalPreviewStream(stream)
     startVad(stream)
 
     // Re-apply stored background if user had one set.
@@ -333,7 +397,15 @@ export function useMeeting({ code, onEnd }: UseMeetingOptions): UseMeetingReturn
                 } }
           ))
         }
+        // Acquire local media on first admission, but never build a peer
+        // connection to ourselves. The backend broadcasts participant.joined
+        // to all admitted clients — including the joiner — so the host
+        // (alone in a fresh meeting) would otherwise create an RTCPeer with
+        // their own user_id, send an offer "to themselves", and crash on
+        // negotiation. Guard against that.
+        const localUid = localUserIdRef.current
         const stream = localStream ?? (await acquireMedia())
+        if (msg.user_id === localUid) break
         const pc = getPeer(msg.user_id)
         addLocalTracksToPeer(pc, stream)
         break
@@ -345,7 +417,6 @@ export function useMeeting({ code, onEnd }: UseMeetingOptions): UseMeetingReturn
         setRemoteSpeaking((prev) => { const n = { ...prev }; delete n[msg.user_id!]; return n })
         setMediaStates((prev) => { const n = { ...prev }; delete n[msg.user_id!]; return n })
         setHandRaisedUsers((prev) => { const s = new Set(prev); s.delete(msg.user_id!); return s })
-        setLaserState((prev) => prev?.userId === msg.user_id ? null : prev)
         break
       }
 
@@ -386,12 +457,10 @@ export function useMeeting({ code, onEnd }: UseMeetingOptions): UseMeetingReturn
         const parts = msg.participants ?? []
         const states: Record<string, MediaState> = {}
         const raised = new Set<string>()
-        let activeLaser: LaserState | null = null
         const dirPatch: Record<string, ParticipantDirectoryEntry> = {}
         parts.forEach((p) => {
           states[p.user_id] = { audio: p.audio, video: p.video }
           if (p.hand_raised) raised.add(p.user_id)
-          if (p.laser_active) activeLaser = { userId: p.user_id, x: 0, y: 0 }
           if (p.full_name || p.initials) {
             dirPatch[p.user_id] = {
               full_name: p.full_name ?? 'User',
@@ -401,7 +470,6 @@ export function useMeeting({ code, onEnd }: UseMeetingOptions): UseMeetingReturn
         })
         setMediaStates(states)
         setHandRaisedUsers(raised)
-        if (activeLaser) setLaserState(activeLaser)
         if (Object.keys(dirPatch).length > 0) {
           setParticipantDirectory(prev => ({ ...dirPatch, ...prev }))
         }
@@ -454,25 +522,6 @@ export function useMeeting({ code, onEnd }: UseMeetingOptions): UseMeetingReturn
           if (raised) { s.add(msg.user_id!) } else { s.delete(msg.user_id!) }
           return s
         })
-        break
-      }
-
-      case 'laser_move': {
-        if (msg.user_id && msg.x != null && msg.y != null) {
-          setLaserState({ userId: msg.user_id, x: msg.x, y: msg.y })
-          // If someone else took the laser while we were active, deactivate locally.
-          if (isLaserActiveRef.current && msg.user_id !== (meeting?.host_id)) {
-            setIsLaserActive(false)
-          }
-        }
-        break
-      }
-
-      case 'laser_stop': {
-        setLaserState((prev) => prev?.userId === msg.user_id ? null : prev)
-        if (msg.user_id && isLaserActiveRef.current) {
-          setIsLaserActive(false)
-        }
         break
       }
 
@@ -567,6 +616,12 @@ export function useMeeting({ code, onEnd }: UseMeetingOptions): UseMeetingReturn
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [getPeer, removePeer, send, acquireMedia, addLocalTracksToPeer, localStream, onEnd, meeting])
 
+  // Ref to the latest handleMessage so the WS onmessage callback (bound once
+  // when the effect mounts) always dispatches to the freshest handler rather
+  // than a stale closure with a null localStream / missing callbacks.
+  const handleMessageRef = useRef(handleMessage)
+  useEffect(() => { handleMessageRef.current = handleMessage }, [handleMessage])
+
   // ── Cleanup ───────────────────────────────────────────────────────────────
   const cleanup = useCallback(() => {
     vadRef.current?.stop()
@@ -583,16 +638,234 @@ export function useMeeting({ code, onEnd }: UseMeetingOptions): UseMeetingReturn
     wsRef.current?.close()
   }, [localStream])
 
-  // ── Connect effect ────────────────────────────────────────────────────────
+  // ── Pre-meeting: fetch the meeting metadata up front so the device-check
+  // screen can show its title/code, and acquire the user's media so the
+  // preview tile renders immediately. The WS is NOT opened here — the user
+  // confirms via joinNow() first. If the meeting fetch fails outright (bad
+  // code, deleted meeting), surface as 'error' immediately rather than
+  // letting the user click through into a doomed device-check screen.
   useEffect(() => {
     if (!accessToken || !code) return
+    let cancelled = false
+    void (async () => {
+      let fetched: Meeting | null = null
+      try {
+        const res = await meetingService.getByCode(code)
+        fetched = res.data
+        if (!cancelled) setMeeting(res.data)
+      } catch (err) {
+        if (!cancelled) {
+          mlog('device_check: getByCode FAILED', { err })
+          setRoomState('error')
+        }
+        return
+      }
+      if (cancelled) return
+      // Skip the device-check screen entirely if the meeting is already
+      // ended — there's nothing to join, no point asking for camera/mic
+      // permission. MeetingRoomPage's 'ended' branch will surface the
+      // "Meeting Ended" UI immediately.
+      if (fetched?.status === 'ended') {
+        mlog('device_check: meeting already ended → skipping preview')
+        setRoomState('ended')
+        return
+      }
+      try { await acquireMedia() } catch { /* permissions may be denied */ }
+    })()
+    return () => { cancelled = true }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [accessToken, code])
+
+  // ── Device selection ──────────────────────────────────────────────────────
+  const [availableDevices, setAvailableDevices] = useState<{
+    cameras: MediaDeviceInfo[]
+    mics: MediaDeviceInfo[]
+    speakers: MediaDeviceInfo[]
+  }>({ cameras: [], mics: [], speakers: [] })
+  const [selectedDeviceIds, setSelectedDeviceIds] = useState<{
+    camera: string
+    mic: string
+    speaker: string
+  }>({ camera: '', mic: '', speaker: '' })
+
+  const refreshDevices = useCallback(async () => {
+    if (!navigator.mediaDevices?.enumerateDevices) return
+    try {
+      const all = await navigator.mediaDevices.enumerateDevices()
+      const cameras = all.filter((d) => d.kind === 'videoinput')
+      const mics = all.filter((d) => d.kind === 'audioinput')
+      const speakers = all.filter((d) => d.kind === 'audiooutput')
+      setAvailableDevices({ cameras, mics, speakers })
+      // Track the currently-active device IDs from the live tracks if not yet
+      // set. Browsers expose deviceId on the track's settings.
+      setSelectedDeviceIds((prev) => {
+        const next = { ...prev }
+        const audioSettings = localTracksRef.current.audioTrack?.getSettings()
+        const videoSettings = localTracksRef.current.videoTrack?.getSettings()
+        if (!next.mic && audioSettings?.deviceId) next.mic = audioSettings.deviceId
+        if (!next.camera && videoSettings?.deviceId) next.camera = videoSettings.deviceId
+        return next
+      })
+    } catch {
+      /* labels may be empty on permission denial — surfaced when the user
+         clicks the toggle and we re-prompt */
+    }
+  }, [])
+
+  // Acquire a fresh stream with a specific track replaced. Returns the new
+  // stream so callers can wire it into peers and the local preview.
+  const acquireWithDevice = useCallback(async (
+    overrides: { audioId?: string; videoId?: string },
+  ): Promise<MediaStream> => {
+    const audioConstraint: MediaTrackConstraints = {
+      echoCancellation: true,
+      noiseSuppression: true,
+      autoGainControl: true,
+    }
+    if (overrides.audioId) audioConstraint.deviceId = { exact: overrides.audioId }
+
+    const videoConstraint: MediaTrackConstraints = {
+      width: 1280, height: 720, frameRate: 30,
+    }
+    if (overrides.videoId) videoConstraint.deviceId = { exact: overrides.videoId }
+
+    return navigator.mediaDevices.getUserMedia({
+      audio: audioConstraint,
+      video: videoConstraint,
+    })
+  }, [])
+
+  const switchCamera = useCallback(async (deviceId: string) => {
+    try {
+      const next = await acquireWithDevice({
+        audioId: selectedDeviceIds.mic || undefined,
+        videoId: deviceId || undefined,
+      })
+      const newVideo = next.getVideoTracks()[0]
+      const newAudio = next.getAudioTracks()[0]
+      // Stop the old camera track to release the device.
+      localTracksRef.current.videoTrack?.stop()
+      localTracksRef.current.videoTrack = newVideo ?? null
+      // Audio track came along for the ride; if we don't already have one,
+      // adopt it.
+      if (!localTracksRef.current.audioTrack && newAudio) {
+        localTracksRef.current.audioTrack = newAudio
+      } else {
+        // Stop the duplicate audio so we don't hold two mic handles.
+        newAudio?.stop()
+      }
+      if (newVideo) {
+        newVideo.enabled = !isCameraOffRef.current
+        // Push to peers and the local preview unless screen-sharing.
+        if (!isScreenSharingRef.current && !localTracksRef.current.canvasTrack) {
+          replaceVideoTrack(newVideo)
+        }
+      }
+      setLocalStream(next)
+      setSelectedDeviceIds((prev) => ({ ...prev, camera: deviceId }))
+    } catch (err) {
+      mlog('switchCamera FAILED', { deviceId, err })
+    }
+  }, [acquireWithDevice, replaceVideoTrack, selectedDeviceIds.mic])
+
+  const switchMic = useCallback(async (deviceId: string) => {
+    try {
+      const next = await acquireWithDevice({
+        audioId: deviceId || undefined,
+        videoId: selectedDeviceIds.camera || undefined,
+      })
+      const newAudio = next.getAudioTracks()[0]
+      const newVideo = next.getVideoTracks()[0]
+      // Stop the old mic track and adopt the new one.
+      localTracksRef.current.audioTrack?.stop()
+      localTracksRef.current.audioTrack = newAudio ?? null
+      if (newAudio) {
+        newAudio.enabled = !isMutedRef.current
+        // Replace the audio sender on every peer.
+        Object.values(peersRef.current).forEach((pc) => {
+          const sender = pc.getSenders().find((s) => s.track?.kind === 'audio')
+          sender?.replaceTrack(newAudio).catch(() => { /* connection closed */ })
+        })
+        // Restart VAD on the new track.
+        vadRef.current?.stop()
+        startVad(next)
+      }
+      // Discard the duplicate video unless we don't already have one.
+      if (!localTracksRef.current.videoTrack && newVideo) {
+        localTracksRef.current.videoTrack = newVideo
+      } else {
+        newVideo?.stop()
+      }
+      setLocalStream(next)
+      setSelectedDeviceIds((prev) => ({ ...prev, mic: deviceId }))
+    } catch (err) {
+      mlog('switchMic FAILED', { deviceId, err })
+    }
+  }, [acquireWithDevice, selectedDeviceIds.camera, startVad])
+
+  const switchSpeaker = useCallback(async (deviceId: string) => {
+    setSelectedDeviceIds((prev) => ({ ...prev, speaker: deviceId }))
+    // Apply to every <video> on the page that supports setSinkId. Browsers
+    // without it (Firefox, Safari) silently no-op — exposing the picker is
+    // still useful so the user knows the app sees the device.
+    const videos = document.querySelectorAll<HTMLVideoElement>('video')
+    for (const v of videos) {
+      const setSinkId = (v as HTMLVideoElement & { setSinkId?: (id: string) => Promise<void> }).setSinkId
+      if (typeof setSinkId === 'function') {
+        try { await setSinkId.call(v, deviceId) } catch { /* ignore */ }
+      }
+    }
+  }, [])
+
+  // Refresh the device list whenever a stream is acquired (labels populate
+  // post-permission) and whenever the OS reports a device change.
+  useEffect(() => {
+    if (localStream) void refreshDevices()
+  }, [localStream, refreshDevices])
+
+  useEffect(() => {
+    const handler = () => { void refreshDevices() }
+    navigator.mediaDevices?.addEventListener?.('devicechange', handler)
+    return () => navigator.mediaDevices?.removeEventListener?.('devicechange', handler)
+  }, [refreshDevices])
+
+  // One-way flag: flips to true when the user confirms the device-check
+  // screen. The connect effect depends on it (so adding it to the dep list
+  // doesn't cause re-runs every time roomState changes); the value never
+  // toggles back to false, so the effect runs at most once.
+  const [joinRequested, setJoinRequested] = useState(false)
+
+  /**
+   * User confirmed device choices on the device-check screen. Flip into the
+   * connecting state — the connect effect (gated below) reacts and opens the
+   * WebSocket. Tracks already reflect their toggle preferences.
+   */
+  const joinNow = useCallback(() => {
+    setRoomState((prev) => (prev === 'device_check' ? 'connecting' : prev))
+    setJoinRequested(true)
+  }, [])
+
+  // ── Connect effect ────────────────────────────────────────────────────────
+  // Gated on roomState !== 'device_check' so the WebSocket stays closed until
+  // the user explicitly joins. Once they do, this effect runs once and the
+  // normal admission flow takes over.
+  useEffect(() => {
+    if (!accessToken || !code) return
+    // Wait for the user to confirm the device-check screen. joinRequested is
+    // a one-way flag (false → true, never back), so this effect re-runs at
+    // most once and the cleanup tear-down only fires on actual unmount.
+    if (!joinRequested) return
+    if (wsRef.current) return
 
     let cancelled = false
 
     const connect = async () => {
+      mlog('connect:start', { code, hasToken: !!accessToken, localUserId: user?.id })
       try {
+        mlog('connect:getByCode →')
         const res = await meetingService.getByCode(code)
-        if (cancelled) return
+        if (cancelled) { mlog('connect:cancelled after getByCode'); return }
+        mlog('connect:getByCode ←', { id: res.data.id, type: res.data.type, host_id: res.data.host_id, status: res.data.status })
         setMeeting(res.data)
 
         // Populate participant directory from the meeting previews so chat
@@ -609,35 +882,81 @@ export function useMeeting({ code, onEnd }: UseMeetingOptions): UseMeetingReturn
           })
         }
 
-        const wsUrl = meetingService.buildWsUrl(code, accessToken)
-        const ws = new WebSocket(wsUrl)
+        // Fetch a fresh, single-use ticket then open the WS. Tickets are
+        // short-lived and bound to (meeting_code, user_id); the access token
+        // never appears in the WS URL. One retry on network failure; no
+        // retry on 4xx.
+        let ticketAttempt = 0
+        let wsPath: string | null = null
+        while (ticketAttempt < 2 && !cancelled) {
+          try {
+            mlog('connect:ticket →', { attempt: ticketAttempt + 1 })
+            const t = await meetingService.requestWsTicket(code)
+            wsPath = t.wsUrl
+            mlog('connect:ticket ←', { wsUrl: t.wsUrl, expiresAt: t.expiresAt })
+            break
+          } catch (err) {
+            ticketAttempt += 1
+            const status = (err as { status?: number })?.status
+            mlog('connect:ticket FAILED', { attempt: ticketAttempt, status, err })
+            if (status && status >= 400 && status < 500) break
+            if (ticketAttempt < 2) await new Promise(r => setTimeout(r, 1000))
+          }
+        }
+        if (cancelled) { mlog('connect:cancelled after ticket'); return }
+        if (!wsPath) {
+          mlog('connect:no ticket → roomState=error')
+          setRoomState('error')
+          return
+        }
+
+        const fullUrl = meetingService.buildAbsoluteWsUrl(wsPath)
+        mlog('connect:ws opening', { url: fullUrl.replace(/ticket=[^&]+/, 'ticket=***') })
+        const ws = new WebSocket(fullUrl)
         wsRef.current = ws
 
-        ws.onopen = () => { if (!cancelled) setRoomState('connecting') }
+        ws.onopen = () => {
+          mlog('ws:onopen')
+          if (!cancelled) setRoomState('connecting')
+        }
 
         ws.onmessage = async (e) => {
           try {
             const msg: WsMessage = JSON.parse(e.data as string)
-            if (roomState === 'connecting') {
-              if (msg.type === 'participant.joined') {
-                setRoomState('in_meeting')
-                await acquireMedia()
-              } else if (msg.type === 'knock.requested') {
-                setRoomState('waiting_room')
-              }
+            mlog('ws:onmessage', { type: msg.type, user_id: (msg as { user_id?: string }).user_id })
+            const isAdmissionSignal =
+              msg.type === 'room_state' ||
+              (msg.type === 'participant.joined' &&
+                !!msg.user_id &&
+                msg.user_id === localUserIdRef.current)
+            if (isAdmissionSignal) {
+              mlog('ws:admission signal → in_meeting', { type: msg.type, user_id: msg.user_id })
+              setRoomState((prev) => (prev === 'connecting' ? 'in_meeting' : prev))
             }
-            await handleMessage(msg)
-          } catch { /* ignore parse errors */ }
+            try {
+              await handleMessageRef.current(msg)
+            } catch (err) {
+              mlog('handleMessage THREW', { type: msg.type, err })
+              throw err
+            }
+          } catch (err) {
+            mlog('ws:onmessage outer error', { err })
+          }
         }
 
         ws.onclose = (e) => {
+          mlog('ws:onclose', { code: e.code, reason: e.reason, wasClean: e.wasClean, cancelled })
           if (e.code === 4003) setRoomState('denied')
           else if (!cancelled) setRoomState('ended')
           cleanup()
         }
 
-        ws.onerror = () => { if (!cancelled) setRoomState('error') }
-      } catch {
+        ws.onerror = (e) => {
+          mlog('ws:onerror', { event: e })
+          if (!cancelled) setRoomState('error')
+        }
+      } catch (err) {
+        mlog('connect:catch', { err })
         if (!cancelled) setRoomState('error')
       }
     }
@@ -645,11 +964,12 @@ export function useMeeting({ code, onEnd }: UseMeetingOptions): UseMeetingReturn
     void connect()
 
     return () => {
+      mlog('connect:effect cleanup', { cancelled })
       cancelled = true
       cleanup()
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [code, accessToken])
+  }, [code, accessToken, joinRequested])
 
   // ── Chat history fetch on join ────────────────────────────────────────────
   // Runs once each time the user enters `in_meeting` (including re-entry after
@@ -774,24 +1094,6 @@ export function useMeeting({ code, onEnd }: UseMeetingOptions): UseMeetingReturn
     if (now - lastEmojiSentRef.current < EMOJI_RATE_LIMIT_MS) return
     lastEmojiSentRef.current = now
     send({ type: 'emoji_reaction', emoji })
-  }, [send])
-
-  // ── Laser pointer ─────────────────────────────────────────────────────────
-
-  const toggleLaser = useCallback(() => {
-    const next = !isLaserActiveRef.current
-    setIsLaserActive(next)
-    if (!next) {
-      send({ type: 'laser_stop' })
-      setLaserState(null)
-    }
-  }, [send])
-
-  const sendLaserMove = useCallback((x: number, y: number) => {
-    const now = Date.now()
-    if (now - lastLaserSentRef.current < LASER_THROTTLE_MS) return
-    lastLaserSentRef.current = now
-    send({ type: 'laser_move', x, y })
   }, [send])
 
   // ── Virtual background ────────────────────────────────────────────────────
@@ -1019,8 +1321,16 @@ export function useMeeting({ code, onEnd }: UseMeetingOptions): UseMeetingReturn
     remoteSpeaking,
     knocks,
     localStream,
+    localPreviewStream,
     peers,
     respondToKnock,
+    joinNow,
+    availableDevices,
+    selectedDeviceIds,
+    refreshDevices,
+    switchCamera,
+    switchMic,
+    switchSpeaker,
     endMeeting,
     leave,
     isMuted,
@@ -1037,10 +1347,6 @@ export function useMeeting({ code, onEnd }: UseMeetingOptions): UseMeetingReturn
     toggleHand,
     reactionQueue,
     sendEmojiReaction,
-    laserState,
-    isLaserActive,
-    toggleLaser,
-    sendLaserMove,
     activeBackground,
     bgSupported,
     setBackground,

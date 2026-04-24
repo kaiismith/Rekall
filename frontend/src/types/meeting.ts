@@ -80,8 +80,6 @@ export type WsMsgType =
   | 'force_mute'
   | 'emoji_reaction'
   | 'hand_raise'
-  | 'laser_move'
-  | 'laser_stop'
   | 'room_state'
   | 'chat_message'
 
@@ -98,8 +96,6 @@ export interface WsMessage {
   audio?: boolean
   video?: boolean
   raised?: boolean
-  x?: number
-  y?: number
   emoji?: string
   from_id?: string          // emoji_reaction sender
   target_id?: string        // force_mute target (client → server)
@@ -121,6 +117,9 @@ export interface KnockEntry {
 
 // State machine states for useMeeting hook
 export type MeetingRoomState =
+  // Pre-meeting: camera/mic preview screen — user picks devices and confirms
+  // before the WebSocket is opened.
+  | 'device_check'
   | 'connecting'
   | 'waiting_room'
   | 'in_meeting'
@@ -144,13 +143,6 @@ export interface EmojiReaction {
   timestamp: number
 }
 
-/** Current laser pointer position (null when no laser is active). */
-export interface LaserState {
-  userId: string
-  x: number   // 0–1 normalised
-  y: number   // 0–1 normalised
-}
-
 /** Snapshot entry sent by the server on join. */
 export interface RoomStateParticipant {
   user_id: string
@@ -159,7 +151,6 @@ export interface RoomStateParticipant {
   audio: boolean
   video: boolean
   hand_raised: boolean
-  laser_active: boolean
 }
 
 /** Virtual background selection. */

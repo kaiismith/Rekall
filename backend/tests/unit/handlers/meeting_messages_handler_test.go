@@ -48,8 +48,7 @@ func newMeetingHandlerWithChat(
 	chat *services.ChatMessageService,
 ) *handlers.MeetingHandler {
 	manager := wsHub.NewHubManager(nil, zap.NewNop())
-	return handlers.NewMeetingHandler(svc, chat, nil, manager, "http://rekall.test",
-		testSecret, testIssuer, zap.NewNop())
+	return handlers.NewMeetingHandler(svc, chat, nil, manager, nil, "http://rekall.test", zap.NewNop())
 }
 
 func newMessagesRouter(h *handlers.MeetingHandler, callerID uuid.UUID) *gin.Engine {

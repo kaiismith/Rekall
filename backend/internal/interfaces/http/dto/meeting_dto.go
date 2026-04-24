@@ -141,3 +141,19 @@ func ChatMessagesFromEntities(msgs []*entities.MeetingMessage) []ChatMessage {
 	}
 	return out
 }
+
+// ─── WebSocket ticket DTOs ────────────────────────────────────────────────────
+
+// WSTicketPayload is returned by POST /api/v1/meetings/:code/ws-ticket. The
+// ticket authenticates a single WebSocket handshake and expires after 60s.
+type WSTicketPayload struct {
+	Ticket    string    `json:"ticket"`
+	ExpiresAt time.Time `json:"expires_at"`
+	WSURL     string    `json:"ws_url"`
+}
+
+// WSTicketResponse wraps WSTicketPayload in the standard envelope.
+type WSTicketResponse struct {
+	Success bool            `json:"success" example:"true"`
+	Data    WSTicketPayload `json:"data"`
+}

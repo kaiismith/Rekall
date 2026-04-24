@@ -28,7 +28,6 @@ type ParticipantState struct {
 	AudioEnabled bool
 	VideoEnabled bool
 	HandRaised   bool
-	LaserActive  bool
 }
 
 // KnockRequest represents a user waiting in the waiting room.
@@ -76,10 +75,6 @@ type Hub struct {
 	// identities maps userID string → display name/initials for every
 	// admitted participant. Populated at admit time from the Client struct.
 	identities map[string]identity
-
-	// laserOwner is the userID string of the participant currently holding the
-	// laser pointer, or "" if no laser is active.
-	laserOwner string
 
 	// handlers is a registry of message-type → handler function.
 	// Adding a new in-room message type only requires registering here.
@@ -138,8 +133,6 @@ func NewHub(
 		MsgTypeForceMute:     handleForceMute,
 		MsgTypeEmojiReaction: handleEmojiReaction,
 		MsgTypeHandRaise:     handleHandRaise,
-		MsgTypeLaserMove:     handleLaserMove,
-		MsgTypeLaserStop:     handleLaserStop,
 		MsgTypeChatMessage:   handleChatMessage,
 	}
 	return h
@@ -184,15 +177,19 @@ func (h *Hub) Done() <-chan struct{} { return h.done }
 
 func (h *Hub) admitDirect(c *Client) {
 	h.clients[c] = struct{}{}
+	h.logger.Info("admitDirect: entered", zap.String("user_id", c.UserID.String()))
 	h.promoteToActive(c)
 	uid := c.UserID
-	h.broadcastAll(OutboundMessage{
+	ok := h.broadcastAllReport(OutboundMessage{
 		Type:     MsgTypeParticipantJoined,
 		UserID:   &uid,
 		FullName: c.FullName,
 		Initials: c.Initials,
 	})
-	h.logger.Info("client admitted directly", zap.String("user_id", uid.String()))
+	h.logger.Info("admitDirect: broadcast participant.joined",
+		zap.String("user_id", uid.String()),
+		zap.Bool("send_ok_for_self", ok),
+	)
 }
 
 // promoteToActive sends a room_state snapshot to the newly admitted client and
@@ -202,7 +199,12 @@ func (h *Hub) promoteToActive(c *Client) {
 	// Build snapshot of all currently admitted participants (excluding c, who
 	// is already in h.clients but not yet in h.mediaState).
 	snapshot := h.buildRoomStateSnapshot()
-	c.Send(OutboundMessage{Type: MsgTypeRoomState, Participants: snapshot})
+	ok := c.Send(OutboundMessage{Type: MsgTypeRoomState, Participants: snapshot})
+	h.logger.Info("promoteToActive: sent room_state",
+		zap.String("user_id", c.UserID.String()),
+		zap.Int("snapshot_size", len(snapshot)),
+		zap.Bool("send_ok", ok),
+	)
 
 	// Initialise this participant's state (defaults: audio on, video on).
 	uidStr := c.UserID.String()
@@ -213,6 +215,29 @@ func (h *Hub) promoteToActive(c *Client) {
 	h.identities[uidStr] = identity{FullName: c.FullName, Initials: c.Initials}
 }
 
+// broadcastAllReport is broadcastAll plus a return flag indicating whether
+// the named client (the joiner themselves) successfully received the broadcast.
+// Used only for diagnostic logging in admitDirect; production callers can keep
+// using broadcastAll.
+func (h *Hub) broadcastAllReport(msg OutboundMessage) bool {
+	selfOk := false
+	uid := msg.UserID
+	for c := range h.clients {
+		ok := c.Send(msg)
+		if uid != nil && c.UserID == *uid {
+			selfOk = ok
+		}
+		if !ok {
+			delete(h.clients, c)
+			c.conn.Close()
+		}
+	}
+	for c := range h.pending {
+		c.Send(msg)
+	}
+	return selfOk
+}
+
 // buildRoomStateSnapshot returns the current state of all admitted participants
 // whose mediaState entry exists (i.e. everyone already in the room).
 func (h *Hub) buildRoomStateSnapshot() []RoomStateParticipant {
@@ -220,13 +245,12 @@ func (h *Hub) buildRoomStateSnapshot() []RoomStateParticipant {
 	for uid, ps := range h.mediaState {
 		id := h.identities[uid]
 		result = append(result, RoomStateParticipant{
-			UserID:      uid,
-			FullName:    id.FullName,
-			Initials:    id.Initials,
-			Audio:       ps.AudioEnabled,
-			Video:       ps.VideoEnabled,
-			HandRaised:  ps.HandRaised,
-			LaserActive: h.laserOwner == uid,
+			UserID:     uid,
+			FullName:   id.FullName,
+			Initials:   id.Initials,
+			Audio:      ps.AudioEnabled,
+			Video:      ps.VideoEnabled,
+			HandRaised: ps.HandRaised,
 		})
 	}
 	return result
@@ -272,12 +296,6 @@ func (h *Hub) handleUnregister(c *Client) {
 	if _, ok := h.clients[c]; ok {
 		uid := c.UserID
 		uidStr := uid.String()
-
-		// If this participant held the laser, clear it and notify others.
-		if h.laserOwner == uidStr {
-			h.laserOwner = ""
-			h.broadcastClients(OutboundMessage{Type: MsgTypeLaserStop, UserID: &uid})
-		}
 
 		// Clean up ephemeral state.
 		delete(h.mediaState, uidStr)

@@ -62,8 +62,6 @@ const (
 	MsgTypeForceMute     = "force_mute"     // host mutes a participant
 	MsgTypeEmojiReaction = "emoji_reaction" // floating emoji animation
 	MsgTypeHandRaise     = "hand_raise"     // raise / lower hand
-	MsgTypeLaserMove     = "laser_move"     // laser pointer position
-	MsgTypeLaserStop     = "laser_stop"     // laser pointer deactivated
 	MsgTypeRoomState     = "room_state"     // full snapshot sent on join
 
 	// Chat
@@ -82,8 +80,6 @@ type InboundMessage struct {
 	Audio    *bool      `json:"audio,omitempty"`     // media_state
 	Video    *bool      `json:"video,omitempty"`     // media_state
 	Raised   *bool      `json:"raised,omitempty"`    // hand_raise
-	X        *float64   `json:"x,omitempty"`         // laser_move
-	Y        *float64   `json:"y,omitempty"`         // laser_move
 	Emoji    string     `json:"emoji,omitempty"`     // emoji_reaction
 	// Chat
 	Body     string `json:"body,omitempty"`      // chat_message
@@ -92,13 +88,12 @@ type InboundMessage struct {
 
 // RoomStateParticipant is a snapshot of one participant's ephemeral state.
 type RoomStateParticipant struct {
-	UserID      string `json:"user_id"`
-	FullName    string `json:"full_name,omitempty"`
-	Initials    string `json:"initials,omitempty"`
-	Audio       bool   `json:"audio"`
-	Video       bool   `json:"video"`
-	HandRaised  bool   `json:"hand_raised"`
-	LaserActive bool   `json:"laser_active"`
+	UserID     string `json:"user_id"`
+	FullName   string `json:"full_name,omitempty"`
+	Initials   string `json:"initials,omitempty"`
+	Audio      bool   `json:"audio"`
+	Video      bool   `json:"video"`
+	HandRaised bool   `json:"hand_raised"`
 }
 
 // OutboundMessage is a generic envelope sent to a client.
@@ -118,8 +113,6 @@ type OutboundMessage struct {
 	Audio        *bool                  `json:"audio,omitempty"`
 	Video        *bool                  `json:"video,omitempty"`
 	Raised       *bool                  `json:"raised,omitempty"`
-	X            *float64               `json:"x,omitempty"`
-	Y            *float64               `json:"y,omitempty"`
 	Emoji        string                 `json:"emoji,omitempty"`
 	Participants []RoomStateParticipant `json:"participants,omitempty"`
 	// Chat
