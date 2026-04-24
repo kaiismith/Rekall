@@ -49,6 +49,7 @@ import (
 	"github.com/rekall/backend/internal/infrastructure/database"
 	infraemail "github.com/rekall/backend/internal/infrastructure/email"
 	"github.com/rekall/backend/internal/infrastructure/repositories"
+	"github.com/rekall/backend/internal/infrastructure/storage"
 	httpserver "github.com/rekall/backend/internal/interfaces/http"
 	"github.com/rekall/backend/internal/interfaces/http/handlers"
 	wsHub "github.com/rekall/backend/internal/interfaces/http/ws"
@@ -210,6 +211,11 @@ func main() {
 
 	// ── WebSocket Hub Manager ─────────────────────────────────────────────────
 	hubManager := wsHub.NewHubManager(meetingMessageRepo, log)
+	defer hubManager.Shutdown()
+
+	// ── WebSocket ticket store (secure WS auth) ───────────────────────────────
+	wsTicketStore := storage.NewMemoryWSTicketStore(log)
+	defer wsTicketStore.Close()
 
 	// ── Handlers ─────────────────────────────────────────────────────────────
 	healthH  := handlers.NewHealthHandler(db)
@@ -218,7 +224,7 @@ func main() {
 	authH    := handlers.NewAuthHandler(authSvc, cfg.Auth.RefreshTokenTTL, log)
 	orgH     := handlers.NewOrganizationHandler(orgSvc, log)
 	deptH    := handlers.NewDepartmentHandler(deptSvc, log)
-	meetingH := handlers.NewMeetingHandler(meetingSvc, chatMessageSvc, userSvc, hubManager, cfg.Auth.AppBaseURL, cfg.Auth.JWTSecret, cfg.Auth.JWTIssuer, log)
+	meetingH := handlers.NewMeetingHandler(meetingSvc, chatMessageSvc, userSvc, hubManager, wsTicketStore, cfg.Auth.AppBaseURL, log)
 
 	// ── Router ───────────────────────────────────────────────────────────────
 	ginMode := gin.DebugMode

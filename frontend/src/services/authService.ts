@@ -37,6 +37,22 @@ export const authService = {
     return data.data
   },
 
+  updateMe: async (payload: { full_name: string }): Promise<User> => {
+    const { data } = await apiClient.patch<ApiResponse<User>>(`${BASE}/me`, payload)
+    return data.data
+  },
+
+  changePassword: async (payload: {
+    current_password: string
+    new_password: string
+  }): Promise<{ access_token: string }> => {
+    const { data } = await apiClient.post<ApiResponse<{ access_token: string }>>(
+      `${BASE}/password/change`,
+      payload,
+    )
+    return data.data
+  },
+
   verifyEmail: async (token: string): Promise<void> => {
     await apiClient.get(`${BASE}/verify`, { params: { token } })
   },

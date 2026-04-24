@@ -12,27 +12,51 @@ import (
 // HubManager is a process-wide singleton that owns one Hub per active meeting.
 // All map access is guarded by an RWMutex; Hub.Run goroutines own their own
 // internal state exclusively.
+//
+// The manager owns a background context derived from the server lifecycle
+// (NOT from any HTTP request) and feeds it to every hub's Run loop. This
+// ensures hubs survive past the request that created them — without it, the
+// HTTP handler returns, Gin cancels its request context, and the hub exits
+// immediately, leaving the WS open with no goroutine to service it.
 type HubManager struct {
 	mu       sync.RWMutex
 	hubs     map[uuid.UUID]*Hub
 	chatRepo ports.MeetingMessageRepository
 	logger   *zap.Logger
+	ctx      context.Context
+	cancel   context.CancelFunc
 }
 
 // NewHubManager creates an empty HubManager. chatRepo is forwarded to every
 // hub created via GetOrCreate so the chat handler can persist messages.
 func NewHubManager(chatRepo ports.MeetingMessageRepository, logger *zap.Logger) *HubManager {
+	ctx, cancel := context.WithCancel(context.Background())
 	return &HubManager{
 		hubs:     make(map[uuid.UUID]*Hub),
 		chatRepo: chatRepo,
 		logger:   logger,
+		ctx:      ctx,
+		cancel:   cancel,
+	}
+}
+
+// Shutdown cancels the manager's background context, signalling every
+// running hub to terminate. Safe to call multiple times.
+func (m *HubManager) Shutdown() {
+	if m.cancel != nil {
+		m.cancel()
 	}
 }
 
 // GetOrCreate returns the existing Hub for meetingID, or starts a new one.
 // hostID is stored in the hub so it can validate force_mute senders.
 // onEnd is called (in a goroutine) when the hub detects the meeting has ended.
-func (m *HubManager) GetOrCreate(ctx context.Context, meetingID, hostID uuid.UUID, onEnd func(uuid.UUID)) *Hub {
+//
+// The supplied ctx is unused for the hub's lifetime — the manager's own
+// background context drives the Run loop. Past callers passed in the HTTP
+// request context, which would cancel as soon as the handler returned and
+// kill the hub. The parameter is kept for backwards compatibility.
+func (m *HubManager) GetOrCreate(_ context.Context, meetingID, hostID uuid.UUID, onEnd func(uuid.UUID)) *Hub {
 	m.mu.RLock()
 	if h, ok := m.hubs[meetingID]; ok {
 		m.mu.RUnlock()
@@ -56,7 +80,7 @@ func (m *HubManager) GetOrCreate(ctx context.Context, meetingID, hostID uuid.UUI
 	}, m.logger)
 
 	m.hubs[meetingID] = h
-	go h.Run(ctx)
+	go h.Run(m.ctx)
 	m.logger.Info("hub created", zap.String("meeting_id", meetingID.String()))
 	return h
 }

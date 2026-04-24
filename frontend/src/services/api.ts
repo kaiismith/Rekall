@@ -21,6 +21,8 @@ export const apiClient: AxiosInstance = axios.create({
   baseURL: API_BASE_URL,
   headers: { 'Content-Type': 'application/json' },
   timeout: 30_000,
+  // Sends the HttpOnly refresh cookie on /auth/refresh so reload restores the session.
+  withCredentials: true,
 })
 
 // ─── Request interceptor ──────────────────────────────────────────────────────

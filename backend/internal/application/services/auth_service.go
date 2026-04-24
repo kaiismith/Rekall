@@ -3,6 +3,7 @@ package services
 import (
 	"context"
 	"fmt"
+	"net/http"
 	"regexp"
 	"strings"
 	"time"
@@ -306,6 +307,78 @@ func (s *AuthService) ResetPassword(ctx context.Context, rawToken, newPassword s
 
 	catalog.PasswordResetCompleted.Info(s.logger, zap.String("user_id", tok.UserID.String()))
 	return nil
+}
+
+// UpdateMe applies an in-place update to the calling user's profile. Only
+// the full_name field is editable via this path; email/role/verified state
+// require admin-managed flows.
+func (s *AuthService) UpdateMe(ctx context.Context, userID uuid.UUID, fullName string) (*entities.User, error) {
+	user, err := s.userRepo.GetByID(ctx, userID)
+	if err != nil {
+		return nil, err
+	}
+	user.FullName = fullName
+	return s.userRepo.Update(ctx, user)
+}
+
+// ChangePassword verifies the caller's current password, installs the new
+// one, revokes every other refresh token for the user, and issues a fresh
+// access+refresh pair for THIS session so the tab that made the change stays
+// signed in. Failing the bcrypt comparison returns INVALID_CURRENT_PASSWORD.
+func (s *AuthService) ChangePassword(
+	ctx context.Context,
+	userID uuid.UUID,
+	currentPassword, newPassword string,
+) (accessToken string, rawRefresh string, err error) {
+	if err := apputils.ValidatePassword(newPassword); err != nil {
+		return "", "", err
+	}
+
+	user, err := s.userRepo.GetByID(ctx, userID)
+	if err != nil {
+		return "", "", err
+	}
+
+	if bcrypt.CompareHashAndPassword([]byte(user.PasswordHash), []byte(currentPassword)) != nil {
+		return "", "", &apperr.AppError{
+			Status:  http.StatusBadRequest,
+			Code:    "INVALID_CURRENT_PASSWORD",
+			Message: "current password is incorrect",
+		}
+	}
+
+	newHash, err := bcrypt.GenerateFromPassword([]byte(newPassword), bcryptCost)
+	if err != nil {
+		return "", "", apperr.Internal("failed to process password change")
+	}
+	if err := s.userRepo.UpdatePassword(ctx, userID, string(newHash)); err != nil {
+		return "", "", apperr.Internal("failed to update password")
+	}
+
+	// Revoke every existing refresh token, then mint a fresh one for this
+	// session so the tab that initiated the change is not kicked out.
+	if err := s.tokenRepo.RevokeAllRefreshTokens(ctx, userID); err != nil {
+		s.logger.Warn("password change: failed to revoke other sessions", zap.Error(err))
+	}
+
+	accessToken, err = infraauth.SignAccessToken(user, s.jwtSecret, s.jwtIssuer, s.accessTTL)
+	if err != nil {
+		return "", "", apperr.Internal("failed to issue access token")
+	}
+
+	rawRefresh, refreshToken, err := helpers.NewRefreshToken(userID, s.refreshTTL)
+	if err != nil {
+		return "", "", err
+	}
+	if err := s.tokenRepo.CreateRefreshToken(ctx, refreshToken); err != nil {
+		return "", "", apperr.Internal("failed to create session")
+	}
+
+	s.logger.Info("password changed",
+		zap.String("event_code", "PASSWORD_CHANGED"),
+		zap.String("user_id", userID.String()),
+	)
+	return accessToken, rawRefresh, nil
 }
 
 // GetUser retrieves a user by ID — used by the auth middleware after JWT parsing.
