@@ -439,22 +439,27 @@ describe('OrgDetailPage', () => {
   })
 
   it('navigates to organizations list after successful delete', async () => {
-    vi.stubGlobal('confirm', () => true)
-
     vi.mocked(orgServiceModule.organizationService.get).mockResolvedValue(mockOrg)
     vi.mocked(orgServiceModule.organizationService.listMembers).mockResolvedValue([mockOwnerMember])
     vi.mocked(orgServiceModule.organizationService.delete).mockResolvedValue(undefined as never)
 
     renderPage()
 
+    // Open the typed-confirmation dialog.
     await waitFor(() => screen.getByRole('button', { name: /delete organization/i }))
     fireEvent.click(screen.getByRole('button', { name: /delete organization/i }))
+
+    // Type the slug to unlock the confirm button.
+    const slugInput = await screen.findByLabelText(/type slug to confirm/i)
+    fireEvent.change(slugInput, { target: { value: mockOrg.slug } })
+
+    // The confirm button sits inside the dialog.
+    const confirmBtn = screen.getByRole('button', { name: /^delete organization$/i })
+    fireEvent.click(confirmBtn)
 
     await waitFor(() => {
       expect(screen.getByText('Organizations List')).toBeInTheDocument()
     })
-
-    vi.unstubAllGlobals()
   })
 
   // ── Members loading spinner ──────────────────────────────────────────────
@@ -475,8 +480,7 @@ describe('OrgDetailPage', () => {
 
   // ── Delete department ───────────────────────────────────────────────────
 
-  it('deletes department when confirm is accepted', async () => {
-    vi.stubGlobal('confirm', () => true)
+  it('deletes department when confirmation ID is typed', async () => {
     vi.mocked(orgServiceModule.organizationService.get).mockResolvedValue(mockOrg)
     vi.mocked(orgServiceModule.organizationService.listMembers).mockResolvedValue([mockOwnerMember])
     vi.mocked(orgServiceModule.organizationService.listDepartments).mockResolvedValue([mockDepts[0]])
@@ -486,8 +490,8 @@ describe('OrgDetailPage', () => {
 
     await waitFor(() => screen.getByText('Engineering'))
 
-    // The dept delete button is an IconButton with a DeleteIcon inside.
-    // Find all buttons with DeleteIcon and click the one on the dept card (not the org one).
+    // The dept delete button is an IconButton with a DeleteIcon. Click the one
+    // on the dept card (not the org's "Delete organization" text button).
     const allButtons = screen.getAllByRole('button')
     const deptDeleteBtn = allButtons.find(
       (b) => b.querySelector('svg[data-testid="DeleteIcon"]') && !b.textContent?.includes('organization'),
@@ -495,11 +499,15 @@ describe('OrgDetailPage', () => {
     expect(deptDeleteBtn).toBeTruthy()
     fireEvent.click(deptDeleteBtn!)
 
+    // Type the department ID to unlock the confirm button.
+    const idInput = await screen.findByLabelText(/type department id to confirm/i)
+    fireEvent.change(idInput, { target: { value: mockDepts[0].id } })
+
+    fireEvent.click(screen.getByRole('button', { name: /^delete department$/i }))
+
     await waitFor(() => {
       expect(orgServiceModule.organizationService.deleteDepartment).toHaveBeenCalled()
     })
-
-    vi.unstubAllGlobals()
   })
 
   // ── Add dept member error ───────────────────────────────────────────────
@@ -535,9 +543,7 @@ describe('OrgDetailPage', () => {
     })
   })
 
-  it('does not delete when confirm is cancelled', async () => {
-    vi.stubGlobal('confirm', () => false)
-
+  it('does not delete when confirmation dialog is cancelled', async () => {
     vi.mocked(orgServiceModule.organizationService.get).mockResolvedValue(mockOrg)
     vi.mocked(orgServiceModule.organizationService.listMembers).mockResolvedValue([mockOwnerMember])
     vi.mocked(orgServiceModule.organizationService.delete).mockResolvedValue(undefined as never)
@@ -547,8 +553,32 @@ describe('OrgDetailPage', () => {
     await waitFor(() => screen.getByRole('button', { name: /delete organization/i }))
     fireEvent.click(screen.getByRole('button', { name: /delete organization/i }))
 
-    expect(orgServiceModule.organizationService.delete).not.toHaveBeenCalled()
+    // The dialog opens, but the user cancels without typing the slug.
+    const cancelBtn = await screen.findByRole('button', { name: /cancel/i })
+    fireEvent.click(cancelBtn)
 
-    vi.unstubAllGlobals()
+    expect(orgServiceModule.organizationService.delete).not.toHaveBeenCalled()
+  })
+
+  it('confirm button stays disabled until the slug is typed correctly', async () => {
+    vi.mocked(orgServiceModule.organizationService.get).mockResolvedValue(mockOrg)
+    vi.mocked(orgServiceModule.organizationService.listMembers).mockResolvedValue([mockOwnerMember])
+    vi.mocked(orgServiceModule.organizationService.delete).mockResolvedValue(undefined as never)
+
+    renderPage()
+
+    await waitFor(() => screen.getByRole('button', { name: /delete organization/i }))
+    fireEvent.click(screen.getByRole('button', { name: /delete organization/i }))
+
+    const slugInput = await screen.findByLabelText(/type slug to confirm/i)
+
+    // Typed wrong value — button stays disabled.
+    fireEvent.change(slugInput, { target: { value: 'wrong-slug' } })
+    const confirmBtn = screen.getByRole('button', { name: /^delete organization$/i })
+    expect(confirmBtn).toBeDisabled()
+
+    // Typing the correct slug enables it.
+    fireEvent.change(slugInput, { target: { value: mockOrg.slug } })
+    expect(confirmBtn).toBeEnabled()
   })
 })

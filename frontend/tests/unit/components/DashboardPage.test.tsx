@@ -13,10 +13,10 @@ function renderPage() {
 }
 
 describe('DashboardPage', () => {
-  it('renders the Dashboard heading', () => {
+  it('renders the welcome heading', () => {
     renderPage()
 
-    expect(screen.getByText('Dashboard')).toBeInTheDocument()
+    expect(screen.getByRole('heading', { name: /welcome back/i })).toBeInTheDocument()
   })
 
   it('renders all four stat card labels', () => {

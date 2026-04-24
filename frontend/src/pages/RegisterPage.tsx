@@ -4,25 +4,37 @@ import {
   Alert,
   Box,
   Button,
-  Container,
   Link,
+  Stack,
   TextField,
   Typography,
 } from '@mui/material'
 import { authService } from '@/services/authService'
 import { ApiError } from '@/services/api'
 import { ROUTES } from '@/constants'
+import { ActionCard, GradientButton, HeroHeader, PasswordField } from '@/components/common/ui'
 
 export function RegisterPage() {
   const [fullName, setFullName] = useState('')
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
+  const [confirmPassword, setConfirmPassword] = useState('')
   const [error, setError] = useState('')
   const [success, setSuccess] = useState(false)
   const [loading, setLoading] = useState(false)
 
+  const passwordsMatch = password === confirmPassword
+  const showMismatch = confirmPassword.length > 0 && !passwordsMatch
+  const canSubmit =
+    fullName.trim().length > 0 &&
+    email.trim().length > 0 &&
+    password.length >= 8 &&
+    passwordsMatch &&
+    !loading
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
+    if (!canSubmit) return
     setError('')
     setLoading(true)
     try {
@@ -37,67 +49,112 @@ export function RegisterPage() {
 
   if (success) {
     return (
-      <Container maxWidth="xs">
-        <Box sx={{ mt: 8, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 3 }}>
-          <Typography variant="h5" fontWeight={700}>Check your inbox</Typography>
-          <Alert severity="success" sx={{ width: '100%' }}>
-            We sent a verification link to <strong>{email}</strong>. Click it to activate your account.
-          </Alert>
-          <Button component={RouterLink} to={ROUTES.LOGIN} variant="outlined" fullWidth>
-            Back to sign in
-          </Button>
+      <Box sx={{ display: 'flex', flexDirection: 'column', minHeight: '100vh' }}>
+        <Box
+          sx={{
+            flex: 1,
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            px: { xs: 2, sm: 3 },
+            py: { xs: 4, sm: 8 },
+          }}
+        >
+          <Stack spacing={4} alignItems="center" sx={{ width: '100%', maxWidth: 440 }}>
+            <HeroHeader title="Check your inbox" />
+            <ActionCard maxWidth={440}>
+              <Stack spacing={3}>
+                <Alert severity="success">
+                  We sent a verification link to <strong>{email}</strong>. Click it to activate
+                  your account.
+                </Alert>
+                <Button component={RouterLink} to={ROUTES.LOGIN} variant="outlined" fullWidth>
+                  Back to sign in
+                </Button>
+              </Stack>
+            </ActionCard>
+          </Stack>
         </Box>
-      </Container>
+      </Box>
     )
   }
 
   return (
-    <Container maxWidth="xs">
-      <Box sx={{ mt: 8, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 3 }}>
-        <Typography variant="h4" fontWeight={700}>
-          Create your account
-        </Typography>
+    <Box sx={{ display: 'flex', flexDirection: 'column', minHeight: '100vh' }}>
+      <Box
+        sx={{
+          flex: 1,
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          px: { xs: 2, sm: 3 },
+          py: { xs: 4, sm: 8 },
+        }}
+      >
+        <Stack spacing={4} alignItems="center" sx={{ width: '100%', maxWidth: 440 }}>
+          <HeroHeader title="Create your account" />
 
-        {error && <Alert severity="error" sx={{ width: '100%' }}>{error}</Alert>}
+          <ActionCard maxWidth={440}>
+            <Box
+              component="form"
+              onSubmit={handleSubmit}
+              noValidate
+              sx={{ display: 'flex', flexDirection: 'column', gap: 2.5 }}
+            >
+              {error && <Alert severity="error">{error}</Alert>}
+              <Stack spacing={2}>
+                <TextField
+                  label="Full name"
+                  value={fullName}
+                  onChange={(e) => setFullName(e.target.value)}
+                  required
+                  fullWidth
+                  autoFocus
+                  autoComplete="name"
+                />
+                <TextField
+                  label="Email"
+                  type="email"
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                  required
+                  fullWidth
+                  autoComplete="email"
+                />
+                <PasswordField
+                  label="Password"
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  required
+                  fullWidth
+                  autoComplete="new-password"
+                  helperText="At least 8 characters with a letter and a digit"
+                />
+                <PasswordField
+                  label="Confirm password"
+                  value={confirmPassword}
+                  onChange={(e) => setConfirmPassword(e.target.value)}
+                  required
+                  fullWidth
+                  autoComplete="new-password"
+                  error={showMismatch}
+                  helperText={showMismatch ? 'Passwords do not match.' : ' '}
+                />
+              </Stack>
+              <GradientButton type="submit" disabled={!canSubmit} sx={{ mt: 0.5 }}>
+                {loading ? 'Creating account…' : 'Create account'}
+              </GradientButton>
+            </Box>
+          </ActionCard>
 
-        <Box component="form" onSubmit={handleSubmit} sx={{ width: '100%', display: 'flex', flexDirection: 'column', gap: 2 }}>
-          <TextField
-            label="Full name"
-            value={fullName}
-            onChange={(e) => setFullName(e.target.value)}
-            required
-            fullWidth
-            autoFocus
-          />
-          <TextField
-            label="Email"
-            type="email"
-            value={email}
-            onChange={(e) => setEmail(e.target.value)}
-            required
-            fullWidth
-          />
-          <TextField
-            label="Password"
-            type="password"
-            value={password}
-            onChange={(e) => setPassword(e.target.value)}
-            required
-            fullWidth
-            helperText="At least 8 characters with a letter and a digit"
-          />
-          <Button type="submit" variant="contained" size="large" fullWidth disabled={loading}>
-            {loading ? 'Creating account…' : 'Create account'}
-          </Button>
-        </Box>
-
-        <Typography variant="body2">
-          Already have an account?{' '}
-          <Link component={RouterLink} to={ROUTES.LOGIN}>
-            Sign in
-          </Link>
-        </Typography>
+          <Typography variant="body2">
+            Already have an account?{' '}
+            <Link component={RouterLink} to={ROUTES.LOGIN}>
+              Sign in
+            </Link>
+          </Typography>
+        </Stack>
       </Box>
-    </Container>
+    </Box>
   )
 }

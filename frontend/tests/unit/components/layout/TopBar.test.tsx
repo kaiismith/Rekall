@@ -1,21 +1,37 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest'
+import { describe, it, expect, beforeEach } from 'vitest'
 import { render, screen, fireEvent } from '@testing-library/react'
+import { MemoryRouter } from 'react-router-dom'
 import { ThemeProvider } from '@mui/material/styles'
 import theme from '@/theme'
 import { TopBar } from '@/components/layout/TopBar'
 import { useUIStore } from '@/store/uiStore'
+import { useAuthStore } from '@/store/authStore'
 
 function renderTopBar() {
   return render(
-    <ThemeProvider theme={theme}>
-      <TopBar />
-    </ThemeProvider>,
+    <MemoryRouter>
+      <ThemeProvider theme={theme}>
+        <TopBar />
+      </ThemeProvider>
+    </MemoryRouter>,
   )
 }
 
 describe('TopBar', () => {
   beforeEach(() => {
     useUIStore.setState({ sidebarOpen: true })
+    useAuthStore.setState({
+      user: {
+        id: 'user-1',
+        email: 'travis@techvify.io',
+        full_name: 'Travis Duong',
+        role: 'member',
+        email_verified: true,
+        created_at: '2024-01-01T00:00:00Z',
+      },
+      accessToken: 'tok',
+      isInitialised: true,
+    })
   })
 
   it('renders the toggle sidebar button', () => {
@@ -23,36 +39,26 @@ describe('TopBar', () => {
     expect(screen.getByRole('button', { name: /toggle sidebar/i })).toBeInTheDocument()
   })
 
-  it('shows MenuOpenIcon (title-less svg) when sidebar is open', () => {
+  it('keeps the sidebar open state when rendered with sidebarOpen=true', () => {
     renderTopBar()
-    // Both MUI icons are SVG; confirm toggle button exists and sidebar is open
-    const btn = screen.getByRole('button', { name: /toggle sidebar/i })
-    expect(btn).toBeInTheDocument()
-    // The SVG path differs between MenuIcon / MenuOpenIcon.
-    // We check that the document contains the data-testid from the icon name.
-    // MUI icons render an SVG; MenuOpenIcon has a specific viewBox path — instead
-    // we assert the aria-label and verify clicking toggles state.
     expect(useUIStore.getState().sidebarOpen).toBe(true)
   })
 
-  it('shows MenuIcon when sidebar is collapsed', () => {
+  it('reflects the collapsed sidebar state', () => {
     useUIStore.setState({ sidebarOpen: false })
     renderTopBar()
-    const btn = screen.getByRole('button', { name: /toggle sidebar/i })
-    expect(btn).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: /toggle sidebar/i })).toBeInTheDocument()
     expect(useUIStore.getState().sidebarOpen).toBe(false)
   })
 
-  it('clicking the toggle button calls toggleSidebar and flips state', () => {
+  it('clicking the toggle button flips the sidebar state', () => {
     renderTopBar()
     expect(useUIStore.getState().sidebarOpen).toBe(true)
-
     fireEvent.click(screen.getByRole('button', { name: /toggle sidebar/i }))
-
     expect(useUIStore.getState().sidebarOpen).toBe(false)
   })
 
-  it('clicking twice returns sidebar to open state', () => {
+  it('clicking twice returns the sidebar to open state', () => {
     renderTopBar()
     const btn = screen.getByRole('button', { name: /toggle sidebar/i })
     fireEvent.click(btn)
@@ -60,19 +66,27 @@ describe('TopBar', () => {
     expect(useUIStore.getState().sidebarOpen).toBe(true)
   })
 
-  it('renders the Notifications button', () => {
+  it('renders the Notifications, Help, and Account buttons', () => {
     renderTopBar()
     expect(screen.getByRole('button', { name: /notifications/i })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: /help/i })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: /account/i })).toBeInTheDocument()
   })
 
-  it('renders the Account avatar', () => {
+  it('shows the user\'s initials in the avatar', () => {
     renderTopBar()
-    // Avatar contains the letter "U"
-    expect(screen.getByText('U')).toBeInTheDocument()
+    // Travis Duong → "TD"
+    expect(screen.getByText('TD')).toBeInTheDocument()
   })
 
-  it('renders "User" label text', () => {
+  it('opens the account menu with the identity block and a sign-out option', () => {
     renderTopBar()
-    expect(screen.getByText('User')).toBeInTheDocument()
+    fireEvent.click(screen.getByRole('button', { name: /account/i }))
+    expect(screen.getByText('Travis Duong')).toBeInTheDocument()
+    expect(screen.getByText('travis@techvify.io')).toBeInTheDocument()
+    expect(screen.getByRole('menuitem', { name: /sign out/i })).toBeInTheDocument()
+    // Profile and Settings moved to the sidebar — they should NOT be in the menu.
+    expect(screen.queryByRole('menuitem', { name: /profile/i })).not.toBeInTheDocument()
+    expect(screen.queryByRole('menuitem', { name: /settings/i })).not.toBeInTheDocument()
   })
 })

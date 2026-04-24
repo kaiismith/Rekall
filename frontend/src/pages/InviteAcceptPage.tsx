@@ -1,10 +1,11 @@
 import { useEffect, useState } from 'react'
 import { Link as RouterLink, useNavigate, useSearchParams } from 'react-router-dom'
-import { Alert, Box, Button, CircularProgress, Container, Typography } from '@mui/material'
+import { Alert, Box, Button, CircularProgress, Stack, Typography } from '@mui/material'
 import { organizationService } from '@/services/organizationService'
 import { useAuthStore } from '@/store/authStore'
 import { ApiError } from '@/services/api'
 import { ROUTES } from '@/constants'
+import { ActionCard, GradientButton, HeroHeader } from '@/components/common/ui'
 
 type State = 'loading' | 'success' | 'error' | 'unauthenticated'
 
@@ -33,67 +34,92 @@ export function InviteAcceptPage() {
       })
   }, [token, accessToken])
 
-  if (state === 'unauthenticated') {
-    return (
-      <Container maxWidth="xs">
-        <Box sx={{ mt: 8, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 3 }}>
-          <Typography variant="h5" fontWeight={700}>Sign in to accept</Typography>
-          <Alert severity="info" sx={{ width: '100%' }}>
-            You need to be signed in to accept this invitation.
-          </Alert>
-          <Button
-            component={RouterLink}
-            to={ROUTES.LOGIN}
-            state={{ from: { pathname: `/invitations/accept`, search: `?token=${token}` } }}
-            variant="contained"
-            fullWidth
-          >
-            Sign in
-          </Button>
-          <Button component={RouterLink} to={ROUTES.REGISTER} variant="outlined" fullWidth>
-            Create an account
-          </Button>
-        </Box>
-      </Container>
-    )
-  }
-
   return (
-    <Container maxWidth="xs">
-      <Box sx={{ mt: 8, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 3 }}>
-        {state === 'loading' && (
-          <>
-            <CircularProgress />
-            <Typography>Accepting invitation…</Typography>
-          </>
-        )}
+    <Box sx={{ display: 'flex', flexDirection: 'column', minHeight: '100vh' }}>
+      <Box
+        sx={{
+          flex: 1,
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          px: { xs: 2, sm: 3 },
+          py: { xs: 4, sm: 8 },
+        }}
+      >
+        <Stack spacing={4} alignItems="center" sx={{ width: '100%', maxWidth: 440 }}>
+          {state === 'unauthenticated' && (
+            <>
+              <HeroHeader
+                title="Sign in to accept"
+                subtitle="You need to be signed in to accept this invitation."
+              />
+              <ActionCard maxWidth={440}>
+                <Stack spacing={2}>
+                  <GradientButton
+                    onClick={() =>
+                      navigate(ROUTES.LOGIN, {
+                        state: { from: { pathname: `/invitations/accept`, search: `?token=${token}` } },
+                      })
+                    }
+                  >
+                    Sign in
+                  </GradientButton>
+                  <Button component={RouterLink} to={ROUTES.REGISTER} variant="outlined" fullWidth>
+                    Create an account
+                  </Button>
+                </Stack>
+              </ActionCard>
+            </>
+          )}
 
-        {state === 'success' && (
-          <>
-            <Typography variant="h5" fontWeight={700}>Welcome aboard!</Typography>
-            <Alert severity="success" sx={{ width: '100%' }}>
-              You&apos;ve joined <strong>{orgName}</strong>.
-            </Alert>
-            <Button
-              variant="contained"
-              fullWidth
-              onClick={() => navigate(ROUTES.ORGANIZATIONS, { replace: true })}
-            >
-              Go to organizations
-            </Button>
-          </>
-        )}
+          {state === 'loading' && (
+            <ActionCard maxWidth={440}>
+              <Stack spacing={2} alignItems="center" py={3}>
+                <CircularProgress size={28} />
+                <Typography color="text.secondary">Accepting invitation…</Typography>
+              </Stack>
+            </ActionCard>
+          )}
 
-        {state === 'error' && (
-          <>
-            <Typography variant="h5" fontWeight={700}>Invitation error</Typography>
-            <Alert severity="error" sx={{ width: '100%' }}>{errorMessage}</Alert>
-            <Button component={RouterLink} to={ROUTES.DASHBOARD} variant="outlined" fullWidth>
-              Go to dashboard
-            </Button>
-          </>
-        )}
+          {state === 'success' && (
+            <>
+              <HeroHeader
+                title="Welcome aboard"
+                subtitle={`You've joined ${orgName}.`}
+              />
+              <ActionCard maxWidth={440}>
+                <Stack spacing={2}>
+                  <Alert severity="success">
+                    You&apos;re now a member of <strong>{orgName}</strong>.
+                  </Alert>
+                  <GradientButton
+                    onClick={() => navigate(ROUTES.ORGANIZATIONS, { replace: true })}
+                  >
+                    Go to organizations
+                  </GradientButton>
+                </Stack>
+              </ActionCard>
+            </>
+          )}
+
+          {state === 'error' && (
+            <>
+              <HeroHeader
+                title="Invitation error"
+                subtitle="We couldn't process this invitation."
+              />
+              <ActionCard maxWidth={440}>
+                <Stack spacing={2}>
+                  <Alert severity="error">{errorMessage}</Alert>
+                  <Button component={RouterLink} to={ROUTES.DASHBOARD} variant="outlined" fullWidth>
+                    Go to dashboard
+                  </Button>
+                </Stack>
+              </ActionCard>
+            </>
+          )}
+        </Stack>
       </Box>
-    </Container>
+    </Box>
   )
 }

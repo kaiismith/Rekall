@@ -3,16 +3,17 @@ import Toolbar from '@mui/material/Toolbar'
 import { Outlet } from 'react-router-dom'
 import { Sidebar } from './Sidebar'
 import { TopBar } from './TopBar'
-import { SIDEBAR_WIDTH, SIDEBAR_COLLAPSED_WIDTH } from '@/constants'
-import { useUIStore } from '@/store/uiStore'
 
 /**
  * Root application shell: fixed TopBar + collapsible Sidebar + scrollable content area.
+ *
+ * The Sidebar is a permanent MUI Drawer — its outer wrapper occupies its
+ * width inside the flex container, so `<main>` only needs `flexGrow: 1` to
+ * take the remaining space. We deliberately do NOT add `ml: drawerWidth` /
+ * `width: calc(100% - drawerWidth)` here; that would double-account for the
+ * sidebar and leave a wide empty gap between the sidebar and the content.
  */
 export function Layout() {
-  const { sidebarOpen } = useUIStore()
-  const drawerWidth = sidebarOpen ? SIDEBAR_WIDTH : SIDEBAR_COLLAPSED_WIDTH
-
   return (
     <Box sx={{ display: 'flex', minHeight: '100vh', bgcolor: 'background.default' }}>
       <TopBar />
@@ -22,9 +23,7 @@ export function Layout() {
         component="main"
         sx={{
           flexGrow: 1,
-          width: { sm: `calc(100% - ${drawerWidth}px)` },
-          ml: { sm: `${drawerWidth}px` },
-          transition: 'margin-left 0.2s ease, width 0.2s ease',
+          minWidth: 0,
           minHeight: '100vh',
           display: 'flex',
           flexDirection: 'column',
@@ -33,7 +32,17 @@ export function Layout() {
         {/* Spacer to push content below the AppBar */}
         <Toolbar sx={{ minHeight: '56px !important' }} />
 
-        <Box sx={{ flex: 1, p: 3 }}>
+        {/* Comfortable gutter against the sidebar — enough room to breathe
+            without re-introducing the floating-content feel. */}
+        <Box
+          sx={{
+            flex: 1,
+            px: { xs: 2, sm: 6 },
+            py: { xs: 2, sm: 3 },
+            width: '100%',
+            maxWidth: 'none',
+          }}
+        >
           <Outlet />
         </Box>
       </Box>
