@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 import {
   Alert,
@@ -20,7 +20,9 @@ import CloseIcon from '@mui/icons-material/Close'
 import MicOffIcon from '@mui/icons-material/MicOff'
 import MicIcon from '@mui/icons-material/Mic'
 import VideocamOffIcon from '@mui/icons-material/VideocamOff'
+import VideocamIcon from '@mui/icons-material/Videocam'
 import BackHandIcon from '@mui/icons-material/BackHand'
+import SettingsIcon from '@mui/icons-material/SettingsOutlined'
 import { useMeeting } from '@/hooks/useMeeting'
 import { useAuthStore } from '@/store/authStore'
 import { MicButton } from '@/components/meeting/MicButton'
@@ -29,9 +31,10 @@ import { ShareButton } from '@/components/meeting/ShareButton'
 import { HandButton } from '@/components/meeting/HandButton'
 import { EmojiButton } from '@/components/meeting/EmojiButton'
 import { BackgroundButton } from '@/components/meeting/BackgroundButton'
-import { LaserButton } from '@/components/meeting/LaserButton'
 import { ChatButton } from '@/components/meeting/ChatButton'
 import { ChatPanel } from '@/components/meeting/chat/ChatPanel'
+import { DeviceSettingsDialog } from '@/components/meeting/DeviceSettingsDialog'
+import { tokens } from '@/theme'
 import type { EmojiReaction } from '@/types/meeting'
 
 // ─── Emoji float animation injected once ─────────────────────────────────────
@@ -62,6 +65,7 @@ export function MeetingRoomPage() {
   const { user } = useAuthStore()
   const localVideoRef = useRef<HTMLVideoElement>(null)
   const videoGridRef = useRef<HTMLDivElement>(null)
+  const [settingsOpen, setSettingsOpen] = useState(false)
 
   const {
     meeting,
@@ -71,8 +75,15 @@ export function MeetingRoomPage() {
     remoteSpeaking,
     knocks,
     localStream,
+    localPreviewStream,
     peers,
     respondToKnock,
+    joinNow,
+    availableDevices,
+    selectedDeviceIds,
+    switchCamera,
+    switchMic,
+    switchSpeaker,
     endMeeting,
     leave,
     isMuted,
@@ -89,10 +100,6 @@ export function MeetingRoomPage() {
     toggleHand,
     reactionQueue,
     sendEmojiReaction,
-    laserState,
-    isLaserActive,
-    toggleLaser,
-    sendLaserMove,
     activeBackground,
     bgSupported,
     setBackground,
@@ -118,29 +125,78 @@ export function MeetingRoomPage() {
     dismissChatSendError,
   } = useMeeting({
     code: code ?? '',
-    onEnd: () => navigate('/meetings'),
+    onEnd: () => {
+      console.log('%c[meeting] page: onEnd → /meetings', 'color:#f59e0b;font-weight:600')
+      navigate('/meetings')
+    },
   })
 
-  // Attach local stream to video element.
+  // Log every roomState transition so we can see in devtools exactly where
+  // the page lands. Easy to grep on `[meeting]`.
   useEffect(() => {
-    if (localVideoRef.current && localStream) {
-      localVideoRef.current.srcObject = localStream
+    console.log('%c[meeting] page: roomState =', 'color:#a78bfa;font-weight:600', roomState)
+  }, [roomState])
+
+  // Attach the local PREVIEW stream (mirrors the active outbound video track:
+  // screen share > virtual-bg canvas > raw camera) to the local <video> tile,
+  // so the user sees what their peers see. Uses a callback ref via the existing
+  // localVideoRef so the binding fires both on stream change AND on element
+  // mount — required when transitioning from the device-check screen, where
+  // a different <video> instance was used and the new one comes up empty.
+  const stream = localPreviewStream ?? localStream
+  useEffect(() => {
+    const el = localVideoRef.current
+    if (el && stream && el.srcObject !== stream) {
+      el.srcObject = stream
     }
-  }, [localStream])
+  }, [stream, isCameraOff, roomState])
 
-  // Laser pointer mouse handler on the video grid.
-  const handleGridMouseMove = useCallback((e: React.MouseEvent<HTMLDivElement>) => {
-    if (!isLaserActive || !videoGridRef.current) return
-    const rect = videoGridRef.current.getBoundingClientRect()
-    const x = (e.clientX - rect.left) / rect.width
-    const y = (e.clientY - rect.top) / rect.height
-    sendLaserMove(
-      Math.max(0, Math.min(1, x)),
-      Math.max(0, Math.min(1, y)),
+  // ── Device check / Connecting / waiting / denied / ended ──────────────────
+
+  // Don't render the device-check screen until the meeting metadata has
+  // loaded — otherwise users hitting an ended meeting see the preview UI
+  // pop up for a frame before flipping to "Meeting Ended". Show a quiet
+  // loading spinner instead while the initial getByCode is in flight.
+  if (roomState === 'device_check' && !meeting) {
+    return (
+      <Box display="flex" flexDirection="column" alignItems="center" justifyContent="center" height="100vh" gap={2}>
+        <CircularProgress />
+      </Box>
     )
-  }, [isLaserActive, sendLaserMove])
+  }
 
-  // ── Connecting / waiting / denied / ended ─────────────────────────────────
+  if (roomState === 'device_check') {
+    return (
+      <>
+        <DeviceCheckScreen
+          meetingTitle={meeting?.title || 'Meeting'}
+          meetingCode={meeting?.code ?? ''}
+          previewStream={localPreviewStream ?? localStream}
+          isMuted={isMuted}
+          isCameraOff={isCameraOff}
+          audioLevel={audioLevel}
+          onToggleMic={toggleMute}
+          onToggleCamera={toggleCamera}
+          onJoin={joinNow}
+          onCancel={() => navigate('/meetings')}
+          onOpenSettings={() => setSettingsOpen(true)}
+        />
+        <DeviceSettingsDialog
+          open={settingsOpen}
+          onClose={() => setSettingsOpen(false)}
+          cameras={availableDevices.cameras}
+          mics={availableDevices.mics}
+          speakers={availableDevices.speakers}
+          selectedCameraId={selectedDeviceIds.camera}
+          selectedMicId={selectedDeviceIds.mic}
+          selectedSpeakerId={selectedDeviceIds.speaker}
+          onSwitchCamera={switchCamera}
+          onSwitchMic={switchMic}
+          onSwitchSpeaker={switchSpeaker}
+        />
+      </>
+    )
+  }
 
   if (roomState === 'connecting') {
     return (
@@ -192,7 +248,7 @@ export function MeetingRoomPage() {
       <Box sx={{ px: 3, py: 1.5, borderBottom: '1px solid', borderColor: 'divider', display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexShrink: 0 }}>
         <Stack direction="row" spacing={1} alignItems="center">
           <Typography variant="h6" fontWeight={600}>{meeting?.title || 'Meeting'}</Typography>
-          <Chip label={meeting?.code} size="small" sx={{ fontFamily: 'monospace' }} />
+          <Chip label={meeting?.code} size="small" sx={{ fontFamily: tokens.fonts.mono }} />
           <Chip label={meeting?.type} size="small" variant="outlined" />
           <Chip label={`${peerIds.length + 1} participants`} size="small" variant="outlined" />
           {handRaisedCount > 0 && (
@@ -231,7 +287,6 @@ export function MeetingRoomPage() {
         {/* ── Video grid ───────────────────────────────────────────────────── */}
         <Box
           ref={videoGridRef}
-          onMouseMove={handleGridMouseMove}
           sx={{
             flex: 1,
             position: 'relative',
@@ -240,7 +295,6 @@ export function MeetingRoomPage() {
             gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))',
             gap: 2,
             alignContent: 'start',
-            cursor: isLaserActive ? 'crosshair' : 'default',
             overflow: 'auto',
           }}
         >
@@ -251,19 +305,30 @@ export function MeetingRoomPage() {
             isSpeaking={isSpeaking}
             audioLevel={audioLevel}
             isCameraOff={isCameraOff}
-            isHandRaised={false}
+            isHandRaised={isHandRaised}
             reactions={reactionQueue.filter((r) => r.userId === user?.id)}
             isLocal
           >
-            {!isCameraOff && (
-              <video
-                ref={localVideoRef}
-                autoPlay
-                muted
-                playsInline
-                style={{ width: '100%', height: '100%', objectFit: 'cover', transform: 'scaleX(-1)' }}
-              />
-            )}
+            {/* Always mount the <video> element — toggling it via the parent
+                conditional unmounted/remounted the node and the new instance
+                started without srcObject (the attach effect doesn't re-run if
+                localStream hasn't changed). Hide it via CSS instead so the
+                MediaStream binding survives camera on→off→on cycles. */}
+            <video
+              ref={localVideoRef}
+              autoPlay
+              muted
+              playsInline
+              style={{
+                width: '100%',
+                height: '100%',
+                objectFit: 'cover',
+                // Mirror only the camera preview — screen-share content
+                // would read backwards if mirrored.
+                transform: isScreenSharing ? 'none' : 'scaleX(-1)',
+                display: isCameraOff && !isScreenSharing ? 'none' : 'block',
+              }}
+            />
           </VideoTile>
 
           {/* Remote tiles */}
@@ -291,31 +356,6 @@ export function MeetingRoomPage() {
             )
           })}
 
-          {/* Laser pointer overlay — spans entire grid */}
-          {laserState && (
-            <Box
-              sx={{
-                position: 'absolute',
-                inset: 0,
-                pointerEvents: 'none',
-                zIndex: 10,
-              }}
-            >
-              <Box
-                sx={{
-                  position: 'absolute',
-                  left: `calc(${laserState.x * 100}% - 6px)`,
-                  top: `calc(${laserState.y * 100}% - 6px)`,
-                  width: 12,
-                  height: 12,
-                  borderRadius: '50%',
-                  bgcolor: '#ef4444',
-                  boxShadow: '0 0 8px 3px rgba(239,68,68,0.55)',
-                  transition: 'left 0.02s linear, top 0.02s linear',
-                }}
-              />
-            </Box>
-          )}
         </Box>
 
         {/* ── Chat panel ──────────────────────────────────────────────────── */}
@@ -399,13 +439,43 @@ export function MeetingRoomPage() {
           customBgSrc={customBgSrc}
           disabled={!bgSupported}
         />
-        <LaserButton isActive={isLaserActive} onToggle={toggleLaser} />
         <ChatButton
           unreadCount={unreadCount}
           isOpen={isChatPanelOpen}
           onToggle={isChatPanelOpen ? closeChatPanel : openChatPanel}
         />
+        <Tooltip title="Device settings">
+          <IconButton
+            size="small"
+            onClick={() => setSettingsOpen(true)}
+            sx={{
+              width: 44,
+              height: 44,
+              bgcolor: 'rgba(255,255,255,0.04)',
+              color: 'text.secondary',
+              border: '1px solid rgba(255,255,255,0.06)',
+              '&:hover': { bgcolor: 'rgba(255,255,255,0.08)', color: 'text.primary' },
+            }}
+            aria-label="Device settings"
+          >
+            <SettingsIcon fontSize="small" />
+          </IconButton>
+        </Tooltip>
       </Box>
+
+      <DeviceSettingsDialog
+        open={settingsOpen}
+        onClose={() => setSettingsOpen(false)}
+        cameras={availableDevices.cameras}
+        mics={availableDevices.mics}
+        speakers={availableDevices.speakers}
+        selectedCameraId={selectedDeviceIds.camera}
+        selectedMicId={selectedDeviceIds.mic}
+        selectedSpeakerId={selectedDeviceIds.speaker}
+        onSwitchCamera={switchCamera}
+        onSwitchMic={switchMic}
+        onSwitchSpeaker={switchSpeaker}
+      />
     </Box>
   )
 }
@@ -547,5 +617,282 @@ function RemoteVideo({ peerConnection }: { peerConnection: RTCPeerConnection }) 
       playsInline
       style={{ width: '100%', height: '100%', objectFit: 'cover' }}
     />
+  )
+}
+
+// ─── DeviceCheckScreen ────────────────────────────────────────────────────────
+
+interface DeviceCheckScreenProps {
+  meetingTitle: string
+  meetingCode: string
+  previewStream: MediaStream | null
+  isMuted: boolean
+  isCameraOff: boolean
+  audioLevel: number
+  onToggleMic: () => void
+  onToggleCamera: () => void
+  onJoin: () => void
+  onCancel: () => void
+  onOpenSettings: () => void
+}
+
+function DeviceCheckScreen({
+  meetingTitle,
+  meetingCode,
+  previewStream,
+  isMuted,
+  isCameraOff,
+  audioLevel,
+  onToggleMic,
+  onToggleCamera,
+  onJoin,
+  onCancel,
+  onOpenSettings,
+}: DeviceCheckScreenProps) {
+  const previewVideoRef = useRef<HTMLVideoElement>(null)
+
+  useEffect(() => {
+    const el = previewVideoRef.current
+    if (el && previewStream && el.srcObject !== previewStream) {
+      el.srcObject = previewStream
+    }
+  }, [previewStream])
+
+  const meterPct = Math.min(100, Math.round(audioLevel * 100))
+
+  return (
+    <Box
+      sx={{
+        minHeight: '100vh',
+        display: 'flex',
+        flexDirection: 'column',
+        alignItems: 'center',
+        justifyContent: 'center',
+        bgcolor: 'background.default',
+        px: { xs: 2, sm: 3 },
+        py: { xs: 4, sm: 6 },
+      }}
+    >
+      <Stack spacing={3} sx={{ width: '100%', maxWidth: 720, alignItems: 'center' }}>
+        <Box sx={{ textAlign: 'center' }}>
+          <Typography
+            variant="overline"
+            sx={{
+              color: 'text.secondary',
+              fontWeight: 700,
+              letterSpacing: '0.12em',
+              display: 'block',
+              mb: 0.5,
+            }}
+          >
+            Ready to join
+          </Typography>
+          <Typography
+            component="h1"
+            sx={{
+              fontWeight: 700,
+              letterSpacing: '-0.02em',
+              fontSize: { xs: '1.5rem', sm: '1.875rem' },
+              color: 'text.primary',
+            }}
+          >
+            {meetingTitle}
+          </Typography>
+          {meetingCode && (
+            <Typography
+              variant="caption"
+              sx={{ color: 'text.secondary', fontFamily: tokens.fonts.mono, mt: 0.5, display: 'block' }}
+            >
+              {meetingCode}
+            </Typography>
+          )}
+        </Box>
+
+        {/* Camera preview */}
+        <Paper
+          sx={{
+            position: 'relative',
+            width: '100%',
+            aspectRatio: '16 / 9',
+            overflow: 'hidden',
+            borderRadius: '14px',
+            bgcolor: '#0a0b12',
+            border: '1px solid rgba(255,255,255,0.06)',
+            boxShadow: '0 12px 40px rgba(0,0,0,0.45)',
+          }}
+        >
+          {previewStream && (
+            <video
+              ref={previewVideoRef}
+              autoPlay
+              muted
+              playsInline
+              style={{
+                width: '100%',
+                height: '100%',
+                objectFit: 'cover',
+                transform: 'scaleX(-1)',
+                display: isCameraOff ? 'none' : 'block',
+              }}
+            />
+          )}
+
+          {isCameraOff && (
+            <Stack
+              sx={{
+                position: 'absolute',
+                inset: 0,
+                alignItems: 'center',
+                justifyContent: 'center',
+                gap: 1.5,
+              }}
+            >
+              <Box
+                sx={{
+                  width: 64,
+                  height: 64,
+                  borderRadius: '50%',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  bgcolor: 'rgba(255,255,255,0.05)',
+                  color: 'text.secondary',
+                }}
+              >
+                <VideocamOffIcon sx={{ fontSize: '2rem' }} />
+              </Box>
+              <Typography variant="body2" color="text.secondary">
+                Camera is off
+              </Typography>
+            </Stack>
+          )}
+
+          {/* Bottom controls overlay */}
+          <Stack
+            direction="row"
+            spacing={1.5}
+            sx={{
+              position: 'absolute',
+              bottom: 16,
+              left: '50%',
+              transform: 'translateX(-50%)',
+              p: 1,
+              borderRadius: '999px',
+              bgcolor: 'rgba(0,0,0,0.55)',
+              backdropFilter: 'blur(8px)',
+              border: '1px solid rgba(255,255,255,0.08)',
+            }}
+          >
+            <Tooltip title={isMuted ? 'Turn on microphone' : 'Mute microphone'}>
+              <IconButton
+                onClick={onToggleMic}
+                sx={{
+                  bgcolor: isMuted ? 'rgba(239,68,68,0.18)' : 'rgba(255,255,255,0.06)',
+                  color: isMuted ? '#fca5a5' : 'text.primary',
+                  border: '1px solid',
+                  borderColor: isMuted ? 'rgba(239,68,68,0.3)' : 'rgba(255,255,255,0.08)',
+                  '&:hover': {
+                    bgcolor: isMuted ? 'rgba(239,68,68,0.24)' : 'rgba(255,255,255,0.1)',
+                  },
+                }}
+              >
+                {isMuted ? <MicOffIcon /> : <MicIcon />}
+              </IconButton>
+            </Tooltip>
+
+            <Tooltip title={isCameraOff ? 'Turn on camera' : 'Turn off camera'}>
+              <IconButton
+                onClick={onToggleCamera}
+                sx={{
+                  bgcolor: isCameraOff ? 'rgba(239,68,68,0.18)' : 'rgba(255,255,255,0.06)',
+                  color: isCameraOff ? '#fca5a5' : 'text.primary',
+                  border: '1px solid',
+                  borderColor: isCameraOff ? 'rgba(239,68,68,0.3)' : 'rgba(255,255,255,0.08)',
+                  '&:hover': {
+                    bgcolor: isCameraOff ? 'rgba(239,68,68,0.24)' : 'rgba(255,255,255,0.1)',
+                  },
+                }}
+              >
+                {isCameraOff ? <VideocamOffIcon /> : <VideocamIcon />}
+              </IconButton>
+            </Tooltip>
+
+            <Tooltip title="Device settings">
+              <IconButton
+                onClick={onOpenSettings}
+                aria-label="Device settings"
+                sx={{
+                  bgcolor: 'rgba(255,255,255,0.06)',
+                  color: 'text.primary',
+                  border: '1px solid rgba(255,255,255,0.08)',
+                  '&:hover': { bgcolor: 'rgba(255,255,255,0.1)' },
+                }}
+              >
+                <SettingsIcon />
+              </IconButton>
+            </Tooltip>
+          </Stack>
+        </Paper>
+
+        {/* Mic-level meter (only when mic is on) */}
+        {!isMuted && (
+          <Box sx={{ width: '100%', maxWidth: 320 }}>
+            <Stack direction="row" spacing={1} alignItems="center">
+              <MicIcon fontSize="small" sx={{ color: 'text.secondary' }} />
+              <Box
+                sx={{
+                  flex: 1,
+                  height: 6,
+                  borderRadius: 3,
+                  bgcolor: 'rgba(255,255,255,0.05)',
+                  overflow: 'hidden',
+                }}
+              >
+                <Box
+                  sx={{
+                    width: `${meterPct}%`,
+                    height: '100%',
+                    background: tokens.gradients.primary,
+                    transition: 'width 80ms linear',
+                  }}
+                />
+              </Box>
+            </Stack>
+          </Box>
+        )}
+
+        <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1.5} sx={{ width: '100%', maxWidth: 360 }}>
+          <Button
+            variant="outlined"
+            fullWidth
+            onClick={onCancel}
+            sx={{ borderColor: 'rgba(255,255,255,0.12)' }}
+          >
+            Cancel
+          </Button>
+          <Button
+            variant="contained"
+            fullWidth
+            onClick={onJoin}
+            sx={{
+              background: tokens.gradients.primary,
+              color: '#0a0b12',
+              fontWeight: 600,
+              boxShadow: tokens.shadows.glowPrimary,
+              '&:hover': {
+                background: tokens.gradients.primaryHover,
+                boxShadow: tokens.shadows.glowPrimaryHover,
+              },
+            }}
+          >
+            Join meeting
+          </Button>
+        </Stack>
+
+        <Typography variant="caption" color="text.secondary" sx={{ textAlign: 'center', maxWidth: 380 }}>
+          Your camera and microphone start off. Toggle them on above to test before joining.
+        </Typography>
+      </Stack>
+    </Box>
   )
 }

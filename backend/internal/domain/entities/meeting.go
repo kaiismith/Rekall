@@ -19,7 +19,7 @@ const (
 	MeetingScopeDept = "department"
 
 	MeetingMaxParticipants = 50
-	MeetingMaxPerHost      = 5
+	MeetingMaxPerHost      = 50
 )
 
 // Meeting represents a real-time video/audio session. Open meetings allow any

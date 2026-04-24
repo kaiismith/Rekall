@@ -28,7 +28,12 @@ vi.mock('@/services/meetingService', () => ({
         join_url: 'http://localhost/meeting/test-code', created_at: '2026-01-01T00:00:00Z',
       },
     }),
-    buildWsUrl: vi.fn().mockReturnValue('ws://localhost/ws/test-code'),
+    requestWsTicket: vi.fn().mockResolvedValue({
+      ticket: 'opaque-xyz',
+      wsUrl: '/api/v1/meetings/test-code/ws?ticket=opaque-xyz',
+      expiresAt: Date.now() + 60_000,
+    }),
+    buildAbsoluteWsUrl: vi.fn().mockReturnValue('ws://localhost/api/v1/meetings/test-code/ws?ticket=opaque-xyz'),
     end: vi.fn().mockResolvedValue({}),
     listMessages: vi.fn().mockResolvedValue({ messages: [], has_more: false }),
   },
@@ -137,13 +142,27 @@ function setupBrowserMocks() {
 
   // Re-apply mock implementations (vi.restoreAllMocks from upload tests may have cleared them).
   vi.mocked(meetingService.getByCode).mockResolvedValue({ data: mockMeeting } as never)
-  vi.mocked(meetingService.buildWsUrl).mockReturnValue('ws://localhost/ws/test-code')
+  vi.mocked(meetingService.requestWsTicket).mockResolvedValue({
+    ticket: 'opaque-xyz',
+    wsUrl: '/api/v1/meetings/test-code/ws?ticket=opaque-xyz',
+    expiresAt: Date.now() + 60_000,
+  })
+  vi.mocked(meetingService.buildAbsoluteWsUrl).mockReturnValue(
+    'ws://localhost/api/v1/meetings/test-code/ws?ticket=opaque-xyz',
+  )
   vi.mocked(meetingService.end).mockResolvedValue({} as never)
   vi.mocked(meetingService.listMessages).mockResolvedValue({ messages: [], has_more: false })
 
   vi.stubGlobal('WebSocket', MockWebSocket)
   vi.stubGlobal('RTCPeerConnection', MockRTCPeerConnection)
   vi.stubGlobal('AudioContext', vi.fn(() => new MockAudioCtx()))
+  // jsdom doesn't ship MediaStream; stub a minimal constructor so the
+  // local-preview rebuild logic doesn't throw.
+  vi.stubGlobal('MediaStream', class MockMediaStream {
+    private _tracks: MediaStreamTrack[] = []
+    addTrack(t: MediaStreamTrack) { this._tracks.push(t) }
+    getTracks() { return this._tracks }
+  })
   Object.defineProperty(navigator, 'mediaDevices', {
     value: {
       getUserMedia: vi.fn().mockResolvedValue(mockStream),
@@ -162,6 +181,13 @@ function teardownBrowserMocks() {
 async function renderMeeting(code = 'test-code', onEnd?: () => void) {
   const { useMeeting } = await import('@/hooks/useMeeting')
   const hook = renderHook(() => useMeeting({ code, onEnd }))
+  // The hook now starts in 'device_check' with mic + camera defaulted OFF.
+  // Existing tests expect both to be ON when the meeting begins; emulate the
+  // user clicking the toggles in the device-check screen, then confirming.
+  await act(async () => { await vi.waitFor(() => hook.result.current.localStream != null) })
+  await act(async () => { hook.result.current.toggleMute() })
+  await act(async () => { hook.result.current.toggleCamera() })
+  await act(async () => { hook.result.current.joinNow() })
   // Let connect effect run (fires meetingService.getByCode → new WebSocket).
   await act(async () => { await vi.waitFor(() => wsInstances.length > 0) })
   return { ...hook, ws: wsInstances[wsInstances.length - 1] }
@@ -348,9 +374,12 @@ describe('useMeeting — WS connect lifecycle', () => {
     expect(meetingService.getByCode).toHaveBeenCalledWith('my-code')
   })
 
-  it('creates a WebSocket via meetingService.buildWsUrl', async () => {
+  it('fetches a WS ticket before opening the WebSocket', async () => {
     await renderMeeting()
-    expect(meetingService.buildWsUrl).toHaveBeenCalledWith('test-code', 'fake-token')
+    expect(meetingService.requestWsTicket).toHaveBeenCalledWith('test-code')
+    expect(meetingService.buildAbsoluteWsUrl).toHaveBeenCalledWith(
+      '/api/v1/meetings/test-code/ws?ticket=opaque-xyz',
+    )
     expect(wsInstances.length).toBe(1)
   })
 
@@ -359,22 +388,27 @@ describe('useMeeting — WS connect lifecycle', () => {
     expect(result.current.meeting).toEqual(mockMeeting)
   })
 
-  it('transitions to "in_meeting" when participant.joined is received after connecting', async () => {
+  it('transitions to "in_meeting" when room_state (admission signal) is received', async () => {
+    // The backend sends `room_state` only to the newly-admitted client, so
+    // it is the authoritative signal that THIS user has been let in.
     const { result, ws } = await renderMeeting()
     await act(async () => {
       ws._open()
-      ws._msg({ type: 'participant.joined', user_id: 'remote-1' })
+      ws._msg({ type: 'room_state', participants: [] })
     })
     expect(result.current.roomState).toBe('in_meeting')
   })
 
-  it('transitions to "waiting_room" when knock.requested is received while connecting', async () => {
+  it('does not transition on knock.requested (knockers never receive it)', async () => {
+    // knock.requested is broadcast to active participants, NOT to the knocker
+    // themselves. A client in the connecting state receiving one (if at all)
+    // must not flip to a misleading state.
     const { result, ws } = await renderMeeting()
     await act(async () => {
       ws._open()
       ws._msg({ type: 'knock.requested', knock_id: 'k1', user_id: 'u1' })
     })
-    expect(result.current.roomState).toBe('waiting_room')
+    expect(result.current.roomState).not.toBe('waiting_room')
   })
 
   it('transitions to "denied" when WS closes with code 4003', async () => {
@@ -429,6 +463,9 @@ describe('useMeeting — public actions', () => {
     const { ws } = res
     await act(async () => {
       ws._open()
+      // room_state is the admission signal; participant.joined follows and
+      // carries the remote peer's identity for the directory.
+      ws._msg({ type: 'room_state', participants: [] })
       ws._msg({ type: 'participant.joined', user_id: 'remote-1' })
     })
     return res
@@ -508,21 +545,6 @@ describe('useMeeting — public actions', () => {
     expect(countAfterSecond).toBe(countAfterFirst)
   })
 
-  it('toggleLaser flips isLaserActive and sends laser_stop when deactivating', async () => {
-    const { result, ws } = await joinedMeeting()
-    act(() => result.current.toggleLaser())
-    expect(result.current.isLaserActive).toBe(true)
-    act(() => result.current.toggleLaser())
-    expect(result.current.isLaserActive).toBe(false)
-    expect(ws.send).toHaveBeenCalledWith(expect.stringContaining('"type":"laser_stop"'))
-  })
-
-  it('sendLaserMove sends laser_move via WS', async () => {
-    const { result, ws } = await joinedMeeting()
-    act(() => result.current.sendLaserMove(0.5, 0.3))
-    expect(ws.send).toHaveBeenCalledWith(expect.stringContaining('"type":"laser_move"'))
-  })
-
   it('forceMute sends force_mute via WS', async () => {
     const { result, ws } = await joinedMeeting()
     act(() => result.current.forceMute('user-xyz'))
@@ -539,6 +561,9 @@ describe('useMeeting — WS message handler', () => {
     const { ws } = res
     await act(async () => {
       ws._open()
+      // room_state is the admission signal; participant.joined follows and
+      // carries the remote peer's identity for the directory.
+      ws._msg({ type: 'room_state', participants: [] })
       ws._msg({ type: 'participant.joined', user_id: 'remote-1' })
     })
     return res
@@ -621,50 +646,6 @@ describe('useMeeting — WS message handler', () => {
     expect(result.current.reactionQueue.length).toBe(0)
   })
 
-  it('laser_move updates laserState', async () => {
-    const { result, ws } = await joinedMeeting()
-    await act(async () => {
-      ws._msg({ type: 'laser_move', user_id: 'remote-1', x: 0.3, y: 0.7 })
-    })
-    expect(result.current.laserState).toEqual({ userId: 'remote-1', x: 0.3, y: 0.7 })
-  })
-
-  it('laser_move deactivates local laser when another user takes it', async () => {
-    const { result, ws } = await joinedMeeting()
-    // Activate local laser first
-    act(() => result.current.toggleLaser())
-    expect(result.current.isLaserActive).toBe(true)
-    // Remote user sends laser_move — should deactivate our laser (lines 396-398)
-    await act(async () => {
-      ws._msg({ type: 'laser_move', user_id: 'remote-1', x: 0.5, y: 0.5 })
-    })
-    expect(result.current.isLaserActive).toBe(false)
-  })
-
-  it('laser_stop deactivates local laser when active', async () => {
-    const { result, ws } = await joinedMeeting()
-    // Activate local laser
-    act(() => result.current.toggleLaser())
-    expect(result.current.isLaserActive).toBe(true)
-    // Remote laser_stop — should deactivate our laser (lines 405-407)
-    await act(async () => {
-      ws._msg({ type: 'laser_stop', user_id: 'remote-1' })
-    })
-    expect(result.current.isLaserActive).toBe(false)
-  })
-
-  it('laser_stop clears laserState for that user', async () => {
-    const { result, ws } = await joinedMeeting()
-    await act(async () => {
-      ws._msg({ type: 'laser_move', user_id: 'remote-1', x: 0.5, y: 0.5 })
-    })
-    expect(result.current.laserState).not.toBeNull()
-    await act(async () => {
-      ws._msg({ type: 'laser_stop', user_id: 'remote-1' })
-    })
-    expect(result.current.laserState).toBeNull()
-  })
-
   it('knock.requested adds to knocks list', async () => {
     const { result, ws } = await joinedMeeting()
     await act(async () => {
@@ -732,8 +713,8 @@ describe('useMeeting — WS message handler', () => {
       ws._msg({
         type: 'room_state',
         participants: [
-          { user_id: 'remote-1', audio: true, video: false, hand_raised: true, laser_active: false },
-          { user_id: 'remote-2', audio: false, video: true, hand_raised: false, laser_active: false },
+          { user_id: 'remote-1', audio: true, video: false, hand_raised: true },
+          { user_id: 'remote-2', audio: false, video: true, hand_raised: false },
         ],
       })
     })
@@ -836,27 +817,12 @@ describe('useMeeting — WS message handler', () => {
     const { result, ws } = await renderMeeting()
     await act(async () => {
       ws._open()
-      // Start in waiting_room
-      ws._msg({ type: 'knock.requested', knock_id: 'k1', user_id: 'u1' })
     })
-    expect(result.current.roomState).toBe('waiting_room')
+    expect(result.current.roomState).toBe('connecting')
     await act(async () => {
       ws._msg({ type: 'knock.approved' })
     })
     expect(result.current.roomState).toBe('in_meeting')
-  })
-
-  it('room_state with laser_active sets laserState', async () => {
-    const { result, ws } = await joinedMeeting()
-    await act(async () => {
-      ws._msg({
-        type: 'room_state',
-        participants: [
-          { user_id: 'remote-1', audio: true, video: true, hand_raised: false, laser_active: true },
-        ],
-      })
-    })
-    expect(result.current.laserState).toEqual({ userId: 'remote-1', x: 0, y: 0 })
   })
 
   it('emoji_reaction caps at MAX_ACTIVE_REACTIONS', async () => {
@@ -880,6 +846,9 @@ describe('useMeeting — shareScreen / stopScreenShare', () => {
     const { ws } = res
     await act(async () => {
       ws._open()
+      // room_state is the admission signal; participant.joined follows and
+      // carries the remote peer's identity for the directory.
+      ws._msg({ type: 'room_state', participants: [] })
       ws._msg({ type: 'participant.joined', user_id: 'remote-1' })
     })
     return res
@@ -979,6 +948,9 @@ describe('useMeeting — setBackground', () => {
     const { ws } = res
     await act(async () => {
       ws._open()
+      // room_state is the admission signal; participant.joined follows and
+      // carries the remote peer's identity for the directory.
+      ws._msg({ type: 'room_state', participants: [] })
       ws._msg({ type: 'participant.joined', user_id: 'remote-1' })
     })
     return res
@@ -1094,6 +1066,9 @@ describe('useMeeting — chat', () => {
     const { ws } = res
     await act(async () => {
       ws._open()
+      // room_state is the admission signal; participant.joined follows and
+      // carries the remote peer's identity for the directory.
+      ws._msg({ type: 'room_state', participants: [] })
       ws._msg({ type: 'participant.joined', user_id: 'remote-1' })
     })
     // Let the history-fetch effect flush.
