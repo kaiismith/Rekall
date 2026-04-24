@@ -45,6 +45,8 @@ func newAuthRouter(h *handlers.AuthHandler, authed bool, userID uuid.UUID) *gin.
 		me.Use(middleware.Authenticate(testSecret, testIssuer, zap.NewNop()))
 	}
 	me.GET("/me", h.Me)
+	me.PATCH("/me", h.UpdateMe)
+	me.POST("/password/change", h.ChangePassword)
 
 	return r
 }
@@ -493,3 +495,177 @@ func TestResetPasswordHandler_InvalidToken(t *testing.T) {
 
 	assert.Equal(t, http.StatusBadRequest, w.Code)
 }
+
+// ─── UpdateMe ─────────────────────────────────────────────────────────────────
+
+func TestUpdateMeHandler_Success(t *testing.T) {
+	userID := uuid.New()
+	userRepo := new(mockUserRepo)
+	svc := newAuthService(userRepo, new(mockTokenRepo), new(mockMailer))
+	h := handlers.NewAuthHandler(svc, 7*24*time.Hour, zap.NewNop())
+	r := newAuthRouter(h, true, userID)
+
+	existing := &entities.User{ID: userID, Email: "a@b.com", FullName: "Old Name", Role: "member"}
+	updated := &entities.User{ID: userID, Email: "a@b.com", FullName: "New Name", Role: "member"}
+	userRepo.On("GetByID", mock.Anything, userID).Return(existing, nil)
+	userRepo.On("Update", mock.Anything, mock.AnythingOfType("*entities.User")).Return(updated, nil)
+
+	w := doRequest(r, http.MethodPatch, "/auth/me", jsonBody(t, map[string]string{
+		"full_name": "New Name",
+	}))
+
+	require.Equal(t, http.StatusOK, w.Code)
+	var resp struct {
+		Success bool `json:"success"`
+		Data    struct {
+			FullName string `json:"full_name"`
+			Role     string `json:"role"`
+		} `json:"data"`
+	}
+	require.NoError(t, json.Unmarshal(w.Body.Bytes(), &resp))
+	assert.Equal(t, "New Name", resp.Data.FullName)
+	assert.Equal(t, "member", resp.Data.Role)
+	userRepo.AssertExpectations(t)
+}
+
+func TestUpdateMeHandler_Blank(t *testing.T) {
+	userID := uuid.New()
+	svc := newAuthService(new(mockUserRepo), new(mockTokenRepo), new(mockMailer))
+	h := handlers.NewAuthHandler(svc, 7*24*time.Hour, zap.NewNop())
+	r := newAuthRouter(h, true, userID)
+
+	w := doRequest(r, http.MethodPatch, "/auth/me", jsonBody(t, map[string]string{
+		"full_name": "   ",
+	}))
+	// All-whitespace values are blocked — either by binding (min=1 after binding
+	// sees the raw string) or by the handler's post-trim check.
+	assert.GreaterOrEqual(t, w.Code, http.StatusBadRequest)
+	assert.Less(t, w.Code, http.StatusInternalServerError)
+}
+
+func TestUpdateMeHandler_TooLong(t *testing.T) {
+	userID := uuid.New()
+	svc := newAuthService(new(mockUserRepo), new(mockTokenRepo), new(mockMailer))
+	h := handlers.NewAuthHandler(svc, 7*24*time.Hour, zap.NewNop())
+	r := newAuthRouter(h, true, userID)
+
+	tooLong := ""
+	for i := 0; i < 101; i++ {
+		tooLong += "a"
+	}
+
+	w := doRequest(r, http.MethodPatch, "/auth/me", jsonBody(t, map[string]string{
+		"full_name": tooLong,
+	}))
+	assert.Equal(t, http.StatusUnprocessableEntity, w.Code)
+}
+
+func TestUpdateMeHandler_IgnoresUnknownFields(t *testing.T) {
+	userID := uuid.New()
+	userRepo := new(mockUserRepo)
+	svc := newAuthService(userRepo, new(mockTokenRepo), new(mockMailer))
+	h := handlers.NewAuthHandler(svc, 7*24*time.Hour, zap.NewNop())
+	r := newAuthRouter(h, true, userID)
+
+	existing := &entities.User{ID: userID, Email: "a@b.com", FullName: "Alice", Role: "member"}
+	userRepo.On("GetByID", mock.Anything, userID).Return(existing, nil)
+	userRepo.On("Update", mock.Anything, mock.MatchedBy(func(u *entities.User) bool {
+		// The role must NOT have been changed by the extra "role": "admin" key.
+		return u.Role == "member" && u.FullName == "Carol"
+	})).Return(&entities.User{ID: userID, Email: "a@b.com", FullName: "Carol", Role: "member"}, nil)
+
+	w := doRequest(r, http.MethodPatch, "/auth/me", jsonBody(t, map[string]any{
+		"full_name": "Carol",
+		"role":      "admin",
+		"email":     "root@rekall.io",
+	}))
+	require.Equal(t, http.StatusOK, w.Code)
+	userRepo.AssertExpectations(t)
+}
+
+// ─── ChangePassword ───────────────────────────────────────────────────────────
+
+func TestChangePasswordHandler_Success(t *testing.T) {
+	userID := uuid.New()
+	userRepo := new(mockUserRepo)
+	tokenRepo := new(mockTokenRepo)
+	svc := newAuthService(userRepo, tokenRepo, new(mockMailer))
+	h := handlers.NewAuthHandler(svc, 7*24*time.Hour, zap.NewNop())
+	r := newAuthRouter(h, true, userID)
+
+	currentHash := hashedPassword(t, "Current1!")
+	existing := &entities.User{
+		ID: userID, Email: "a@b.com", FullName: "Alice", Role: "member",
+		PasswordHash: currentHash, EmailVerified: true,
+	}
+	userRepo.On("GetByID", mock.Anything, userID).Return(existing, nil)
+	userRepo.On("UpdatePassword", mock.Anything, userID, mock.AnythingOfType("string")).Return(nil)
+	tokenRepo.On("RevokeAllRefreshTokens", mock.Anything, userID).Return(nil)
+	tokenRepo.On("CreateRefreshToken", mock.Anything, mock.AnythingOfType("*entities.RefreshToken")).Return(nil)
+
+	w := doRequest(r, http.MethodPost, "/auth/password/change", jsonBody(t, map[string]string{
+		"current_password": "Current1!",
+		"new_password":     "Brandnew2@",
+	}))
+
+	require.Equal(t, http.StatusOK, w.Code)
+	var resp struct {
+		Data struct {
+			AccessToken string `json:"access_token"`
+		} `json:"data"`
+	}
+	require.NoError(t, json.Unmarshal(w.Body.Bytes(), &resp))
+	assert.NotEmpty(t, resp.Data.AccessToken)
+	tokenRepo.AssertCalled(t, "RevokeAllRefreshTokens", mock.Anything, userID)
+}
+
+func TestChangePasswordHandler_WrongCurrent(t *testing.T) {
+	userID := uuid.New()
+	userRepo := new(mockUserRepo)
+	svc := newAuthService(userRepo, new(mockTokenRepo), new(mockMailer))
+	h := handlers.NewAuthHandler(svc, 7*24*time.Hour, zap.NewNop())
+	r := newAuthRouter(h, true, userID)
+
+	existing := &entities.User{
+		ID: userID, Email: "a@b.com", FullName: "Alice", Role: "member",
+		PasswordHash: hashedPassword(t, "Current1!"), EmailVerified: true,
+	}
+	userRepo.On("GetByID", mock.Anything, userID).Return(existing, nil)
+
+	w := doRequest(r, http.MethodPost, "/auth/password/change", jsonBody(t, map[string]string{
+		"current_password": "WrongOne1!",
+		"new_password":     "Brandnew2@",
+	}))
+
+	assert.Equal(t, http.StatusBadRequest, w.Code)
+	assert.Contains(t, w.Body.String(), "INVALID_CURRENT_PASSWORD")
+}
+
+func TestChangePasswordHandler_WeakNewPassword(t *testing.T) {
+	userID := uuid.New()
+	svc := newAuthService(new(mockUserRepo), new(mockTokenRepo), new(mockMailer))
+	h := handlers.NewAuthHandler(svc, 7*24*time.Hour, zap.NewNop())
+	r := newAuthRouter(h, true, userID)
+
+	w := doRequest(r, http.MethodPost, "/auth/password/change", jsonBody(t, map[string]string{
+		"current_password": "Current1!",
+		"new_password":     "short",
+	}))
+
+	assert.Equal(t, http.StatusUnprocessableEntity, w.Code)
+}
+
+func TestChangePasswordHandler_Unauthenticated(t *testing.T) {
+	svc := newAuthService(new(mockUserRepo), new(mockTokenRepo), new(mockMailer))
+	h := handlers.NewAuthHandler(svc, 7*24*time.Hour, zap.NewNop())
+	// authed=false → real middleware runs, no bearer in request.
+	r := newAuthRouter(h, false, uuid.Nil)
+
+	req := httptest.NewRequest(http.MethodPost, "/auth/password/change", nil)
+	w := httptest.NewRecorder()
+	r.ServeHTTP(w, req)
+	assert.Equal(t, http.StatusUnauthorized, w.Code)
+}
+
+// Silence unused import warnings if httptest is not otherwise used here.
+var _ = httptest.NewRecorder

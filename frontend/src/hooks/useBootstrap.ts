@@ -1,37 +1,61 @@
 import { useEffect } from 'react'
 import { useAuthStore } from '@/store/authStore'
 import { authService } from '@/services/authService'
+import { ApiError } from '@/services/api'
 
-/**
- * Called once at app startup to restore the auth session.
- * Tries GET /auth/me (which automatically retries with refresh token via the interceptor).
- * Always marks the store as initialised when done so ProtectedRoute can render.
- */
-export function useBootstrap() {
-  const { setAuth, setInitialised, accessToken } = useAuthStore()
+let bootstrapPromise: Promise<void> | null = null
 
-  useEffect(() => {
-    if (accessToken) {
-      // Already have a token in memory — fetch the current user to confirm session.
-      authService
-        .me()
-        .then((user) => setAuth(user, accessToken))
-        .catch(() => {
-          /* interceptor will clear auth on 401 */
-        })
-        .finally(() => setInitialised())
+function isExpectedAuthFailure(err: unknown): boolean {
+  if (err instanceof ApiError) {
+    return err.status === 401 || err.code === 'NETWORK_ERROR' || err.code === 'TIMEOUT'
+  }
+  return false
+}
+
+async function runBootstrap(): Promise<void> {
+  const store = useAuthStore.getState()
+
+  try {
+    if (store.accessToken) {
+      const user = await authService.me()
+      store.setAuth(user, store.accessToken)
       return
     }
 
-    // No in-memory token — attempt a silent refresh using the HttpOnly cookie.
-    authService
-      .refresh()
-      .then(({ access_token }) =>
-        authService.me().then((user) => setAuth(user, access_token)),
-      )
-      .catch(() => {
-        /* No valid session — that's fine */
-      })
-      .finally(() => setInitialised())
-  }, []) // eslint-disable-line react-hooks/exhaustive-deps
+    const { access_token } = await authService.refresh()
+    // Install the token BEFORE calling /me — the axios request interceptor
+    // reads the store at request time, so the token must be in place or the
+    // /me call goes out without an Authorization header and 401s.
+    useAuthStore.setState({ accessToken: access_token })
+    try {
+      const user = await authService.me()
+      store.setAuth(user, access_token)
+    } catch (err) {
+      // Refresh worked but /me failed (transient). Keep the token; pages that
+      // need `user` can handle the null case with their own loading state.
+      console.warn('[bootstrap] refresh succeeded but /me failed:', err)
+    }
+  } catch (err: unknown) {
+    if (!isExpectedAuthFailure(err)) {
+      console.warn('[bootstrap]', err)
+    }
+  } finally {
+    useAuthStore.getState().setInitialised()
+  }
+}
+
+/**
+ * Runs bootstrap once per app session. Guarded at the module level so React
+ * StrictMode's double-invocation in dev does not produce two network calls.
+ * The promise is cleared when it settles so tests that reset the auth store
+ * can trigger a fresh bootstrap on the next mount.
+ */
+export function useBootstrap() {
+  useEffect(() => {
+    if (useAuthStore.getState().isInitialised) return
+    if (bootstrapPromise) return
+    bootstrapPromise = runBootstrap().finally(() => {
+      bootstrapPromise = null
+    })
+  }, [])
 }

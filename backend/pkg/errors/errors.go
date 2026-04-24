@@ -78,6 +78,37 @@ func Conflict(message string) *AppError {
 	}
 }
 
+// Gone creates a 410 AppError with a caller-supplied machine code.
+// Use this for resources that existed but have been permanently retired
+// (e.g. an ended meeting).
+func Gone(code, message string) *AppError {
+	return &AppError{
+		Status:  http.StatusGone,
+		Code:    code,
+		Message: message,
+	}
+}
+
+// Unauthorized with a caller-specified machine code.
+// Useful where the default "UNAUTHORIZED" code is too broad (e.g.
+// TICKET_REQUIRED, TICKET_INVALID, TICKET_MISMATCH).
+func UnauthorizedCode(code, message string) *AppError {
+	return &AppError{
+		Status:  http.StatusUnauthorized,
+		Code:    code,
+		Message: message,
+	}
+}
+
+// NotFoundCode creates a 404 AppError with a caller-specified machine code.
+func NotFoundCode(code, message string) *AppError {
+	return &AppError{
+		Status:  http.StatusNotFound,
+		Code:    code,
+		Message: message,
+	}
+}
+
 // Internal creates a 500 AppError.
 // The raw cause is intentionally NOT exposed in the response; log it separately.
 func Internal(message string) *AppError {

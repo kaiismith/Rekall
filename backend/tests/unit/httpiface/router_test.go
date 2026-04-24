@@ -185,8 +185,7 @@ func TestNewRouter_MeetingHWired_RegistersMeetingRoutes(t *testing.T) {
 	log := zap.NewNop()
 	meetingSvc := services.NewMeetingService(nil, nil, nil, nil, "http://rekall.test", log)
 	manager := wsHub.NewHubManager(nil, log)
-	deps.MeetingH = handlers.NewMeetingHandler(meetingSvc, nil, nil, manager, "http://rekall.test",
-		deps.JWTSecret, deps.JWTIssuer, log)
+	deps.MeetingH = handlers.NewMeetingHandler(meetingSvc, nil, nil, manager, nil, "http://rekall.test", log)
 
 	r := httpiface.NewRouter(deps)
 
