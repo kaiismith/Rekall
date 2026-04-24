@@ -66,17 +66,16 @@ describe('InviteAcceptPage', () => {
 
     renderPage('valid-token', false)
 
-    expect(screen.getByText(/sign in to accept/i)).toBeInTheDocument()
-    expect(screen.getByRole('link', { name: /sign in/i })).toBeInTheDocument()
+    expect(screen.getByRole('heading', { name: /sign in to accept/i })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: /sign in/i })).toBeInTheDocument()
     expect(screen.getByRole('link', { name: /create an account/i })).toBeInTheDocument()
   })
 
-  it('shows info alert explaining login requirement when unauthenticated', () => {
+  it('explains login requirement when unauthenticated', () => {
     useAuthStore.setState({ user: null, accessToken: null, isInitialised: true })
 
     renderPage('valid-token', false)
 
-    expect(screen.getByRole('alert')).toBeInTheDocument()
     expect(screen.getByText(/need to be signed in/i)).toBeInTheDocument()
   })
 
@@ -104,8 +103,8 @@ describe('InviteAcceptPage', () => {
     renderPage('valid-token')
 
     await waitFor(() => {
-      expect(screen.getByText(/welcome aboard/i)).toBeInTheDocument()
-      expect(screen.getByText(/Acme Corp/)).toBeInTheDocument()
+      expect(screen.getByRole('heading', { name: /welcome aboard/i })).toBeInTheDocument()
+      expect(screen.getAllByText(/Acme Corp/).length).toBeGreaterThan(0)
     })
   })
 

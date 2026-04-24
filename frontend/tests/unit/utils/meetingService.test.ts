@@ -62,12 +62,29 @@ describe('meetingService', () => {
     expect(apiClient.delete).toHaveBeenCalledWith('/meetings/abc-defg-hij')
   })
 
-  it('buildWsUrl constructs a URL with the meeting code and token', () => {
-    const url = meetingService.buildWsUrl('abc-defg-hij', 'my-token')
-    expect(url).toContain('/api/v1/meetings/abc-defg-hij/ws')
-    expect(url).toContain('token=my-token')
-    // In test env VITE_API_BASE_URL is undefined so base is /api/v1 (no protocol prefix).
-    // In production it will be a ws:// URL. Just assert the path and token are correct.
+  it('requestWsTicket posts to /meetings/:code/ws-ticket and normalises the payload', async () => {
+    vi.mocked(apiClient.post).mockResolvedValue({
+      data: {
+        success: true,
+        data: {
+          ticket: 'opaque-value',
+          expires_at: '2026-04-23T14:03:17Z',
+          ws_url: '/api/v1/meetings/abc-defg-hij/ws?ticket=opaque-value',
+        },
+      },
+    })
+    const result = await meetingService.requestWsTicket('abc-defg-hij')
+    expect(apiClient.post).toHaveBeenCalledWith('/meetings/abc-defg-hij/ws-ticket')
+    expect(result.ticket).toBe('opaque-value')
+    expect(result.wsUrl).toBe('/api/v1/meetings/abc-defg-hij/ws?ticket=opaque-value')
+    expect(result.expiresAt).toBe(new Date('2026-04-23T14:03:17Z').getTime())
+  })
+
+  it('buildAbsoluteWsUrl prefixes the relative ws_url with the ws:// origin', () => {
+    const url = meetingService.buildAbsoluteWsUrl('/api/v1/meetings/abc-defg-hij/ws?ticket=xxx')
+    expect(url).toContain('/api/v1/meetings/abc-defg-hij/ws?ticket=xxx')
+    // Token must NEVER appear in the WS URL — only the ticket.
+    expect(url).not.toContain('token=')
   })
 
   // ── listMessages ────────────────────────────────────────────────────────────

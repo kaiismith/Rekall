@@ -25,6 +25,10 @@ export const ROUTES = {
   MEETINGS: '/meetings',
   NEW_MEETING: '/meetings/new',
   MEETING_ROOM: '/meeting/:code',
+  // Account
+  PROFILE: '/profile',
+  SETTINGS: '/settings',
+  HELP: '/help',
   NOT_FOUND: '*',
 } as const
 
@@ -44,5 +48,8 @@ export const CALL_STATUS_CONFIG = {
 } as const
 
 /** Sidebar width in pixels. */
-export const SIDEBAR_WIDTH = 240
-export const SIDEBAR_COLLAPSED_WIDTH = 64
+export const SIDEBAR_WIDTH = 260
+export const SIDEBAR_COLLAPSED_WIDTH = 72
+
+/** Minimum meeting-code length accepted by the Join Meeting input. */
+export const MIN_MEETING_CODE_LENGTH = 6

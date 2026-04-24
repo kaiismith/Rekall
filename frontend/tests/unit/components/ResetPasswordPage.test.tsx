@@ -74,7 +74,7 @@ describe('ResetPasswordPage', () => {
     renderPage('good-token')
 
     // heading and submit button share the same text — target the heading role
-    expect(screen.getByRole('heading', { name: /set new password/i })).toBeInTheDocument()
+    expect(screen.getByRole('heading', { name: /set a new password/i })).toBeInTheDocument()
   })
 
   it('renders a password input field', () => {

@@ -35,6 +35,8 @@ import { organizationService } from '@/services/organizationService'
 import { useAuthStore } from '@/store/authStore'
 import { ApiError } from '@/services/api'
 import { ROUTES } from '@/constants'
+import { ConfirmDeleteDialog, GradientButton, PageHeader } from '@/components/common/ui'
+import { tokens } from '@/theme'
 import type { Department } from '@/types/organization'
 
 export function OrgDetailPage() {
@@ -64,6 +66,12 @@ export function OrgDetailPage() {
 
   // Expanded department cards
   const [expandedDepts, setExpandedDepts] = useState<Record<string, boolean>>({})
+
+  // Delete confirmation dialogs
+  const [deleteOrgOpen, setDeleteOrgOpen] = useState(false)
+  const [deleteOrgError, setDeleteOrgError] = useState<string | null>(null)
+  const [deleteDeptTarget, setDeleteDeptTarget] = useState<Department | null>(null)
+  const [deleteDeptError, setDeleteDeptError] = useState<string | null>(null)
 
   const { data: org, isLoading: orgLoading, error: orgError } = useQuery({
     queryKey: ['org', id],
@@ -101,7 +109,13 @@ export function OrgDetailPage() {
 
   const deleteMutation = useMutation({
     mutationFn: () => organizationService.delete(id!),
-    onSuccess: () => navigate(ROUTES.ORGANIZATIONS, { replace: true }),
+    onSuccess: () => {
+      setDeleteOrgOpen(false)
+      navigate(ROUTES.ORGANIZATIONS, { replace: true })
+    },
+    onError: (err) => {
+      setDeleteOrgError(err instanceof ApiError ? err.message : 'Failed to delete organization')
+    },
   })
 
   const createDeptMutation = useMutation({
@@ -119,7 +133,13 @@ export function OrgDetailPage() {
 
   const deleteDeptMutation = useMutation({
     mutationFn: (deptId: string) => organizationService.deleteDepartment(deptId),
-    onSuccess: () => void queryClient.invalidateQueries({ queryKey: ['org-departments', id] }),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ['org-departments', id] })
+      setDeleteDeptTarget(null)
+    },
+    onError: (err) => {
+      setDeleteDeptError(err instanceof ApiError ? err.message : 'Failed to delete department')
+    },
   })
 
   const addDeptMemberMutation = useMutation({
@@ -147,23 +167,27 @@ export function OrgDetailPage() {
 
   return (
     <Box>
-      <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', mb: 3 }}>
-        <Box>
-          <Typography variant="h5" fontWeight={700}>{org.name}</Typography>
-          <Typography variant="body2" color="text.secondary">/{org.slug}</Typography>
-        </Box>
-        {canManage && (
-          <Button startIcon={<PersonAddIcon />} variant="outlined" onClick={() => {
-            setInviteSuccess(false)
-            setInviteError('')
-            setInviteOpen(true)
-          }}>
-            Invite member
-          </Button>
-        )}
-      </Box>
-
-      <Divider sx={{ mb: 3 }} />
+      <PageHeader
+        eyebrow="Organization"
+        title={org.name}
+        subtitle={`/${org.slug}`}
+        actions={
+          canManage ? (
+            <GradientButton
+              size="small"
+              fullWidth={false}
+              startIcon={<PersonAddIcon />}
+              onClick={() => {
+                setInviteSuccess(false)
+                setInviteError('')
+                setInviteOpen(true)
+              }}
+            >
+              Invite member
+            </GradientButton>
+          ) : undefined
+        }
+      />
 
       {/* ── Members ─────────────────────────────────────────────────── */}
       <Typography variant="h6" sx={{ mb: 2 }}>Members</Typography>
@@ -183,7 +207,7 @@ export function OrgDetailPage() {
           <TableBody>
             {members?.map((m) => (
               <TableRow key={m.user_id}>
-                <TableCell sx={{ fontFamily: 'monospace', fontSize: '0.8rem' }}>{m.user_id}</TableCell>
+                <TableCell sx={{ fontFamily: tokens.fonts.mono, fontSize: '0.8rem' }}>{m.user_id}</TableCell>
                 <TableCell sx={{ textTransform: 'capitalize' }}>{m.role}</TableCell>
                 <TableCell>{new Date(m.joined_at).toLocaleDateString()}</TableCell>
                 {canManage && (
@@ -238,9 +262,8 @@ export function OrgDetailPage() {
             expanded={!!expandedDepts[dept.id]}
             onToggle={() => toggleDept(dept.id)}
             onDelete={() => {
-              if (confirm(`Delete department "${dept.name}"? This cannot be undone.`)) {
-                deleteDeptMutation.mutate(dept.id)
-              }
+              setDeleteDeptError(null)
+              setDeleteDeptTarget(dept)
             }}
             onAddMember={() => {
               setAddMemberError('')
@@ -254,15 +277,37 @@ export function OrgDetailPage() {
 
       {/* Danger zone */}
       {isOwner && (
-        <Box sx={{ mt: 6, pt: 3, borderTop: '1px solid', borderColor: 'divider' }}>
-          <Typography variant="h6" color="error" sx={{ mb: 1 }}>Danger zone</Typography>
+        <Box
+          sx={{
+            mt: 6,
+            p: 3,
+            borderRadius: '12px',
+            border: '1px solid rgba(239,68,68,0.25)',
+            bgcolor: 'rgba(239,68,68,0.04)',
+          }}
+        >
+          <Typography
+            variant="overline"
+            sx={{
+              color: '#fca5a5',
+              fontWeight: 700,
+              letterSpacing: '0.12em',
+              display: 'block',
+              mb: 0.5,
+            }}
+          >
+            Danger zone
+          </Typography>
+          <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+            Deleting this organization will permanently remove all members, departments,
+            and related records.
+          </Typography>
           <Button
             variant="outlined"
             color="error"
             onClick={() => {
-              if (confirm(`Delete "${org.name}"? This cannot be undone.`)) {
-                deleteMutation.mutate()
-              }
+              setDeleteOrgError(null)
+              setDeleteOrgOpen(true)
             }}
             disabled={deleteMutation.isPending}
           >
@@ -270,6 +315,44 @@ export function OrgDetailPage() {
           </Button>
         </Box>
       )}
+
+      {/* Typed-confirmation dialogs */}
+      <ConfirmDeleteDialog
+        open={deleteOrgOpen}
+        onClose={() => setDeleteOrgOpen(false)}
+        onConfirm={() => deleteMutation.mutate()}
+        title="Delete organization"
+        entityName={org.name}
+        confirmationValue={org.slug}
+        confirmationLabel="slug"
+        description={`You're about to permanently delete "${org.name}". Other organizations may share this name, so we use the slug to make sure you're deleting the right one.`}
+        consequences={[
+          'Remove all members and their access',
+          'Delete every department and its memberships',
+          'Cancel pending invitations to this organization',
+        ]}
+        confirmLabel="Delete organization"
+        loading={deleteMutation.isPending}
+        error={deleteOrgError}
+      />
+
+      <ConfirmDeleteDialog
+        open={!!deleteDeptTarget}
+        onClose={() => setDeleteDeptTarget(null)}
+        onConfirm={() => deleteDeptTarget && deleteDeptMutation.mutate(deleteDeptTarget.id)}
+        title="Delete department"
+        entityName={deleteDeptTarget?.name ?? ''}
+        confirmationValue={deleteDeptTarget?.id ?? ''}
+        confirmationLabel="department ID"
+        description={`You're about to permanently delete the department "${deleteDeptTarget?.name ?? ''}". Type its ID to confirm — this is unique even if another department shares the same name.`}
+        consequences={[
+          'Remove all department memberships',
+          'This action cannot be undone',
+        ]}
+        confirmLabel="Delete department"
+        loading={deleteDeptMutation.isPending}
+        error={deleteDeptError}
+      />
 
       {/* ── Invite dialog ────────────────────────────────────────────── */}
       <Dialog open={inviteOpen} onClose={() => setInviteOpen(false)} maxWidth="xs" fullWidth>
@@ -461,7 +544,7 @@ function DepartmentCard({ dept, canManage, expanded, onToggle, onDelete, onAddMe
                 <TableBody>
                   {members.map((m) => (
                     <TableRow key={m.user_id}>
-                      <TableCell sx={{ fontFamily: 'monospace', fontSize: '0.8rem' }}>{m.user_id}</TableCell>
+                      <TableCell sx={{ fontFamily: tokens.fonts.mono, fontSize: '0.8rem' }}>{m.user_id}</TableCell>
                       <TableCell>
                         <Chip
                           label={m.role}

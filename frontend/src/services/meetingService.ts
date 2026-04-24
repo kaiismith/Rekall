@@ -85,12 +85,35 @@ export const meetingService = {
   },
 
   /**
-   * Build the WebSocket URL for a meeting. The access token is passed as a
-   * query parameter because WebSocket clients cannot set custom headers.
+   * Request a short-lived, single-use ticket for opening the meeting
+   * signaling WebSocket. The bearer token is attached by the axios request
+   * interceptor; the returned ticket is opaque, carries its own 60-second
+   * TTL, and is consumed atomically on the WS upgrade.
    */
-  buildWsUrl(code: string, accessToken: string): string {
+  async requestWsTicket(
+    code: string,
+  ): Promise<{ ticket: string; wsUrl: string; expiresAt: number }> {
+    const response = await apiClient.post<ApiResponse<{
+      ticket: string
+      expires_at: string
+      ws_url: string
+    }>>(`/meetings/${code}/ws-ticket`)
+    const d = response.data.data
+    return {
+      ticket: d.ticket,
+      wsUrl: d.ws_url,
+      expiresAt: new Date(d.expires_at).getTime(),
+    }
+  },
+
+  /**
+   * Build the absolute WebSocket URL from a server-provided relative `wsUrl`
+   * path (returned by requestWsTicket). The backend returns a path starting
+   * with `/api/v1/…`; we derive the ws:// origin from the configured API base.
+   */
+  buildAbsoluteWsUrl(wsUrl: string): string {
     const apiBase = (import.meta.env['VITE_API_BASE_URL'] as string | undefined) ?? '/api/v1'
-    const wsBase = apiBase.replace(/^http/, 'ws').replace(/\/api\/v1\/?$/, '')
-    return `${wsBase}/api/v1/meetings/${code}/ws?token=${encodeURIComponent(accessToken)}`
+    const origin = apiBase.replace(/^http/, 'ws').replace(/\/api\/v1\/?$/, '')
+    return `${origin}${wsUrl}`
   },
 }

@@ -135,7 +135,7 @@ describe('CallsPage', () => {
       expect(screen.getByText('Title')).toBeInTheDocument()
       expect(screen.getByText('Status')).toBeInTheDocument()
       expect(screen.getByText('Duration')).toBeInTheDocument()
-      expect(screen.getByText('Created At')).toBeInTheDocument()
+      expect(screen.getByRole('columnheader', { name: /created/i })).toBeInTheDocument()
     })
   })
 
