@@ -48,7 +48,7 @@ func newTestDeps(t *testing.T) httpiface.RouterDeps {
 	// Stub services with empty mocks — handlers won't be invoked in router-existence tests.
 	// We just need non-nil handlers so route registration succeeds.
 	authSvc := services.NewAuthService(nil, nil, nil, "secret", "rekall", "http://localhost", 15*time.Minute, 168*time.Hour, time.Hour, 24*time.Hour, log)
-	callSvc := services.NewCallService(nil, log)
+	callSvc := services.NewCallService(nil, nil, nil, log)
 	userSvc := services.NewUserService(nil, log)
 	orgSvc := services.NewOrganizationService(nil, nil, nil, nil, nil, "http://localhost", 48*time.Hour, log)
 	deptSvc := services.NewDepartmentService(nil, nil, nil, log)

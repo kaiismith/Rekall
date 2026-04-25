@@ -158,7 +158,7 @@ func main() {
 	)
 
 	// ── Services ─────────────────────────────────────────────────────────────
-	callSvc := services.NewCallService(callRepo, log)
+	callSvc := services.NewCallService(callRepo, memberRepo, deptMemberRepo, log)
 	userSvc := services.NewUserService(userRepo, log)
 	authSvc := services.NewAuthService(
 		userRepo,

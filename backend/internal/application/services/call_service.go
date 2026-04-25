@@ -15,25 +15,40 @@ import (
 
 // CallService orchestrates business logic for call management.
 type CallService struct {
-	callRepo ports.CallRepository
-	logger   *zap.Logger
+	callRepo       ports.CallRepository
+	orgMemberRepo  ports.OrgMembershipRepository
+	deptMemberRepo ports.DepartmentMembershipRepository
+	logger         *zap.Logger
 }
 
 // NewCallService creates a CallService with its required dependencies.
 // The logger is tagged with component="call_service" so every log line emitted
 // here is automatically identified without repeating the tag at each call site.
-func NewCallService(callRepo ports.CallRepository, logger *zap.Logger) *CallService {
+//
+// orgMemberRepo and deptMemberRepo may be nil in test setups that do not
+// exercise scoped calls — scope validation short-circuits when the relevant
+// repo is absent and scope is not requested.
+func NewCallService(
+	callRepo ports.CallRepository,
+	orgMemberRepo ports.OrgMembershipRepository,
+	deptMemberRepo ports.DepartmentMembershipRepository,
+	logger *zap.Logger,
+) *CallService {
 	return &CallService{
-		callRepo: callRepo,
-		logger:   applogger.WithComponent(logger, "call_service"),
+		callRepo:       callRepo,
+		orgMemberRepo:  orgMemberRepo,
+		deptMemberRepo: deptMemberRepo,
+		logger:         applogger.WithComponent(logger, "call_service"),
 	}
 }
 
 // CreateCallInput holds the data required to create a new call record.
 type CreateCallInput struct {
-	UserID   uuid.UUID
-	Title    string
-	Metadata map[string]interface{}
+	UserID    uuid.UUID
+	Title     string
+	Metadata  map[string]interface{}
+	ScopeType string // "organization" | "department" | ""
+	ScopeID   *uuid.UUID
 }
 
 // UpdateCallInput holds the fields that may be updated on an existing call.
@@ -66,6 +81,17 @@ func (s *CallService) CreateCall(ctx context.Context, input CreateCallInput) (*e
 		input.Metadata = map[string]interface{}{}
 	}
 
+	// Scope coherence: both fields set or both empty; scope membership enforced.
+	scopeSet := input.ScopeType != "" || input.ScopeID != nil
+	if scopeSet {
+		if input.ScopeType == "" || input.ScopeID == nil {
+			return nil, apperr.BadRequest("scope_type and scope_id must be provided together")
+		}
+		if err := s.assertCallScopeMember(ctx, input.ScopeType, *input.ScopeID, input.UserID); err != nil {
+			return nil, err
+		}
+	}
+
 	now := time.Now().UTC()
 	call := &entities.Call{
 		ID:        uuid.New(),
@@ -75,6 +101,11 @@ func (s *CallService) CreateCall(ctx context.Context, input CreateCallInput) (*e
 		Metadata:  input.Metadata,
 		CreatedAt: now,
 		UpdatedAt: now,
+	}
+	if scopeSet {
+		scopeType := input.ScopeType
+		call.ScopeType = &scopeType
+		call.ScopeID = input.ScopeID
 	}
 
 	created, err := s.callRepo.Create(ctx, call)
@@ -121,11 +152,35 @@ func (s *CallService) GetCall(ctx context.Context, id uuid.UUID) (*entities.Call
 }
 
 // ListCalls returns a paginated list of calls, optionally filtered.
+//
+// When filter.Scope is non-nil and requests an org/dept slice, the caller must
+// be a member — enforcement is layered on here so handlers do not need to
+// duplicate the check.
 func (s *CallService) ListCalls(
 	ctx context.Context,
+	callerID uuid.UUID,
 	filter ports.ListCallsFilter,
 	page, perPage int,
 ) ([]*entities.Call, int, error) {
+	if filter.Scope != nil {
+		switch filter.Scope.Kind {
+		case ports.ScopeKindOrganization:
+			if err := s.assertCallScopeMember(ctx, "organization", filter.Scope.ID, callerID); err != nil {
+				return nil, 0, err
+			}
+		case ports.ScopeKindDepartment:
+			if err := s.assertCallScopeMember(ctx, "department", filter.Scope.ID, callerID); err != nil {
+				return nil, 0, err
+			}
+		case ports.ScopeKindOpen:
+			// Open-scope visibility is caller-owned: constrain by user_id so a
+			// user never sees another user's open items through a scope=open
+			// filter.
+			cid := callerID
+			filter.UserID = &cid
+		}
+	}
+
 	calls, total, err := s.callRepo.List(ctx, filter, page, perPage)
 	if err != nil {
 		catalog.CallListFailed.Error(s.logger,
@@ -143,6 +198,52 @@ func (s *CallService) ListCalls(
 		zap.Int("per_page", perPage),
 	)
 	return calls, total, nil
+}
+
+// assertCallScopeMember confirms that userID is a member of the scope
+// (organization or department) identified by scopeType/scopeID. Returns
+// apperr.Forbidden when the user is not a member, or an Internal error if
+// the lookup itself fails.
+func (s *CallService) assertCallScopeMember(
+	ctx context.Context,
+	scopeType string,
+	scopeID uuid.UUID,
+	userID uuid.UUID,
+) error {
+	switch scopeType {
+	case "organization":
+		if s.orgMemberRepo == nil {
+			return apperr.Internal("organization membership lookup unavailable")
+		}
+		mem, err := s.orgMemberRepo.GetByOrgAndUser(ctx, scopeID, userID)
+		if err != nil {
+			if apperr.IsNotFound(err) {
+				return apperr.Forbidden("caller is not a member of the organization")
+			}
+			return apperr.Internal("failed to verify organization membership")
+		}
+		if mem == nil {
+			return apperr.Forbidden("caller is not a member of the organization")
+		}
+		return nil
+	case "department":
+		if s.deptMemberRepo == nil {
+			return apperr.Internal("department membership lookup unavailable")
+		}
+		mem, err := s.deptMemberRepo.GetByDeptAndUser(ctx, scopeID, userID)
+		if err != nil {
+			if apperr.IsNotFound(err) {
+				return apperr.Forbidden("caller is not a member of the department")
+			}
+			return apperr.Internal("failed to verify department membership")
+		}
+		if mem == nil {
+			return apperr.Forbidden("caller is not a member of the department")
+		}
+		return nil
+	default:
+		return apperr.BadRequest("scope_type must be 'organization' or 'department'")
+	}
 }
 
 // UpdateCall applies a partial update to an existing call.

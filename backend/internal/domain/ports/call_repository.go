@@ -11,6 +11,9 @@ import (
 type ListCallsFilter struct {
 	UserID *uuid.UUID
 	Status *string
+	// Scope, when non-nil, restricts the result to calls matching the given
+	// scope. Nil preserves the caller's default visibility (owner-only).
+	Scope *ScopeFilter
 }
 
 // CallRepository defines the contract for call persistence operations.

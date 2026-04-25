@@ -52,7 +52,7 @@ func (m *mockCallRepo) SoftDelete(ctx context.Context, id uuid.UUID) error {
 // ─── Helper ───────────────────────────────────────────────────────────────────
 
 func newTestCallService(repo *mockCallRepo) *services.CallService {
-	return services.NewCallService(repo, zap.NewNop())
+	return services.NewCallService(repo, nil, nil, zap.NewNop())
 }
 
 func pendingCall(userID uuid.UUID) *entities.Call {
@@ -197,7 +197,7 @@ func TestListCalls_ReturnsPage(t *testing.T) {
 
 	repo.On("List", ctx, filter, 1, 20).Return(calls, 2, nil)
 
-	result, total, err := svc.ListCalls(ctx, filter, 1, 20)
+	result, total, err := svc.ListCalls(ctx, uuid.New(), filter, 1, 20)
 
 	require.NoError(t, err)
 	assert.Len(t, result, 2)
@@ -212,7 +212,7 @@ func TestListCalls_RepoError(t *testing.T) {
 	filter := ports.ListCallsFilter{}
 	repo.On("List", ctx, filter, 1, 20).Return([]*entities.Call(nil), 0, assert.AnError)
 
-	_, _, err := svc.ListCalls(ctx, filter, 1, 20)
+	_, _, err := svc.ListCalls(ctx, uuid.New(), filter, 1, 20)
 	require.Error(t, err)
 }
 
@@ -224,7 +224,7 @@ func TestListCalls_EmptyResult(t *testing.T) {
 	filter := ports.ListCallsFilter{}
 	repo.On("List", ctx, filter, 1, 20).Return([]*entities.Call{}, 0, nil)
 
-	result, total, err := svc.ListCalls(ctx, filter, 1, 20)
+	result, total, err := svc.ListCalls(ctx, uuid.New(), filter, 1, 20)
 
 	require.NoError(t, err)
 	assert.Empty(t, result)

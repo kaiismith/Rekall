@@ -54,6 +54,10 @@ type Call struct {
 	RecordingURL *string    `gorm:"column:recording_url"                             json:"recording_url,omitempty"`
 	Transcript   *string    `gorm:"type:text"                                        json:"transcript,omitempty"`
 	Metadata     JSONMap    `gorm:"type:jsonb;not null;default:'{}'"                 json:"metadata"`
+	// Scope attaches this call to an organization or department. NULL on both
+	// means the call is an Open Item — not attached to any team.
+	ScopeType    *string    `gorm:"column:scope_type"                                json:"scope_type,omitempty"`
+	ScopeID      *uuid.UUID `gorm:"type:uuid;column:scope_id"                        json:"scope_id,omitempty"`
 	StartedAt    *time.Time `gorm:"column:started_at"                                json:"started_at,omitempty"`
 	EndedAt      *time.Time `gorm:"column:ended_at"                                  json:"ended_at,omitempty"`
 	CreatedAt    time.Time  `gorm:"autoCreateTime"                                   json:"created_at"`
