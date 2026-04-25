@@ -55,14 +55,34 @@ func NewOrganizationService(
 	}
 }
 
-// CreateOrganization creates a new org and adds the caller as its owner.
-func (s *OrganizationService) CreateOrganization(ctx context.Context, ownerID uuid.UUID, name string) (*entities.Organization, error) {
+// CreateOrganization creates a new org and adds the designated owner as a
+// member with role="owner". When ownerEmail is the empty string, the caller
+// (callerID) becomes the owner — admin self-service path. When ownerEmail is
+// supplied (platform admin creating on behalf of another user), the org's
+// OwnerID is resolved from that email instead. Unknown emails return 422.
+func (s *OrganizationService) CreateOrganization(
+	ctx context.Context,
+	callerID uuid.UUID,
+	name, ownerEmail string,
+) (*entities.Organization, error) {
 	name = strings.TrimSpace(name)
 	if name == "" {
 		return nil, apperr.Unprocessable("organization name is required", nil)
 	}
 	if len(name) > 100 {
 		return nil, apperr.Unprocessable("organization name must be 100 characters or fewer", nil)
+	}
+
+	ownerID := callerID
+	if ownerEmail != "" {
+		owner, err := s.userRepo.GetByEmail(ctx, strings.ToLower(strings.TrimSpace(ownerEmail)))
+		if err != nil {
+			if apperr.IsNotFound(err) {
+				return nil, apperr.Unprocessable("owner_email: no user with that email", nil)
+			}
+			return nil, apperr.Internal("failed to resolve owner_email")
+		}
+		ownerID = owner.ID
 	}
 
 	slug := apputils.GenerateSlug(name)
@@ -87,7 +107,7 @@ func (s *OrganizationService) CreateOrganization(ctx context.Context, ownerID uu
 		return nil, apperr.Internal("failed to create organization")
 	}
 
-	// Add the creator as owner-level member.
+	// Add the designated owner as owner-level member.
 	membership := &entities.OrgMembership{
 		ID:       uuid.New(),
 		OrgID:    created.ID,
@@ -107,6 +127,7 @@ func (s *OrganizationService) CreateOrganization(ctx context.Context, ownerID uu
 	catalog.OrgCreated.Info(s.logger,
 		zap.String("org_id", created.ID.String()),
 		zap.String("owner_id", ownerID.String()),
+		zap.String("created_by", callerID.String()),
 	)
 	return created, nil
 }

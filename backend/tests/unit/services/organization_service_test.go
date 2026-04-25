@@ -141,7 +141,7 @@ func TestCreateOrganization_Success(t *testing.T) {
 	orgRepo.On("Create", ctx, mock.AnythingOfType("*entities.Organization")).Return(created, nil)
 	memberRepo.On("Create", ctx, mock.AnythingOfType("*entities.OrgMembership")).Return(nil)
 
-	o, err := svc.CreateOrganization(ctx, ownerID, "Acme Corp")
+	o, err := svc.CreateOrganization(ctx, ownerID, "Acme Corp", "")
 
 	require.NoError(t, err)
 	assert.Equal(t, "Acme Corp", o.Name)
@@ -151,7 +151,7 @@ func TestCreateOrganization_Success(t *testing.T) {
 func TestCreateOrganization_EmptyName(t *testing.T) {
 	svc := newOrgService(new(mockOrgRepo), new(mockMemberRepo), new(mockInviteRepo), new(mockUserRepo), new(mockMailer))
 
-	_, err := svc.CreateOrganization(context.Background(), uuid.New(), "")
+	_, err := svc.CreateOrganization(context.Background(), uuid.New(), "", "")
 
 	require.Error(t, err)
 	appErr, ok := apperr.AsAppError(err)
@@ -166,7 +166,7 @@ func TestCreateOrganization_NameTooLong(t *testing.T) {
 		longName[i] = 'a'
 	}
 
-	_, err := svc.CreateOrganization(context.Background(), uuid.New(), string(longName))
+	_, err := svc.CreateOrganization(context.Background(), uuid.New(), string(longName), "")
 	require.Error(t, err)
 	appErr, ok := apperr.AsAppError(err)
 	require.True(t, ok)
@@ -180,7 +180,7 @@ func TestCreateOrganization_RepoCreateError(t *testing.T) {
 	orgRepo.On("GetBySlug", mock.Anything, mock.Anything).Return(nil, apperr.NotFound("Organization", "x"))
 	orgRepo.On("Create", mock.Anything, mock.AnythingOfType("*entities.Organization")).Return(nil, assert.AnError)
 
-	_, err := svc.CreateOrganization(context.Background(), uuid.New(), "Acme")
+	_, err := svc.CreateOrganization(context.Background(), uuid.New(), "Acme", "")
 	require.Error(t, err)
 	appErr, ok := apperr.AsAppError(err)
 	require.True(t, ok)
@@ -201,7 +201,7 @@ func TestCreateOrganization_MembershipFailure_StillSucceeds(t *testing.T) {
 	}, nil)
 	memberRepo.On("Create", mock.Anything, mock.AnythingOfType("*entities.OrgMembership")).Return(assert.AnError)
 
-	org, err := svc.CreateOrganization(context.Background(), uuid.New(), "Acme")
+	org, err := svc.CreateOrganization(context.Background(), uuid.New(), "Acme", "")
 	require.NoError(t, err)
 	assert.Equal(t, orgID, org.ID)
 }
@@ -221,7 +221,7 @@ func TestCreateOrganization_SlugCollision(t *testing.T) {
 	orgRepo.On("Create", ctx, mock.AnythingOfType("*entities.Organization")).Return(unique, nil)
 	memberRepo.On("Create", ctx, mock.AnythingOfType("*entities.OrgMembership")).Return(nil)
 
-	o, err := svc.CreateOrganization(ctx, ownerID, "Acme Corp")
+	o, err := svc.CreateOrganization(ctx, ownerID, "Acme Corp", "")
 
 	require.NoError(t, err)
 	assert.Equal(t, "acme-corp-2", o.Slug)

@@ -34,4 +34,14 @@ type UserRepository interface {
 
 	// UpdatePassword replaces the stored password hash for the given user.
 	UpdatePassword(ctx context.Context, id uuid.UUID, hash string) error
+
+	// SetRoleByEmail sets the platform-level role on the user with the given
+	// email. No-op if the email is unknown. Used by the AdminReconciler.
+	SetRoleByEmail(ctx context.Context, email, role string) error
+
+	// DemoteAdminsExcept downgrades every user currently with role="admin"
+	// whose email is NOT in the keepEmails set back to role="member". The
+	// AdminReconciler calls this so the env var stays authoritative across
+	// boots.
+	DemoteAdminsExcept(ctx context.Context, keepEmails []string) (int, error)
 }

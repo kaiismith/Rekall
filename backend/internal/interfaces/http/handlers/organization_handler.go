@@ -84,7 +84,7 @@ func (h *OrganizationHandler) Create(c *gin.Context) {
 		return
 	}
 
-	org, err := h.service.CreateOrganization(c.Request.Context(), userID, req.Name)
+	org, err := h.service.CreateOrganization(c.Request.Context(), userID, req.Name, req.OwnerEmail)
 	if err != nil {
 		handlerhelpers.RespondError(c, h.logger, err)
 		return

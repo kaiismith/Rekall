@@ -135,6 +135,13 @@ func (m *mockUserRepo) SetEmailVerified(ctx context.Context, id uuid.UUID, v boo
 func (m *mockUserRepo) UpdatePassword(ctx context.Context, id uuid.UUID, hash string) error {
 	return m.Called(ctx, id, hash).Error(0)
 }
+func (m *mockUserRepo) SetRoleByEmail(ctx context.Context, email, role string) error {
+	return m.Called(ctx, email, role).Error(0)
+}
+func (m *mockUserRepo) DemoteAdminsExcept(ctx context.Context, keep []string) (int, error) {
+	args := m.Called(ctx, keep)
+	return args.Int(0), args.Error(1)
+}
 
 // ─── Mock: TokenRepository ────────────────────────────────────────────────────
 

@@ -40,6 +40,17 @@ type AuthConfig struct {
 	PasswordResetTTL time.Duration
 	EmailVerifyTTL   time.Duration
 	InvitationTTL    time.Duration
+
+	// PlatformAdminEmails is a list of lowercased emails that should be granted
+	// the platform-level "admin" role on each server boot. The reconciler also
+	// demotes any existing admins whose email is no longer in this list — so
+	// the env var is the source of truth.
+	PlatformAdminEmails []string
+	// PlatformAdminBootstrapPwd, when non-empty, is used to first-run-create
+	// any admin email that does not yet have a User record. Subsequent boots
+	// do NOT re-apply the password — rotation goes through the standard reset
+	// flow.
+	PlatformAdminBootstrapPwd string
 }
 
 // SMTPConfig holds outgoing mail settings.
@@ -192,14 +203,16 @@ func Load() (*Config, error) {
 			AllowedOrigins: splitCSV(viper.GetString("CORS_ALLOWED_ORIGINS")),
 		},
 		Auth: AuthConfig{
-			JWTSecret:        viper.GetString("JWT_SECRET"),
-			JWTIssuer:        viper.GetString("JWT_ISSUER"),
-			AppBaseURL:       viper.GetString("APP_BASE_URL"),
-			AccessTokenTTL:   accessTTL,
-			RefreshTokenTTL:  refreshTTL,
-			PasswordResetTTL: resetTTL,
-			EmailVerifyTTL:   verifyTTL,
-			InvitationTTL:    inviteTTL,
+			JWTSecret:                 viper.GetString("JWT_SECRET"),
+			JWTIssuer:                 viper.GetString("JWT_ISSUER"),
+			AppBaseURL:                viper.GetString("APP_BASE_URL"),
+			AccessTokenTTL:            accessTTL,
+			RefreshTokenTTL:           refreshTTL,
+			PasswordResetTTL:          resetTTL,
+			EmailVerifyTTL:            verifyTTL,
+			InvitationTTL:             inviteTTL,
+			PlatformAdminEmails:       parseAdminEmails(viper.GetString("PLATFORM_ADMIN_EMAILS")),
+			PlatformAdminBootstrapPwd: viper.GetString("PLATFORM_ADMIN_BOOTSTRAP_PASSWORD"),
 		},
 		SMTP: SMTPConfig{
 			Host:     viper.GetString("SMTP_HOST"),
@@ -273,4 +286,27 @@ func splitCSV(s string) []string {
 		}
 	}
 	return result
+}
+
+// parseAdminEmails parses the comma-separated PLATFORM_ADMIN_EMAILS value into
+// a deduplicated, trimmed, lowercased list. Empty input yields an empty slice
+// (no admins). The reconciler treats this slice as the source of truth — any
+// user whose email is in it gets role=admin on boot, and any current admin
+// whose email is NOT in it gets demoted to member.
+func parseAdminEmails(s string) []string {
+	parts := strings.Split(s, ",")
+	seen := make(map[string]struct{}, len(parts))
+	out := make([]string, 0, len(parts))
+	for _, p := range parts {
+		e := strings.ToLower(strings.TrimSpace(p))
+		if e == "" {
+			continue
+		}
+		if _, dup := seen[e]; dup {
+			continue
+		}
+		seen[e] = struct{}{}
+		out = append(out, e)
+	}
+	return out
 }

@@ -24,13 +24,18 @@ import { ApiError } from '@/services/api'
 import { ROUTES } from '@/constants'
 import { EmptyState, GradientButton, PageHeader } from '@/components/common/ui'
 import { tokens } from '@/theme'
+import { useAuthStore } from '@/store/authStore'
+import { canCreateOrg } from '@/utils/permissions'
 
 export function OrganizationsPage() {
   const navigate = useNavigate()
   const queryClient = useQueryClient()
+  const user = useAuthStore((s) => s.user)
+  const adminCanCreate = canCreateOrg(user)
 
   const [createOpen, setCreateOpen] = useState(false)
   const [name, setName] = useState('')
+  const [ownerEmail, setOwnerEmail] = useState('')
   const [createError, setCreateError] = useState('')
 
   const { data: orgs, isLoading, error } = useQuery({
@@ -39,11 +44,13 @@ export function OrganizationsPage() {
   })
 
   const createMutation = useMutation({
-    mutationFn: (orgName: string) => organizationService.create({ name: orgName }),
+    mutationFn: (input: { name: string; owner_email?: string }) =>
+      organizationService.create(input),
     onSuccess: (org) => {
       void queryClient.invalidateQueries({ queryKey: ['organizations'] })
       setCreateOpen(false)
       setName('')
+      setOwnerEmail('')
       navigate(ROUTES.ORG_DETAIL.replace(':id', org.id))
     },
     onError: (err) => {
@@ -53,7 +60,9 @@ export function OrganizationsPage() {
 
   const handleCreate = () => {
     setCreateError('')
-    createMutation.mutate(name)
+    createMutation.mutate(
+      ownerEmail ? { name, owner_email: ownerEmail } : { name },
+    )
   }
 
   const openDialog = () => {
@@ -69,14 +78,16 @@ export function OrganizationsPage() {
         title="Organizations"
         subtitle="Workspaces you belong to. Manage members, departments, and invitations."
         actions={
-          <GradientButton
-            size="small"
-            fullWidth={false}
-            startIcon={<AddIcon />}
-            onClick={openDialog}
-          >
-            New organization
-          </GradientButton>
+          adminCanCreate ? (
+            <GradientButton
+              size="small"
+              fullWidth={false}
+              startIcon={<AddIcon />}
+              onClick={openDialog}
+            >
+              New organization
+            </GradientButton>
+          ) : null
         }
       />
 
@@ -92,15 +103,21 @@ export function OrganizationsPage() {
         <EmptyState
           icon={<ApartmentOutlinedIcon />}
           title="No organizations yet"
-          description="Create an organization to invite teammates, manage departments, and scope private meetings."
+          description={
+            adminCanCreate
+              ? 'Create an organization to invite teammates, manage departments, and scope private meetings.'
+              : 'Contact your administrator to be added to an organization.'
+          }
           action={
-            <GradientButton
-              fullWidth={false}
-              startIcon={<AddIcon />}
-              onClick={openDialog}
-            >
-              Create an organization
-            </GradientButton>
+            adminCanCreate ? (
+              <GradientButton
+                fullWidth={false}
+                startIcon={<AddIcon />}
+                onClick={openDialog}
+              >
+                Create an organization
+              </GradientButton>
+            ) : null
           }
         />
       )}
@@ -181,6 +198,14 @@ export function OrganizationsPage() {
             fullWidth
             autoFocus
             onKeyDown={(e) => e.key === 'Enter' && handleCreate()}
+          />
+          <TextField
+            label="Owner email (optional)"
+            value={ownerEmail}
+            onChange={(e) => setOwnerEmail(e.target.value)}
+            type="email"
+            fullWidth
+            helperText="Leave blank to keep yourself as owner. Otherwise, the named user becomes the org's owner."
           />
         </DialogContent>
         <DialogActions sx={{ px: 3, pb: 2 }}>

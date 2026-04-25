@@ -19,6 +19,8 @@ export interface OrgMember {
 /** Body for POST /organizations. */
 export interface CreateOrgPayload {
   name: string
+  /** Set by platform admins creating on behalf of another user. */
+  owner_email?: string
 }
 
 /** Body for PATCH /organizations/:id. */

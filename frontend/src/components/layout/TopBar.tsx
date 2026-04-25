@@ -22,6 +22,7 @@ import { useUIStore } from '@/store/uiStore'
 import { useAuthStore } from '@/store/authStore'
 import { authService } from '@/services/authService'
 import { tokens } from '@/theme'
+import { OrgSwitcher } from '@/components/common/ui'
 
 function initialsFromName(name?: string): string {
   if (!name) return 'U'
@@ -95,6 +96,8 @@ export function TopBar() {
 
         {/* Spacer */}
         <Box flexGrow={1} />
+
+        <OrgSwitcher />
 
         <Tooltip title="Notifications">
           <IconButton size="small" sx={{ color: 'text.secondary' }}>
