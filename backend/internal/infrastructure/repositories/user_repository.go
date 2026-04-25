@@ -112,3 +112,31 @@ func (r *UserRepository) UpdatePassword(ctx context.Context, id uuid.UUID, hash 
 		Where("id = ?", id).
 		Update("password_hash", hash).Error
 }
+
+// SetRoleByEmail sets the role column for the user with the given email.
+// No rows are affected when the email is unknown — the caller treats that as
+// a no-op (the AdminReconciler will then bootstrap-create the user if a
+// password was supplied).
+func (r *UserRepository) SetRoleByEmail(ctx context.Context, email, role string) error {
+	return r.db.WithContext(ctx).
+		Model(&entities.User{}).
+		Where("email = ?", email).
+		Update("role", role).Error
+}
+
+// DemoteAdminsExcept downgrades every current admin whose email is NOT in
+// keepEmails to role="member". Returns the count of demoted users.
+//
+// keepEmails is matched case-insensitively (the env var is lowercased on
+// load); this method does not lowercase incoming user.email so callers MUST
+// store emails canonical-lowercased — which the auth service already does.
+func (r *UserRepository) DemoteAdminsExcept(ctx context.Context, keepEmails []string) (int, error) {
+	q := r.db.WithContext(ctx).
+		Model(&entities.User{}).
+		Where("role = ?", "admin")
+	if len(keepEmails) > 0 {
+		q = q.Where("email NOT IN ?", keepEmails)
+	}
+	res := q.Update("role", "member")
+	return int(res.RowsAffected), res.Error
+}

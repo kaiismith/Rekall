@@ -1,5 +1,5 @@
-import { useCallback, useEffect, useState } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useNavigate, useSearchParams } from 'react-router-dom'
 import {
   Alert,
   Box,
@@ -8,10 +8,12 @@ import {
   DialogActions,
   DialogContent,
   DialogTitle,
+  FormControlLabel,
   InputAdornment,
   MenuItem,
   Select,
   Stack,
+  Switch,
   TextField,
   Typography,
 } from '@mui/material'
@@ -21,6 +23,8 @@ import WarningAmberRoundedIcon from '@mui/icons-material/WarningAmberRounded'
 import { meetingService } from '@/services/meetingService'
 import { MIN_MEETING_CODE_LENGTH, ROUTES } from '@/constants'
 import { useUIPreferencesStore } from '@/store/uiPreferencesStore'
+import { useOrgsStore } from '@/store/orgsStore'
+import { useDeptsStore } from '@/store/deptsStore'
 import { ApiError } from '@/services/api'
 import {
   ActionCard,
@@ -28,8 +32,11 @@ import {
   GradientButton,
   HeroHeader,
   OrDivider,
+  ScopePicker,
   ShortcutHint,
 } from '@/components/common/ui'
+import type { Scope } from '@/types/scope'
+import { parseScopeFromUrl } from '@/utils/scope'
 
 type TranscriptLanguage = 'en' | 'es' | 'fr' | 'de' | 'ja' | 'zh'
 
@@ -51,18 +58,50 @@ interface CreateError {
 
 export function NewMeetingPage() {
   const navigate = useNavigate()
+  const [searchParams] = useSearchParams()
   const keyboardShortcutsEnabled = useUIPreferencesStore((s) => s.keyboardShortcutsEnabled)
   const [transcriptLanguage, setTranscriptLanguage] = useState<TranscriptLanguage>('en')
   const [code, setCode] = useState('')
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<CreateError | null>(null)
 
+  // Scope picker — pre-fills from `?scope=` (set by scoped Meetings pages'
+  // "New Meeting" button). Defaults to null (Personal/open).
+  const initialScope = useMemo(() => parseScopeFromUrl(searchParams), [searchParams])
+  const [scope, setScope] = useState<Scope | null>(initialScope)
+  const [isPrivate, setIsPrivate] = useState(false)
+
+  // Hide the picker entirely when the user has zero orgs — there is nothing
+  // for them to pick.
+  const orgs = useOrgsStore((s) => s.orgs)
+  const loadOrgs = useOrgsStore((s) => s.load)
+  const ensureDeptsLoaded = useDeptsStore((s) => s.ensureLoaded)
+  useEffect(() => {
+    if (orgs === null) void loadOrgs()
+  }, [orgs, loadOrgs])
+  useEffect(() => {
+    if (initialScope?.type === 'department') void ensureDeptsLoaded(initialScope.orgId)
+  }, [initialScope, ensureDeptsLoaded])
+
+  const showScopePicker = (orgs?.length ?? 0) > 0
+
   const handleCreate = useCallback(async () => {
     if (loading) return
     setError(null)
     setLoading(true)
     try {
-      const res = await meetingService.create({ title: '', type: 'open' })
+      const payload: Parameters<typeof meetingService.create>[0] = {
+        title: '',
+        type: scope && isPrivate ? 'private' : 'open',
+      }
+      if (scope?.type === 'organization') {
+        payload.scope_type = 'organization'
+        payload.scope_id = scope.id
+      } else if (scope?.type === 'department') {
+        payload.scope_type = 'department'
+        payload.scope_id = scope.id
+      }
+      const res = await meetingService.create(payload)
       navigate(`/meeting/${res.data.code}`)
     } catch (e: unknown) {
       // Map known server errors to friendly modals; fall back to a generic
@@ -94,7 +133,7 @@ export function NewMeetingPage() {
     } finally {
       setLoading(false)
     }
-  }, [navigate, loading])
+  }, [navigate, loading, scope, isPrivate])
 
   // Ctrl/⌘ + Shift + C shortcut — create a meeting from anywhere on this page.
   // Gated on the user's UI preference so it can be disabled from Settings.
@@ -150,6 +189,31 @@ export function NewMeetingPage() {
 
           <ActionCard>
             <Stack spacing={2}>
+              {showScopePicker && (
+                <Stack spacing={1}>
+                  <Typography variant="body2" color="text.secondary">
+                    Scope
+                  </Typography>
+                  <ScopePicker value={scope} onChange={setScope} />
+                  {scope && (scope.type === 'organization' || scope.type === 'department') && (
+                    <FormControlLabel
+                      control={
+                        <Switch
+                          size="small"
+                          checked={isPrivate}
+                          onChange={(_, v) => setIsPrivate(v)}
+                        />
+                      }
+                      label={
+                        <Typography variant="body2" color="text.secondary">
+                          Private (members of this scope only)
+                        </Typography>
+                      }
+                    />
+                  )}
+                </Stack>
+              )}
+
               <Typography variant="body2" color="text.secondary">
                 Transcript language
               </Typography>

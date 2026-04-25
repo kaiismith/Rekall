@@ -209,6 +209,19 @@ func main() {
 		log,
 	)
 
+	// ── Platform admin reconciliation ────────────────────────────────────────
+	// Runs once before the HTTP server is brought up so listed admins are
+	// promoted (and stale admins demoted) atomically with each deploy.
+	adminReconciler := services.NewAdminReconciler(
+		userRepo,
+		cfg.Auth.PlatformAdminEmails,
+		cfg.Auth.PlatformAdminBootstrapPwd,
+		log,
+	)
+	if _, err := adminReconciler.Reconcile(context.Background()); err != nil {
+		log.Warn("platform admin reconciliation failed", zap.Error(err))
+	}
+
 	// ── WebSocket Hub Manager ─────────────────────────────────────────────────
 	hubManager := wsHub.NewHubManager(meetingMessageRepo, log)
 	defer hubManager.Shutdown()

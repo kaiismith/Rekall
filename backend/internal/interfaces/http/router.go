@@ -91,7 +91,10 @@ func NewRouter(deps RouterDeps) *gin.Engine {
 		orgs := protected.Group("/organizations")
 		{
 			orgs.GET("", deps.OrgH.List)
-			orgs.POST("", deps.OrgH.Create)
+			// Org creation is reserved for platform admins. Per-org owners are
+			// derived from the request body (caller becomes owner unless they
+			// pass an `owner_email` to create on someone else's behalf).
+			orgs.POST("", middleware.RequireRole(constants.UserRoleAdmin), deps.OrgH.Create)
 			orgs.GET("/:id", deps.OrgH.Get)
 			orgs.PATCH("/:id", deps.OrgH.Update)
 			orgs.DELETE("/:id", deps.OrgH.Delete)

@@ -21,3 +21,8 @@ func (DepartmentMembership) TableName() string { return "department_memberships"
 
 // IsHead reports whether the member holds the head (leader) role.
 func (m *DepartmentMembership) IsHead() bool { return m.Role == constants.DeptRoleHead }
+
+// CanManageMembers reports whether this dept member can add/remove other
+// members of THIS department. Equivalent to IsHead today; kept as a separate
+// predicate so callers express their intent and future divergence stays surgical.
+func (m *DepartmentMembership) CanManageMembers() bool { return m.IsHead() }
