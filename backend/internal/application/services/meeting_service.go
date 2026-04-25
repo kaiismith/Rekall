@@ -158,6 +158,55 @@ func (s *MeetingService) ListMeetingsWithMeta(ctx context.Context, userID uuid.U
 	return s.meetingRepo.ListByUser(ctx, userID, filter)
 }
 
+// ListMeetingsInScope returns meetings attached to the given scope (organization,
+// department, or open items), enriched with duration and participant previews.
+//
+// Membership is enforced here — callers who are not members of the scope receive
+// Forbidden and never see the list. The "open" scope has no membership check
+// (every authenticated user can see their own open-item list); the repository
+// restricts to rows where scope_type IS NULL and the caller is host or participant.
+func (s *MeetingService) ListMeetingsInScope(
+	ctx context.Context,
+	userID uuid.UUID,
+	scope *ports.ScopeFilter,
+	statusFilter, sort string,
+) ([]*ports.MeetingListItem, error) {
+	if scope == nil {
+		return s.ListMeetingsWithMeta(ctx, userID, statusFilter, sort)
+	}
+
+	switch scope.Kind {
+	case ports.ScopeKindOrganization:
+		if err := s.assertScopeMember(ctx, entities.MeetingScopeOrg, scope.ID, userID); err != nil {
+			if apperr.IsNotFound(err) {
+				return nil, apperr.Forbidden("caller is not a member of the organization")
+			}
+			return nil, err
+		}
+	case ports.ScopeKindDepartment:
+		if err := s.assertScopeMember(ctx, entities.MeetingScopeDept, scope.ID, userID); err != nil {
+			if apperr.IsNotFound(err) {
+				return nil, apperr.Forbidden("caller is not a member of the department")
+			}
+			return nil, err
+		}
+	case ports.ScopeKindOpen:
+		// Open items are visible to the caller as host or participant only —
+		// the repository layer already encodes this when scope is nil. We need
+		// a narrower query here: scope_type IS NULL AND (host_id=? OR participant).
+		// Model this by passing the filter to the repo with the Open kind; the
+		// repo applies both constraints.
+	default:
+		return nil, apperr.BadRequest("invalid scope kind")
+	}
+
+	filter := ports.ListMeetingsFilter{Sort: sort, Scope: scope}
+	if statusFilter != "" {
+		filter.Status = &statusFilter
+	}
+	return s.meetingRepo.ListByUser(ctx, userID, filter)
+}
+
 // CanJoin determines whether userID can enter the given meeting and how.
 //
 //   - CanJoinDirect  — user may join immediately (open meeting, or private + scope member)

@@ -103,10 +103,33 @@ func (r *MeetingRepository) FindActiveWithNoParticipants(ctx context.Context) ([
 func (r *MeetingRepository) ListByUser(ctx context.Context, userID uuid.UUID, filter ports.ListMeetingsFilter) ([]*ports.MeetingListItem, error) {
 	var meetings []*entities.Meeting
 
-	q := r.db.WithContext(ctx).Where(
-		"host_id = ? OR id IN (SELECT meeting_id FROM meeting_participants WHERE user_id = ?)",
-		userID, userID,
-	)
+	q := r.db.WithContext(ctx)
+
+	// When a scope filter is active, membership in org/department scopes is the
+	// authorisation gate (enforced by the service); every meeting in the scope
+	// is visible to its members regardless of host/participant status.
+	//
+	// For Open scope we layer the host-or-participant rule on top because open
+	// items are addressed personally ("my open meetings"), not by group
+	// membership. No scope filter preserves the historical default.
+	if filter.Scope != nil {
+		switch filter.Scope.Kind {
+		case ports.ScopeKindOpen:
+			q = q.Where(
+				"scope_type IS NULL AND (host_id = ? OR id IN (SELECT meeting_id FROM meeting_participants WHERE user_id = ?))",
+				userID, userID,
+			)
+		case ports.ScopeKindOrganization:
+			q = q.Where("scope_type = ? AND scope_id = ?", entities.MeetingScopeOrg, filter.Scope.ID)
+		case ports.ScopeKindDepartment:
+			q = q.Where("scope_type = ? AND scope_id = ?", entities.MeetingScopeDept, filter.Scope.ID)
+		}
+	} else {
+		q = q.Where(
+			"host_id = ? OR id IN (SELECT meeting_id FROM meeting_participants WHERE user_id = ?)",
+			userID, userID,
+		)
+	}
 
 	// Translate the user-facing status label to internal meeting statuses.
 	if filter.Status != nil {

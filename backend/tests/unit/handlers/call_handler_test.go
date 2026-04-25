@@ -35,7 +35,7 @@ func newCallRouter(h *handlers.CallHandler, callerID uuid.UUID) *gin.Engine {
 }
 
 func newCallService(repo *mockCallRepo) *services.CallService {
-	return services.NewCallService(repo, zap.NewNop())
+	return services.NewCallService(repo, nil, nil, zap.NewNop())
 }
 
 func sampleCall(userID uuid.UUID) *entities.Call {

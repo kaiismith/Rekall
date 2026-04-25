@@ -997,6 +997,91 @@ func TestCanJoin_Private_DeptMember_Direct(t *testing.T) {
 	assert.Equal(t, services.CanJoinDirect, result)
 }
 
+// ─── ListMeetingsInScope ──────────────────────────────────────────────────────
+
+func TestListMeetingsInScope_NilScope_FallsBackToDefault(t *testing.T) {
+	mr := new(mockMeetingRepo)
+	svc := newTestMeetingService(mr, new(mockParticipantRepo), new(meetingMockOrgMemberRepo), new(meetingMockDeptMemberRepo))
+
+	userID := uuid.New()
+	mr.On("ListByUser", mock.Anything, userID, ports.ListMeetingsFilter{Sort: "created_at_desc"}).
+		Return([]*ports.MeetingListItem{}, nil)
+
+	_, err := svc.ListMeetingsInScope(context.Background(), userID, nil, "", "created_at_desc")
+	require.NoError(t, err)
+	mr.AssertExpectations(t)
+}
+
+func TestListMeetingsInScope_OrgScope_NonMember_Forbidden(t *testing.T) {
+	mr := new(mockMeetingRepo)
+	or := new(meetingMockOrgMemberRepo)
+	svc := newTestMeetingService(mr, new(mockParticipantRepo), or, new(meetingMockDeptMemberRepo))
+
+	userID := uuid.New()
+	orgID := uuid.New()
+	or.On("GetByOrgAndUser", mock.Anything, orgID, userID).
+		Return(nil, apperr.NotFound("OrgMembership", orgID.String()))
+
+	_, err := svc.ListMeetingsInScope(context.Background(), userID,
+		&ports.ScopeFilter{Kind: ports.ScopeKindOrganization, ID: orgID},
+		"", "created_at_desc")
+	require.Error(t, err)
+	appErr, ok := apperr.AsAppError(err)
+	require.True(t, ok)
+	assert.Equal(t, 403, appErr.Status)
+	mr.AssertNotCalled(t, "ListByUser")
+}
+
+func TestListMeetingsInScope_OrgScope_Member_PassesFilterToRepo(t *testing.T) {
+	mr := new(mockMeetingRepo)
+	or := new(meetingMockOrgMemberRepo)
+	svc := newTestMeetingService(mr, new(mockParticipantRepo), or, new(meetingMockDeptMemberRepo))
+
+	userID := uuid.New()
+	orgID := uuid.New()
+	scope := &ports.ScopeFilter{Kind: ports.ScopeKindOrganization, ID: orgID}
+	or.On("GetByOrgAndUser", mock.Anything, orgID, userID).Return(&entities.OrgMembership{}, nil)
+	mr.On("ListByUser", mock.Anything, userID, ports.ListMeetingsFilter{Sort: "created_at_desc", Scope: scope}).
+		Return([]*ports.MeetingListItem{}, nil)
+
+	_, err := svc.ListMeetingsInScope(context.Background(), userID, scope, "", "created_at_desc")
+	require.NoError(t, err)
+	mr.AssertExpectations(t)
+}
+
+func TestListMeetingsInScope_DeptScope_NonMember_Forbidden(t *testing.T) {
+	mr := new(mockMeetingRepo)
+	dr := new(meetingMockDeptMemberRepo)
+	svc := newTestMeetingService(mr, new(mockParticipantRepo), new(meetingMockOrgMemberRepo), dr)
+
+	userID := uuid.New()
+	deptID := uuid.New()
+	dr.On("GetByDeptAndUser", mock.Anything, deptID, userID).
+		Return(nil, apperr.NotFound("DepartmentMembership", deptID.String()))
+
+	_, err := svc.ListMeetingsInScope(context.Background(), userID,
+		&ports.ScopeFilter{Kind: ports.ScopeKindDepartment, ID: deptID},
+		"", "created_at_desc")
+	require.Error(t, err)
+	appErr, ok := apperr.AsAppError(err)
+	require.True(t, ok)
+	assert.Equal(t, 403, appErr.Status)
+}
+
+func TestListMeetingsInScope_OpenScope_PassesScopeFilterToRepo(t *testing.T) {
+	mr := new(mockMeetingRepo)
+	svc := newTestMeetingService(mr, new(mockParticipantRepo), new(meetingMockOrgMemberRepo), new(meetingMockDeptMemberRepo))
+
+	userID := uuid.New()
+	scope := &ports.ScopeFilter{Kind: ports.ScopeKindOpen}
+	mr.On("ListByUser", mock.Anything, userID, ports.ListMeetingsFilter{Sort: "created_at_desc", Scope: scope}).
+		Return([]*ports.MeetingListItem{}, nil)
+
+	_, err := svc.ListMeetingsInScope(context.Background(), userID, scope, "", "created_at_desc")
+	require.NoError(t, err)
+	mr.AssertExpectations(t)
+}
+
 // ─── GetMeeting / GetMeetingByCode / ListMyMeetings ──────────────────────────
 
 func TestGetMeeting_DelegatesToRepo(t *testing.T) {
