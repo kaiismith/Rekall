@@ -27,6 +27,9 @@ export interface Meeting {
   host_id: string
   status: MeetingStatus
   max_participants: number
+  /** Per-meeting toggle for the live-captions / ASR feature. Set by the host
+   *  at creation. When false the captions UI is hidden. */
+  transcription_enabled: boolean
   join_url: string
   started_at?: string
   ended_at?: string
@@ -45,6 +48,8 @@ export interface CreateMeetingPayload {
   type: MeetingType
   scope_type?: MeetingScopeType
   scope_id?: string
+  /** Opt the meeting into live captions / transcription. Defaults to false. */
+  transcription_enabled?: boolean
 }
 
 export interface MeetingParticipant {

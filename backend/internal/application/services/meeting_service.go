@@ -50,6 +50,9 @@ type CreateMeetingInput struct {
 	Type      string // "open" | "private"
 	ScopeType string // "organization" | "department" | ""
 	ScopeID   *uuid.UUID
+	// TranscriptionEnabled opts the meeting into the live-captions / ASR
+	// feature; defaults to false when the host doesn't request it.
+	TranscriptionEnabled bool
 }
 
 // CanJoinResult describes how a user may enter a meeting.
@@ -102,14 +105,15 @@ func (s *MeetingService) CreateMeeting(ctx context.Context, input CreateMeetingI
 
 	now := time.Now().UTC()
 	m := &entities.Meeting{
-		Code:            code,
-		Title:           input.Title,
-		Type:            input.Type,
-		HostID:          input.HostID,
-		Status:          entities.MeetingStatusWaiting,
-		MaxParticipants: entities.MeetingMaxParticipants,
-		CreatedAt:       now,
-		UpdatedAt:       now,
+		Code:                 code,
+		Title:                input.Title,
+		Type:                 input.Type,
+		HostID:               input.HostID,
+		Status:               entities.MeetingStatusWaiting,
+		MaxParticipants:      entities.MeetingMaxParticipants,
+		TranscriptionEnabled: input.TranscriptionEnabled,
+		CreatedAt:            now,
+		UpdatedAt:            now,
 	}
 	if input.ScopeType != "" {
 		m.ScopeType = &input.ScopeType

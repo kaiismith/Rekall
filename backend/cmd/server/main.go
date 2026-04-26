@@ -46,6 +46,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/rekall/backend/internal/application/services"
+	infraasr "github.com/rekall/backend/internal/infrastructure/asr"
 	"github.com/rekall/backend/internal/infrastructure/database"
 	infraemail "github.com/rekall/backend/internal/infrastructure/email"
 	"github.com/rekall/backend/internal/infrastructure/repositories"
@@ -64,6 +65,10 @@ func main() {
 	// Load first — the logger depends on config.Logger, so errors go to stderr.
 	cfg, err := config.Load()
 	if err != nil {
+		_, _ = os.Stderr.WriteString("FATAL [SYS_CONFIG_INVALID] " + err.Error() + "\n")
+		os.Exit(1)
+	}
+	if err := cfg.Validate(); err != nil {
 		_, _ = os.Stderr.WriteString("FATAL [SYS_CONFIG_INVALID] " + err.Error() + "\n")
 		os.Exit(1)
 	}
@@ -230,6 +235,43 @@ func main() {
 	wsTicketStore := storage.NewMemoryWSTicketStore(log)
 	defer wsTicketStore.Close()
 
+	// ── ASR (optional — gated by ASR_FEATURE_ENABLED) ───────────────────────
+	var asrIssuer *services.ASRTokenIssuer
+	if cfg.ASR.FeatureEnabled {
+		asrClient, err := infraasr.NewGRPCClient(infraasr.ClientConfig{
+			Addr: cfg.ASR.GRPCAddr,
+			MTLS: infraasr.MTLSConfig{
+				ClientCert: cfg.ASR.GRPCClientCert,
+				ClientKey:  cfg.ASR.GRPCClientKey,
+				ServerCA:   cfg.ASR.GRPCServerCA,
+				ServerName: cfg.ASR.GRPCServerName,
+			},
+			CircuitBreakerFailures: cfg.ASR.CircuitBreakerFailures,
+			CircuitBreakerCooldown: cfg.ASR.CircuitBreakerCooldown,
+		})
+		if err != nil {
+			catalog.SysConfigInvalid.Error(log, zap.Error(err),
+				zap.String("component", "asr_grpc_client"))
+			os.Exit(1)
+		}
+		defer func() { _ = asrClient.Close() }()
+
+		signer, err := infraasr.NewTokenSigner([]byte(cfg.ASR.TokenSecret),
+			cfg.ASR.TokenIssuer, cfg.ASR.TokenAudience)
+		if err != nil {
+			catalog.SysConfigInvalid.Error(log, zap.Error(err),
+				zap.String("component", "asr_token_signer"))
+			os.Exit(1)
+		}
+		asrIssuer = services.NewASRTokenIssuer(
+			asrClient, callRepo, meetingRepo, meetingParticipRepo, signer,
+			services.ASRTokenIssuerConfig{
+				WSBaseURL:  cfg.ASR.WSURLBase,
+				DefaultTTL: cfg.ASR.TokenDefaultTTL,
+				MaxTTL:     cfg.ASR.TokenMaxTTL,
+			}, log)
+	}
+
 	// ── Handlers ─────────────────────────────────────────────────────────────
 	healthH  := handlers.NewHealthHandler(db)
 	callH    := handlers.NewCallHandler(callSvc, log)
@@ -238,6 +280,7 @@ func main() {
 	orgH     := handlers.NewOrganizationHandler(orgSvc, log)
 	deptH    := handlers.NewDepartmentHandler(deptSvc, log)
 	meetingH := handlers.NewMeetingHandler(meetingSvc, chatMessageSvc, userSvc, hubManager, wsTicketStore, cfg.Auth.AppBaseURL, log)
+	asrH     := handlers.NewASRHandler(asrIssuer, log)
 
 	// ── Router ───────────────────────────────────────────────────────────────
 	ginMode := gin.DebugMode
@@ -257,6 +300,7 @@ func main() {
 		OrgH:           orgH,
 		DeptH:          deptH,
 		MeetingH:       meetingH,
+		ASRH:           asrH,
 		CORSOrigins:    cfg.CORS.AllowedOrigins,
 		SwaggerEnabled: cfg.Server.SwaggerEnabled,
 	})

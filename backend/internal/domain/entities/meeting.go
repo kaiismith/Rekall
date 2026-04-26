@@ -35,6 +35,12 @@ type Meeting struct {
 	HostID          uuid.UUID  `gorm:"type:uuid;column:host_id;not null"              json:"host_id"`
 	Status          string     `gorm:"not null;default:'waiting'"                     json:"status"`
 	MaxParticipants int        `gorm:"column:max_participants;not null;default:50"    json:"max_participants"`
+	// TranscriptionEnabled gates the live-captions / ASR feature for this
+	// meeting. When false, the /meetings/:code/asr-session endpoint returns
+	// 403 TRANSCRIPTION_DISABLED. Set at creation time by the host (or later
+	// via PATCH /meetings/:code — out of scope for v1). Defaults to false so
+	// existing rows and unset clients are unaffected.
+	TranscriptionEnabled bool `gorm:"column:transcription_enabled;not null;default:false" json:"transcription_enabled"`
 	StartedAt       *time.Time `gorm:"column:started_at"                              json:"started_at,omitempty"`
 	EndedAt         *time.Time `gorm:"column:ended_at"                                json:"ended_at,omitempty"`
 	CreatedAt       time.Time  `gorm:"autoCreateTime"                                 json:"created_at"`

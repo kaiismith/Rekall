@@ -12,10 +12,13 @@ import (
 
 // CreateMeetingRequest is the body for POST /api/v1/meetings.
 type CreateMeetingRequest struct {
-	Title     string     `json:"title"`
-	Type      string     `json:"type"       binding:"required,oneof=open private"`
-	ScopeType string     `json:"scope_type"`
-	ScopeID   *uuid.UUID `json:"scope_id"`
+	Title                string     `json:"title"`
+	Type                 string     `json:"type"       binding:"required,oneof=open private"`
+	ScopeType            string     `json:"scope_type"`
+	ScopeID              *uuid.UUID `json:"scope_id"`
+	// TranscriptionEnabled allows the host to opt the meeting into the
+	// live-captions / ASR feature at creation time. Defaults to false.
+	TranscriptionEnabled bool `json:"transcription_enabled"`
 }
 
 // ─── Response DTOs ────────────────────────────────────────────────────────────
