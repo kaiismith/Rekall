@@ -132,6 +132,12 @@ services:
       ASR_MODEL_DEFAULT_BEAM_SIZE: ${ASR_MODEL_DEFAULT_BEAM_SIZE:-3}
       ASR_MODEL_DEFAULT_BEST_OF: ${ASR_MODEL_DEFAULT_BEST_OF:-3}
       ASR_MODELS_DEFAULT: ${ASR_MODELS_DEFAULT:-tiny.en}
+      # Lower latency knobs — emit partials more often, finalize sooner, and
+      # cut the rolling audio window so each utterance ships through whisper
+      # quickly. Tune up if CPU pressure becomes an issue.
+      ASR_SESSION_PARTIAL_EMIT_INTERVAL_MS: ${ASR_SESSION_PARTIAL_EMIT_INTERVAL_MS:-150}
+      ASR_SESSION_FINAL_EMIT_MAX_LATENCY_MS: ${ASR_SESSION_FINAL_EMIT_MAX_LATENCY_MS:-600}
+      ASR_SESSION_AUDIO_WINDOW_SECONDS: ${ASR_SESSION_AUDIO_WINDOW_SECONDS:-4}
     volumes:
       - ./asr/models:/var/lib/rekall-asr/models:ro
       # Mount the live config from the host so edits take effect on `up`

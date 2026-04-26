@@ -110,16 +110,20 @@ void Transcriber::run(std::stop_token st) {
         auto frame = session_->inbound.pop_blocking(st);
         if (!frame) break;  // stop_token tripped
 
-        bool flush = frame->flush;
+        bool flush         = frame->flush;
+        bool vad_speech_end = false;
+
         if (!flush && !frame->samples.empty()) {
             session_->stats.audio_samples_processed.fetch_add(frame->samples.size());
             session_->touch();
 
-            // Optional VAD trip — used only for logging/metrics today;
-            // segment finalisation happens via the partial-vs-final cadence
-            // below rather than the energy detector to keep transcript
-            // boundaries aligned with whisper's segmenter.
+            // VAD speech-end is the segmentation signal. When the energy
+            // detector trips a "trailing silence" boundary we finalize the
+            // current window and start fresh — without this, whisper keeps
+            // re-decoding overlapping audio every 150 ms and hallucinates
+            // the previous utterance's text into new ones.
             if (auto seg_end = vad_.push(frame->samples)) {
+                vad_speech_end = true;
                 rekall::asr::observ::debug(rekall::asr::observ::VAD_SEGMENT_END, {
                     {"session_id", session_->sid},
                 });
@@ -135,12 +139,12 @@ void Transcriber::run(std::stop_token st) {
             }
         }
 
-        // Decide whether to decode now: throttle by partial_emit_interval_ms,
-        // but always decode on flush.
-        auto now = steady_clock::now();
+        // Decide whether to decode now: throttle partials by
+        // partial_emit_interval_ms; always decode on flush or VAD speech-end.
+        auto now   = steady_clock::now();
         auto since = duration_cast<milliseconds>(now - last_partial_emit_).count();
-        bool due = since >= cfg_.partial_emit_interval_ms;
-        if (!flush && !due) continue;
+        bool due   = since >= cfg_.partial_emit_interval_ms;
+        if (!flush && !vad_speech_end && !due) continue;
 
         if (!ensure_state()) {
             rekall::asr::observ::error(rekall::asr::observ::INFERENCE_FAILED, {
@@ -162,10 +166,13 @@ void Transcriber::run(std::stop_token st) {
             continue;
         }
 
-        if (flush) {
+        if (flush || vad_speech_end) {
+            // Commit the current utterance, then wipe state so the next
+            // utterance starts with a clean buffer + a new segment_id.
             emit_final(static_cast<std::uint64_t>(window_.size()));
             window_.clear();
             vad_.reset();
+            last_partial_text_.clear();
             last_partial_emit_ = steady_clock::now();
         } else {
             emit_partial();

@@ -30,30 +30,150 @@ const EMOJI_RATE_LIMIT_MS = 500
 // the bottom anyway so participants always see the latest.
 const CAPTION_BUFFER_MAX = 400
 
+// If no new partial chunk arrives for the same speaker within this window,
+// the open partial is treated as "speech ended" — finalized in place and the
+// next chunk starts a brand-new entry with its own timestamp. Compensates
+// for whisper's segment_id resetting per audio window (we can't trust the
+// segment_id alone to tell us a new utterance has started) AND for the
+// model occasionally not emitting a clean final.
+const CAPTION_SILENCE_GAP_MS = 1500
+
+let captionSeq = 0
+function freshCaptionKey(userId: string): string {
+  captionSeq += 1
+  return `${userId}:${captionSeq}`
+}
+
 /**
  * Reducer for the caption feed.
  *
- * - If we've already seen this `key` (same userId+segmentId), replace the
- *   prior entry in place. This is how a partial gets upgraded to a final
- *   without showing both, and how a re-emitted partial overwrites the old
- *   text rather than appending duplicates.
- * - Otherwise append. Trim from the front when exceeding CAPTION_BUFFER_MAX.
+ * Each speaker has at most ONE "open partial" at a time — the most recent
+ * entry for that user with kind='partial'. We update it in place while the
+ * speaker keeps talking, finalize it when whisper commits OR when ~1.5s
+ * passes between chunks (silence). The next partial after a finalized open
+ * entry starts a fresh CaptionEntry with its own timestamp, which is what
+ * gives the user pause-based segmentation in the panel.
+ *
+ * We do NOT match by ASR segment_id — Whisper resets segment ids per audio
+ * window, so the same id would collide across utterances and the new
+ * utterance would silently overwrite the previous one in the feed. The
+ * earlier implementation hit exactly this bug.
  */
-function mergeCaption(prev: CaptionEntry[], next: CaptionEntry): CaptionEntry[] {
-  const idx = prev.findIndex((e) => e.key === next.key)
-  if (idx >= 0) {
-    // Don't downgrade a final to a partial — a late partial echo could
-    // otherwise overwrite a final we already finalized.
-    if (prev[idx].kind === 'final' && next.kind === 'partial') return prev
+function mergeCaption(
+  prev: CaptionEntry[],
+  incoming: { userId: string; kind: 'partial' | 'final'; text: string; timestamp: number },
+): CaptionEntry[] {
+  // Find this user's currently-open partial — searching from the end since
+  // it's the most recent entry by construction (we only have one open at
+  // a time per user).
+  let openIdx = -1
+  for (let i = prev.length - 1; i >= 0; i--) {
+    if (prev[i].userId === incoming.userId) {
+      if (prev[i].kind === 'partial') openIdx = i
+      break // only inspect the latest entry from this user
+    }
+  }
+
+  if (incoming.kind === 'partial') {
+    if (openIdx >= 0) {
+      const gap = incoming.timestamp - prev[openIdx].lastUpdate
+      if (gap > CAPTION_SILENCE_GAP_MS) {
+        // Speaker paused long enough to count as a new utterance. Freeze
+        // the old partial as final and append a new partial entry with a
+        // fresh timestamp + key.
+        // eslint-disable-next-line no-console
+        console.debug('[captions] partial → SILENCE_GAP, finalize+new', {
+          gap_ms:        gap,
+          finalized_key: prev[openIdx].key,
+          finalized_text: prev[openIdx].text,
+          new_text:      incoming.text,
+        })
+        const out = prev.slice()
+        out[openIdx] = { ...prev[openIdx], kind: 'final' }
+        out.push({
+          key:        freshCaptionKey(incoming.userId),
+          userId:     incoming.userId,
+          kind:       'partial',
+          text:       incoming.text,
+          timestamp:  incoming.timestamp,
+          lastUpdate: incoming.timestamp,
+        })
+        return capCaptions(out)
+      }
+      // Update the open partial in place, preserving its key and original
+      // timestamp so React reconciles cleanly and the displayed time
+      // doesn't keep ticking.
+      // eslint-disable-next-line no-console
+      console.debug('[captions] partial → UPDATE open', {
+        key:      prev[openIdx].key,
+        gap_ms:   gap,
+        old_text: prev[openIdx].text,
+        new_text: incoming.text,
+      })
+      const out = prev.slice()
+      out[openIdx] = {
+        ...prev[openIdx],
+        text:       incoming.text,
+        lastUpdate: incoming.timestamp,
+      }
+      return out
+    }
+    // No open partial → start a new entry.
+    // eslint-disable-next-line no-console
+    console.debug('[captions] partial → NEW entry (no open partial)', {
+      text: incoming.text,
+    })
+    return capCaptions([
+      ...prev,
+      {
+        key:        freshCaptionKey(incoming.userId),
+        userId:     incoming.userId,
+        kind:       'partial',
+        text:       incoming.text,
+        timestamp:  incoming.timestamp,
+        lastUpdate: incoming.timestamp,
+      },
+    ])
+  }
+
+  // Final chunk: commit the open partial (if any) with the final's text;
+  // otherwise append as a standalone final.
+  if (openIdx >= 0) {
+    // eslint-disable-next-line no-console
+    console.debug('[captions] FINAL → commit open partial', {
+      key:      prev[openIdx].key,
+      partial_text: prev[openIdx].text,
+      final_text:   incoming.text,
+    })
     const out = prev.slice()
-    out[idx] = next
+    out[openIdx] = {
+      ...prev[openIdx],
+      kind:       'final',
+      text:       incoming.text,
+      lastUpdate: incoming.timestamp,
+    }
     return out
   }
-  const out = prev.length >= CAPTION_BUFFER_MAX
-    ? prev.slice(prev.length - CAPTION_BUFFER_MAX + 1)
-    : prev.slice()
-  out.push(next)
-  return out
+  // eslint-disable-next-line no-console
+  console.debug('[captions] FINAL → standalone (no open partial)', {
+    text: incoming.text,
+  })
+  return capCaptions([
+    ...prev,
+    {
+      key:        freshCaptionKey(incoming.userId),
+      userId:     incoming.userId,
+      kind:       'final',
+      text:       incoming.text,
+      timestamp:  incoming.timestamp,
+      lastUpdate: incoming.timestamp,
+    },
+  ])
+}
+
+function capCaptions(arr: CaptionEntry[]): CaptionEntry[] {
+  if (arr.length <= CAPTION_BUFFER_MAX) return arr
+  return arr.slice(arr.length - CAPTION_BUFFER_MAX)
 }
 const MAX_ACTIVE_REACTIONS = 10
 const BG_STORAGE_KEY = 'rekall_bg_preference'
@@ -658,17 +778,24 @@ export function useMeeting({ code, onEnd }: UseMeetingOptions): UseMeetingReturn
         break
 
       case 'caption_chunk': {
-        if (!msg.user_id || !msg.caption_segment_id || !msg.caption_text) break
+        if (!msg.user_id || !msg.caption_text) break
         if (msg.caption_kind !== 'partial' && msg.caption_kind !== 'final') break
-        const entry: CaptionEntry = {
-          key:       `${msg.user_id}:${msg.caption_segment_id}`,
-          userId:    msg.user_id,
-          segmentId: msg.caption_segment_id,
-          kind:      msg.caption_kind,
-          text:      msg.caption_text,
+        // eslint-disable-next-line no-console
+        console.debug('[captions] WS ← from peer', {
+          user:    msg.user_id.slice(0, 8),
+          kind:    msg.caption_kind,
+          seg:     msg.caption_segment_id,
+          text:    msg.caption_text,
+        })
+        // mergeCaption ignores segment_id by design (Whisper resets it per
+        // window); we keep it on the wire for any future debugging consumer
+        // but don't pass it through.
+        setCaptions((prev) => mergeCaption(prev, {
+          userId:    msg.user_id!,
+          kind:      msg.caption_kind!,
+          text:      msg.caption_text!,
           timestamp: msg.caption_ts ?? Date.now(),
-        }
-        setCaptions((prev) => mergeCaption(prev, entry))
+        }))
         break
       }
 
@@ -1374,6 +1501,36 @@ export function useMeeting({ code, onEnd }: UseMeetingOptions): UseMeetingReturn
     }
   }, [code, isLoadingHistory, hasMoreHistory, messages])
 
+  // ── live captions: silence-based finalizer ────────────────────────────────
+  // Finalize any open partial that hasn't been updated for >SILENCE_GAP. The
+  // ASR usually emits a clean final at end-of-utterance, but it's not
+  // guaranteed (network blip, lost final, model edge case). This guarantees
+  // the panel doesn't end up with a perpetually-italic entry that never
+  // commits, AND that the next chunk starts a new entry.
+  useEffect(() => {
+    const interval = setInterval(() => {
+      setCaptions((prev) => {
+        const now = Date.now()
+        let changed = false
+        const out = prev.map((e) => {
+          if (e.kind === 'partial' && now - e.lastUpdate > CAPTION_SILENCE_GAP_MS) {
+            // eslint-disable-next-line no-console
+            console.debug('[captions] silence-finalizer → freeze partial', {
+              key:        e.key,
+              text:       e.text,
+              stale_ms:   now - e.lastUpdate,
+            })
+            changed = true
+            return { ...e, kind: 'final' as const }
+          }
+          return e
+        })
+        return changed ? out : prev
+      })
+    }, 500)
+    return () => clearInterval(interval)
+  }, [])
+
   // ── live captions: relay local ASR chunks ─────────────────────────────────
   // Relay a local ASR chunk to other participants over the meeting WS. Also
   // appends to the local captions feed so the speaker sees their own text
@@ -1387,9 +1544,7 @@ export function useMeeting({ code, onEnd }: UseMeetingOptions): UseMeetingReturn
     if (!uid || !text || !segmentId) return
     const ts = Date.now()
     setCaptions((prev) => mergeCaption(prev, {
-      key:       `${uid}:${segmentId}`,
-      userId:    uid,
-      segmentId,
+      userId: uid,
       kind,
       text,
       timestamp: ts,

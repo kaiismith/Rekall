@@ -39,9 +39,9 @@ session:
   idle_timeout_seconds: 30
   hard_timeout_seconds: 1800
   graceful_drain_seconds: 30
-  partial_emit_interval_ms: 250
-  final_emit_max_latency_ms: 1500
-  audio_window_seconds: 8
+  partial_emit_interval_ms: 150
+  final_emit_max_latency_ms: 600
+  audio_window_seconds: 4
 
 logging:
   level: info
