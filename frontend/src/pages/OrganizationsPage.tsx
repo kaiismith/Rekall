@@ -25,13 +25,17 @@ import { ROUTES } from '@/constants'
 import { EmptyState, GradientButton, PageHeader } from '@/components/common/ui'
 import { tokens } from '@/theme'
 import { useAuthStore } from '@/store/authStore'
+import { useOrgsStore } from '@/store/orgsStore'
 import { canCreateOrg } from '@/utils/permissions'
+import { useStalePermissionHandler } from '@/hooks/useStalePermissionHandler'
 
 export function OrganizationsPage() {
   const navigate = useNavigate()
   const queryClient = useQueryClient()
   const user = useAuthStore((s) => s.user)
+  const invalidateOrgs = useOrgsStore((s) => s.invalidate)
   const adminCanCreate = canCreateOrg(user)
+  const handleStale = useStalePermissionHandler({ invalidate: invalidateOrgs })
 
   const [createOpen, setCreateOpen] = useState(false)
   const [name, setName] = useState('')
@@ -47,13 +51,20 @@ export function OrganizationsPage() {
     mutationFn: (input: { name: string; owner_email?: string }) =>
       organizationService.create(input),
     onSuccess: (org) => {
+      // Invalidate both the React Query cache (used by this page) and the
+      // global orgs store (used by OrgSwitcher / ScopeBadge / ScopePicker).
       void queryClient.invalidateQueries({ queryKey: ['organizations'] })
+      invalidateOrgs()
       setCreateOpen(false)
       setName('')
       setOwnerEmail('')
       navigate(ROUTES.ORG_DETAIL.replace(':id', org.id))
     },
     onError: (err) => {
+      if (handleStale(err)) {
+        setCreateOpen(false)
+        return
+      }
       setCreateError(err instanceof ApiError ? err.message : 'Failed to create organization')
     },
   })

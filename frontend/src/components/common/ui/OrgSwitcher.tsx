@@ -15,6 +15,8 @@ import ExpandMoreIcon from '@mui/icons-material/ExpandMore'
 import { matchPath, useLocation, useNavigate, useParams } from 'react-router-dom'
 import { ROUTES, buildScopedRoute } from '@/constants'
 import { useOrgsStore } from '@/store/orgsStore'
+import { useAuthStore } from '@/store/authStore'
+import { canCreateOrg } from '@/utils/permissions'
 
 /**
  * Top-bar dropdown that lets the user see which org they're "in" and jump
@@ -29,6 +31,8 @@ export function OrgSwitcher() {
   const isLoading = useOrgsStore((s) => s.isLoading)
   const load = useOrgsStore((s) => s.load)
   const getOrgName = useOrgsStore((s) => s.getOrgName)
+  const user = useAuthStore((s) => s.user)
+  const adminCanCreate = canCreateOrg(user)
 
   const navigate = useNavigate()
   const { pathname } = useLocation()
@@ -110,10 +114,17 @@ export function OrgSwitcher() {
               />
             </MenuItem>
           ))
+        ) : adminCanCreate ? (
+          <MenuItem onClick={() => goto(ROUTES.ORGANIZATIONS)}>
+            <ListItemIcon>
+              <BusinessIcon fontSize="small" />
+            </ListItemIcon>
+            <ListItemText primary="Create your first organization" />
+          </MenuItem>
         ) : (
           <MenuItem disabled>
             <Typography variant="body2" color="text.secondary">
-              You aren&apos;t in any organizations yet.
+              Contact your administrator to be added to an organization.
             </Typography>
           </MenuItem>
         )}
