@@ -163,3 +163,83 @@ describe('NewMeetingPage — Rekall layout', () => {
     expect(meetingService.create).not.toHaveBeenCalled()
   })
 })
+
+// ── Scope picker (Task 16.6) ────────────────────────────────────────────────
+
+describe('NewMeetingPage — scope picker', () => {
+  const ORG = '00000000-0000-0000-0000-00000000a001'
+
+  beforeEach(async () => {
+    vi.clearAllMocks()
+    vi.mocked(meetingService.create).mockResolvedValue({
+      data: {
+        code: 'abc123',
+        id: 'm-1',
+        title: '',
+        type: 'open',
+        status: 'waiting',
+        created_at: '',
+      },
+    } as never)
+
+    // Seed orgs store so the picker renders.
+    const { useOrgsStore } = await import('@/store/orgsStore')
+    useOrgsStore.setState({
+      orgs: [
+        {
+          id: ORG,
+          name: 'Acme',
+          slug: 'acme',
+          owner_id: 'u',
+          created_at: '2026-01-01T00:00:00Z',
+          updated_at: '2026-01-01T00:00:00Z',
+        },
+      ],
+      isLoading: false,
+      error: null,
+    })
+  })
+
+  function renderWithUrl(url: string) {
+    return render(
+      <ThemeProvider theme={theme}>
+        <MemoryRouter initialEntries={[url]}>
+          <NewMeetingPage />
+        </MemoryRouter>
+      </ThemeProvider>,
+    )
+  }
+
+  it('hides the picker entirely when the user has zero orgs', async () => {
+    const { useOrgsStore } = await import('@/store/orgsStore')
+    useOrgsStore.setState({ orgs: [], isLoading: false, error: null })
+    renderWithUrl('/meetings/new')
+    expect(screen.queryByText('All scopes')).not.toBeInTheDocument()
+    expect(screen.queryByText('Personal (open)')).not.toBeInTheDocument()
+  })
+
+  it('renders the picker chip when the user has at least one org', () => {
+    renderWithUrl('/meetings/new')
+    // No `?scope=` → picker shows the default "All scopes" chip.
+    expect(screen.getByText('All scopes')).toBeInTheDocument()
+  })
+
+  it('pre-fills the picker from ?scope=org:<uuid>', () => {
+    renderWithUrl(`/meetings/new?scope=org:${ORG}`)
+    // Chip label switches to the resolved org name.
+    expect(screen.getByText('Acme')).toBeInTheDocument()
+  })
+
+  it('creates with scope_type/scope_id when an org scope is preselected', async () => {
+    renderWithUrl(`/meetings/new?scope=org:${ORG}`)
+    fireEvent.click(screen.getByRole('button', { name: /create meeting/i }))
+    await waitFor(() => {
+      expect(meetingService.create).toHaveBeenCalledWith({
+        title: '',
+        type: 'open',
+        scope_type: 'organization',
+        scope_id: ORG,
+      })
+    })
+  })
+})
