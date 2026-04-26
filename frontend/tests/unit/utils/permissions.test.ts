@@ -2,6 +2,7 @@ import { describe, it, expect } from 'vitest'
 import {
   canAddDeptMember,
   canCreateOrg,
+  canDeleteOrg,
   canManageDept,
   canManageOrg,
   canPromoteDeptMember,
@@ -99,5 +100,17 @@ describe('canPromoteDeptMember', () => {
     expect(canPromoteDeptMember(orgAdmin, member)).toBe(true)
     expect(canPromoteDeptMember(null, admin)).toBe(true)
     expect(canPromoteDeptMember(orgMember, member)).toBe(false)
+  })
+})
+
+describe('canDeleteOrg', () => {
+  it('only the owner (or platform admin) can delete the org', () => {
+    expect(canDeleteOrg(owner, member)).toBe(true)
+    expect(canDeleteOrg(null, admin)).toBe(true)
+  })
+  it('org admin and plain member denied', () => {
+    expect(canDeleteOrg(orgAdmin, member)).toBe(false)
+    expect(canDeleteOrg(orgMember, member)).toBe(false)
+    expect(canDeleteOrg(null, member)).toBe(false)
   })
 })

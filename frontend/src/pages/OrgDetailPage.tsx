@@ -48,7 +48,7 @@ import { ScopedCallsPage } from './ScopedCallsPage'
 import { tokens } from '@/theme'
 import type { Department, OrgMember } from '@/types/organization'
 import type { User } from '@/types/auth'
-import { canManageDept, canManageOrg } from '@/utils/permissions'
+import { canDeleteOrg, canManageDept, canManageOrg } from '@/utils/permissions'
 import { useStalePermissionHandler } from '@/hooks/useStalePermissionHandler'
 import { useOrgsStore } from '@/store/orgsStore'
 import { useDeptsStore } from '@/store/deptsStore'
@@ -159,7 +159,9 @@ function OrgOverviewPanel({ orgId, org, currentMember, user }: OverviewProps) {
   })
 
   const canManage = canManageOrg(currentMember ?? null, user)
-  const isOwner = currentMember?.role === 'owner'
+  // Only owners (and platform admins) may delete the org — stricter than
+  // canManage since org admins can't pull this lever.
+  const canDelete = canDeleteOrg(currentMember ?? null, user)
 
   const { data: members, isLoading: membersLoading } = useQuery({
     queryKey: ['org-members', orgId],
@@ -272,7 +274,7 @@ function OrgOverviewPanel({ orgId, org, currentMember, user }: OverviewProps) {
         )}
       </Box>
 
-      {isOwner && (
+      {canDelete && (
         <Box
           sx={{
             p: 3,
