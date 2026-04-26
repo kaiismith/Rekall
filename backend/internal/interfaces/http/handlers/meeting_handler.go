@@ -102,11 +102,12 @@ func (h *MeetingHandler) Create(c *gin.Context) {
 	}
 
 	input := services.CreateMeetingInput{
-		HostID:    hostID,
-		Title:     req.Title,
-		Type:      req.Type,
-		ScopeType: req.ScopeType,
-		ScopeID:   req.ScopeID,
+		HostID:               hostID,
+		Title:                req.Title,
+		Type:                 req.Type,
+		ScopeType:            req.ScopeType,
+		ScopeID:              req.ScopeID,
+		TranscriptionEnabled: req.TranscriptionEnabled,
 	}
 
 	meeting, err := h.service.CreateMeeting(c.Request.Context(), input)

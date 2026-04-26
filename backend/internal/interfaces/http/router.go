@@ -24,6 +24,7 @@ type RouterDeps struct {
 	OrgH           *handlers.OrganizationHandler
 	DeptH          *handlers.DepartmentHandler
 	MeetingH       *handlers.MeetingHandler
+	ASRH           *handlers.ASRHandler
 	CORSOrigins    []string
 	SwaggerEnabled bool
 }
@@ -75,6 +76,14 @@ func NewRouter(deps RouterDeps) *gin.Engine {
 			calls.GET("/:id", deps.CallH.Get)
 			calls.PATCH("/:id", deps.CallH.Update)
 			calls.DELETE("/:id", deps.CallH.Delete)
+
+			// ASR live-captions session endpoints. The handler returns
+			// 503 ASR_NOT_CONFIGURED when the feature flag is off, so
+			// these routes are always wired and the frontend probes them.
+			if deps.ASRH != nil {
+				calls.POST("/:id/asr-session", deps.ASRH.Request)
+				calls.POST("/:id/asr-session/end", deps.ASRH.End)
+			}
 		}
 
 		// Users — platform-admin only
@@ -124,6 +133,14 @@ func NewRouter(deps RouterDeps) *gin.Engine {
 				// Ticket endpoint — authenticated via bearer; returns a short-lived
 				// ticket that the WS upgrade consumes in place of the JWT.
 				meetings.POST("/:code/ws-ticket", deps.MeetingH.IssueWSTicket)
+
+				// ASR live-captions session endpoints — gated by both
+				// ASR_FEATURE_ENABLED on the backend AND the per-meeting
+				// `transcription_enabled` flag set by the host at creation.
+				if deps.ASRH != nil {
+					meetings.POST("/:code/asr-session", deps.ASRH.RequestForMeeting)
+					meetings.POST("/:code/asr-session/end", deps.ASRH.EndForMeeting)
+				}
 			}
 			// WebSocket — no JWT middleware; authenticates via the ticket.
 			v1.GET("/meetings/:code/ws", deps.MeetingH.Connect)

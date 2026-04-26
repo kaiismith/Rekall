@@ -56,6 +56,14 @@ services:
       SMTP_PASSWORD: ""
       SMTP_FROM: ${SMTP_FROM:-noreply@rekall.local}
       SMTP_TLS: "false"
+      # ASR (live-captions) — feature-flagged off by default. Set
+      # ASR_FEATURE_ENABLED=true and bring up the `asr` profile to enable.
+      ASR_FEATURE_ENABLED: ${ASR_FEATURE_ENABLED:-false}
+      ASR_GRPC_ADDR: ${ASR_GRPC_ADDR:-asr:9090}
+      ASR_TOKEN_SECRET: ${ASR_TOKEN_SECRET:-}
+      ASR_WS_URL_BASE: ${ASR_WS_URL_BASE:-ws://localhost:8081}
+      ASR_TOKEN_DEFAULT_TTL: ${ASR_TOKEN_DEFAULT_TTL:-3m}
+      ASR_TOKEN_MAX_TTL: ${ASR_TOKEN_MAX_TTL:-5m}
     ports:
       - "${SERVER_PORT:-8080}:8080"
     healthcheck:
@@ -88,6 +96,38 @@ services:
       - backend
     ports:
       - "3000:80"
+
+  # ─── ASR (C++ / whisper.cpp) ───────────────────────────────────────────────
+  # Optional. Build with:  docker compose build asr
+  # Run with:              docker compose --profile asr up -d
+  # The backend reads ASR_FEATURE_ENABLED=false by default; enable it only
+  # when the asr container is up and the model files are mounted.
+  asr:
+    profiles: ["asr"]
+    build:
+      context: ./asr
+      dockerfile: docker/Dockerfile
+    container_name: rekall_asr
+    restart: unless-stopped
+    environment:
+      ASR_TOKEN_SECRET: ${ASR_TOKEN_SECRET:?ASR_TOKEN_SECRET is required}
+      ASR_WS_LISTEN: "0.0.0.0:8081"
+      ASR_GRPC_LISTEN: "0.0.0.0:9090"
+      ASR_METRICS_LISTEN: "0.0.0.0:9091"
+      ASR_GRPC_BIND_ALL: "true"
+      ASR_WS_ALLOWED_ORIGINS: ${ASR_WS_ALLOWED_ORIGINS:-http://localhost:5173,http://localhost:3000}
+      ASR_ALLOW_INSECURE_WS: "true"
+      ASR_LOG_LEVEL: ${ASR_LOG_LEVEL:-info}
+      ASR_LOG_FORMAT: json
+    volumes:
+      - ./asr/models:/var/lib/rekall-asr/models:ro
+      # Mount the live config from the host so edits take effect on `up`
+      # without rebuilding the image. The Dockerfile bakes a copy at the
+      # same path; this overlay wins because Docker mounts after the COPY.
+      - ./asr/config/config.yaml:/etc/rekall-asr/config.yaml:ro
+    ports:
+      - "8081:8081"   # WebSocket data plane
+      - "9091:9091"   # Prometheus metrics
 
 volumes:
   postgres_data:

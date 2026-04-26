@@ -1,0 +1,137 @@
+syntax = "proto3";
+
+package rekall.asr.v1;
+
+option go_package = "github.com/rekall/backend/internal/infrastructure/asr/pb;pb";
+
+import "google/protobuf/timestamp.proto";
+import "google/protobuf/empty.proto";
+
+// ASR is the Rekall speech-to-text control plane. It is exposed only to the
+// Rekall backend over mTLS; browsers never speak gRPC to this service — they
+// use the WebSocket data plane (/v1/asr/stream?token=<jwt>).
+service ASR {
+    // StartSession registers a new session on the server. The returned
+    // session_id is embedded in the JWT minted by the backend for the browser.
+    rpc StartSession (StartSessionRequest) returns (StartSessionResponse);
+
+    // EndSession terminates a session. Idempotent: calling EndSession on an
+    // already-closed session returns OK with the cached final transcript.
+    rpc EndSession (EndSessionRequest) returns (EndSessionResponse);
+
+    // GetSession returns the live state of a session.
+    rpc GetSession (GetSessionRequest) returns (SessionInfo);
+
+    // Health returns the live snapshot of the service.
+    rpc Health (google.protobuf.Empty) returns (HealthResponse);
+
+    // ReloadModels loads or replaces entries in the model registry. Existing
+    // sessions continue using their pinned model pointer; new sessions pick up
+    // the replacement on next StartSession.
+    rpc ReloadModels (ReloadModelsRequest) returns (ReloadModelsResponse);
+
+    // StreamSession is an internal/test path that bypasses the WebSocket auth
+    // layer. Not part of the production data path.
+    rpc StreamSession (stream StreamChunk) returns (stream TranscriptEvent);
+}
+
+message StartSessionRequest {
+    string user_id = 1;
+    string call_id = 2;
+    // Optional. Empty string selects the configured default model.
+    string model_id = 3;
+    // Optional BCP-47 language tag. Empty string lets whisper auto-detect.
+    string language = 4;
+    // Optional. 0 → server default. Server clamps to [token_min_ttl, token_max_ttl].
+    uint32 requested_token_ttl_seconds = 5;
+    map<string, string> metadata = 6;
+}
+
+message StartSessionResponse {
+    string session_id = 1;
+    // Canonical model_id actually selected after fallback.
+    string model_id = 2;
+    // Always 16000 for whisper.
+    int32 sample_rate = 3;
+    // Always "pcm_s16le_mono".
+    string frame_format = 4;
+    google.protobuf.Timestamp expires_at = 5;
+}
+
+message EndSessionRequest {
+    string session_id = 1;
+}
+
+message EndSessionResponse {
+    string final_transcript = 1;
+    uint32 final_count = 2;
+}
+
+message GetSessionRequest {
+    string session_id = 1;
+}
+
+message SessionInfo {
+    // "pending" | "active" | "closed"
+    string state = 1;
+    google.protobuf.Timestamp started_at = 2;
+    google.protobuf.Timestamp last_activity_at = 3;
+    uint32 audio_seconds_processed = 4;
+    uint32 partial_count = 5;
+    uint32 final_count = 6;
+}
+
+message HealthResponse {
+    // SERVING | NOT_SERVING
+    string status = 1;
+    string version = 2;
+    uint64 uptime_seconds = 3;
+    repeated string loaded_models = 4;
+    uint32 active_sessions = 5;
+    uint32 worker_pool_size = 6;
+    uint32 worker_pool_in_use = 7;
+}
+
+message ReloadModelsRequest {
+    repeated ModelEntry entries = 1;
+}
+
+message ReloadModelsResponse {
+    repeated string loaded = 1;
+    repeated string failed = 2;
+}
+
+message ModelEntry {
+    string id = 1;
+    string path = 2;
+    string language = 3;
+    int32 n_threads = 4;
+    int32 beam_size = 5;
+}
+
+message StreamChunk {
+    oneof payload {
+        StartSessionRequest start = 1;
+        // Raw pcm_s16le_mono bytes.
+        bytes audio = 2;
+        bool flush = 3;
+    }
+}
+
+message TranscriptEvent {
+    // "partial" | "final" | "info" | "error"
+    string type = 1;
+    int32 segment_id = 2;
+    string text = 3;
+    uint32 start_ms = 4;
+    uint32 end_ms = 5;
+    float confidence = 6;
+    repeated WordTiming words = 7;
+}
+
+message WordTiming {
+    string w = 1;
+    uint32 start_ms = 2;
+    uint32 end_ms = 3;
+    float p = 4;
+}

@@ -18,6 +18,34 @@ type Config struct {
 	Auth     AuthConfig
 	SMTP     SMTPConfig
 	Meeting  MeetingConfig
+	ASR      ASRConfig
+}
+
+// ASRConfig holds the Go-side knobs for the standalone C++ ASR service.
+// FeatureEnabled is the master switch — when false, /calls/:id/asr-session
+// returns 503 ASR_NOT_CONFIGURED and the gRPC client is not dialled at boot.
+type ASRConfig struct {
+	FeatureEnabled bool
+
+	GRPCAddr      string
+	TokenSecret   string
+	TokenIssuer   string
+	TokenAudience string
+	TokenDefaultTTL time.Duration
+	TokenMaxTTL     time.Duration
+
+	// Browser-facing WebSocket base (e.g. wss://asr.rekall.example).
+	WSURLBase string
+
+	// mTLS material for the gRPC channel (production).
+	GRPCClientCert string
+	GRPCClientKey  string
+	GRPCServerCA   string
+	GRPCServerName string
+
+	// Circuit breaker.
+	CircuitBreakerFailures int
+	CircuitBreakerCooldown time.Duration
 }
 
 // MeetingConfig holds settings for the meeting feature.
@@ -174,6 +202,18 @@ func Load() (*Config, error) {
 	if err != nil {
 		return nil, fmt.Errorf("invalid MEETING_CLEANUP_INTERVAL: %w", err)
 	}
+	asrTokenDefaultTTL, err := time.ParseDuration(viper.GetString("ASR_TOKEN_DEFAULT_TTL"))
+	if err != nil {
+		return nil, fmt.Errorf("invalid ASR_TOKEN_DEFAULT_TTL: %w", err)
+	}
+	asrTokenMaxTTL, err := time.ParseDuration(viper.GetString("ASR_TOKEN_MAX_TTL"))
+	if err != nil {
+		return nil, fmt.Errorf("invalid ASR_TOKEN_MAX_TTL: %w", err)
+	}
+	asrCircuitCooldown, err := time.ParseDuration(viper.GetString("ASR_CIRCUIT_BREAKER_COOLDOWN"))
+	if err != nil {
+		return nil, fmt.Errorf("invalid ASR_CIRCUIT_BREAKER_COOLDOWN: %w", err)
+	}
 
 	return &Config{
 		Server: ServerConfig{
@@ -227,7 +267,49 @@ func Load() (*Config, error) {
 			MaxDuration:     meetingMaxDuration,
 			CleanupInterval: meetingCleanupInterval,
 		},
+		ASR: ASRConfig{
+			FeatureEnabled:         viper.GetBool("ASR_FEATURE_ENABLED"),
+			GRPCAddr:               viper.GetString("ASR_GRPC_ADDR"),
+			TokenSecret:            viper.GetString("ASR_TOKEN_SECRET"),
+			TokenIssuer:            viper.GetString("ASR_TOKEN_ISSUER"),
+			TokenAudience:          viper.GetString("ASR_TOKEN_AUDIENCE"),
+			TokenDefaultTTL:        asrTokenDefaultTTL,
+			TokenMaxTTL:            asrTokenMaxTTL,
+			WSURLBase:              viper.GetString("ASR_WS_URL_BASE"),
+			GRPCClientCert:         viper.GetString("ASR_GRPC_CLIENT_CERT"),
+			GRPCClientKey:          viper.GetString("ASR_GRPC_CLIENT_KEY"),
+			GRPCServerCA:           viper.GetString("ASR_GRPC_SERVER_CA"),
+			GRPCServerName:         viper.GetString("ASR_GRPC_SERVER_NAME"),
+			CircuitBreakerFailures: viper.GetInt("ASR_CIRCUIT_BREAKER_FAILURES"),
+			CircuitBreakerCooldown: asrCircuitCooldown,
+		},
 	}, nil
+}
+
+// Validate enforces cross-field constraints. Called after Load() in main.go.
+// Today only the ASR section has cross-field rules; the rest is validated
+// by their respective field-level type checks.
+func (c *Config) Validate() error {
+	if c.ASR.FeatureEnabled {
+		if c.ASR.GRPCAddr == "" {
+			return fmt.Errorf("ASR_FEATURE_ENABLED=true requires ASR_GRPC_ADDR")
+		}
+		if len(c.ASR.TokenSecret) < 32 {
+			return fmt.Errorf("ASR_FEATURE_ENABLED=true requires ASR_TOKEN_SECRET ≥ 32 bytes")
+		}
+		if c.ASR.TokenMaxTTL > 5*time.Minute {
+			return fmt.Errorf("ASR_TOKEN_MAX_TTL must be ≤ 5m")
+		}
+		if c.ASR.TokenDefaultTTL > c.ASR.TokenMaxTTL {
+			return fmt.Errorf("ASR_TOKEN_DEFAULT_TTL must be ≤ ASR_TOKEN_MAX_TTL")
+		}
+		if !c.Server.IsDevelopment() {
+			if c.ASR.GRPCClientCert == "" || c.ASR.GRPCClientKey == "" || c.ASR.GRPCServerCA == "" {
+				return fmt.Errorf("non-dev environments require ASR_GRPC_CLIENT_CERT, ASR_GRPC_CLIENT_KEY, ASR_GRPC_SERVER_CA")
+			}
+		}
+	}
+	return nil
 }
 
 func setDefaults() {
@@ -265,6 +347,18 @@ func setDefaults() {
 	viper.SetDefault("SMTP_PORT", 1025)
 	viper.SetDefault("SMTP_FROM", "noreply@rekall.local")
 	viper.SetDefault("SMTP_TLS", false)
+
+	// ASR (master switch defaults off so the wider repo runs without the C++
+	// service deployed). When enabled, missing required vars are caught in
+	// Config.Validate.
+	viper.SetDefault("ASR_FEATURE_ENABLED", false)
+	viper.SetDefault("ASR_TOKEN_DEFAULT_TTL", "3m")
+	viper.SetDefault("ASR_TOKEN_MAX_TTL", "5m")
+	viper.SetDefault("ASR_TOKEN_AUDIENCE", "rekall-asr")
+	viper.SetDefault("ASR_TOKEN_ISSUER", "rekall-backend")
+	viper.SetDefault("ASR_WS_URL_BASE", "ws://localhost:8081")
+	viper.SetDefault("ASR_CIRCUIT_BREAKER_FAILURES", 3)
+	viper.SetDefault("ASR_CIRCUIT_BREAKER_COOLDOWN", "30s")
 }
 
 func validateRequired() error {

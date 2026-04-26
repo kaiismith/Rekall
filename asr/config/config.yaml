@@ -1,0 +1,73 @@
+# Active rekall-asr config — read by the binary at runtime via
+#   rekall-asr --config /etc/rekall-asr/config.yaml
+#
+# Tracked in git so the asr container's COPY step picks it up. The
+# `config.example.yaml` next to it stays as the documented reference; this
+# file is the live source of truth for the dev/compose deployment.
+#
+# Every key may be overridden by an env var of the same name uppercased,
+# `.` → `_`, prefixed `ASR_`. e.g.  worker_pool.size  ⇄  ASR_WORKER_POOL_SIZE.
+
+server:
+  ws_listen:           "0.0.0.0:8081"
+  grpc_listen:         "0.0.0.0:9090"           # bind off loopback so the
+                                                # backend container can reach it
+                                                # over the compose network
+  metrics_listen:      "0.0.0.0:9091"
+  allow_insecure_ws:   true                     # dev only; flip false in prod
+  ws_allowed_origins:                           # CSV via env var
+    - "http://localhost:5173"
+    - "http://localhost:3000"
+
+auth:
+  token_secret_env:    "ASR_TOKEN_SECRET"       # name of the env var holding the secret
+  token_audience:      "rekall-asr"
+  token_issuer:        "rekall-backend"
+  token_default_ttl_seconds: 180
+  token_min_ttl_seconds:      60
+  token_max_ttl_seconds:     300
+  jti_cache_ttl_seconds:     600
+
+# tls section omitted on purpose — dev runs without mTLS. For production
+# uncomment all four paths and the gRPC listener will require client certs.
+# tls:
+#   ws_cert:        "/etc/rekall-asr/tls/ws.crt"
+#   ws_key:         "/etc/rekall-asr/tls/ws.key"
+#   grpc_cert:      "/etc/rekall-asr/tls/grpc-server.crt"
+#   grpc_key:       "/etc/rekall-asr/tls/grpc-server.key"
+#   grpc_client_ca: "/etc/rekall-asr/tls/clients-ca.crt"
+
+worker_pool:
+  size: 4                                       # 1..64; aim for size*n_threads <= cores
+
+admission:
+  inbound_audio_buffer_frames: 256              # ≈25 s at 100 ms frames
+  outbound_event_buffer:        64
+  backpressure_kill_ms:       5000
+  outbound_drop_ms:            200
+
+session:
+  idle_timeout_seconds:        30
+  hard_timeout_seconds:      1800
+  graceful_drain_seconds:      30
+  partial_emit_interval_ms:   250
+  final_emit_max_latency_ms: 1500
+  audio_window_seconds:         8
+
+models:
+  default: "tiny.en"
+  entries:
+    - id:          "tiny.en"
+      path:        "/var/lib/rekall-asr/models/ggml-tiny.en.bin"
+      language:    "en"
+      n_threads:   2
+      beam_size:   3
+      best_of:     3
+      temperature: 0.0
+
+logging:
+  level:  "info"        # debug | info | warn | error
+  format: "json"        # json | text
+
+telemetry:
+  otel_endpoint: ""     # empty disables OTLP exporter

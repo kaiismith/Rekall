@@ -70,6 +70,7 @@ export function NewMeetingPage() {
   const initialScope = useMemo(() => parseScopeFromUrl(searchParams), [searchParams])
   const [scope, setScope] = useState<Scope | null>(initialScope)
   const [isPrivate, setIsPrivate] = useState(false)
+  const [transcriptionEnabled, setTranscriptionEnabled] = useState(false)
 
   // Hide the picker entirely when the user has zero orgs — there is nothing
   // for them to pick.
@@ -93,6 +94,7 @@ export function NewMeetingPage() {
       const payload: Parameters<typeof meetingService.create>[0] = {
         title: '',
         type: scope && isPrivate ? 'private' : 'open',
+        transcription_enabled: transcriptionEnabled,
       }
       if (scope?.type === 'organization') {
         payload.scope_type = 'organization'
@@ -133,7 +135,7 @@ export function NewMeetingPage() {
     } finally {
       setLoading(false)
     }
-  }, [navigate, loading, scope, isPrivate])
+  }, [navigate, loading, scope, isPrivate, transcriptionEnabled])
 
   // Ctrl/⌘ + Shift + C shortcut — create a meeting from anywhere on this page.
   // Gated on the user's UI preference so it can be disabled from Settings.
@@ -211,6 +213,20 @@ export function NewMeetingPage() {
                       }
                     />
                   )}
+                  <FormControlLabel
+                    control={
+                      <Switch
+                        size="small"
+                        checked={transcriptionEnabled}
+                        onChange={(_, v) => setTranscriptionEnabled(v)}
+                      />
+                    }
+                    label={
+                      <Typography variant="body2" color="text.secondary">
+                        Live captions / transcription
+                      </Typography>
+                    }
+                  />
                 </Stack>
               )}
 

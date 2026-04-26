@@ -33,6 +33,7 @@ import { EmojiButton } from '@/components/meeting/EmojiButton'
 import { BackgroundButton } from '@/components/meeting/BackgroundButton'
 import { ChatButton } from '@/components/meeting/ChatButton'
 import { ChatPanel } from '@/components/meeting/chat/ChatPanel'
+import { LiveCaptions } from '@/components/calls/LiveCaptions'
 import { DeviceSettingsDialog } from '@/components/meeting/DeviceSettingsDialog'
 import { tokens } from '@/theme'
 import type { EmojiReaction } from '@/types/meeting'
@@ -410,6 +411,18 @@ export function MeetingRoomPage() {
                 </Paper>
               ))}
             </Stack>
+          </Box>
+        )}
+
+        {/* ── Live-captions sidebar ────────────────────────────────────────── */}
+        {/* Visible only when the host enabled transcription at meeting creation
+            AND we're actually in the meeting room. The LiveCaptions component
+            additionally hides itself when the backend reports
+            ASR_NOT_CONFIGURED, so this works gracefully on deployments where
+            the C++ ASR service isn't running. */}
+        {meeting?.transcription_enabled && roomState === 'in_meeting' && meeting?.code && (
+          <Box sx={{ width: 320, borderLeft: '1px solid', borderColor: 'divider', p: 2, overflowY: 'auto', flexShrink: 0 }}>
+            <LiveCaptions callId={meeting.code} kind="meeting" />
           </Box>
         )}
       </Box>
