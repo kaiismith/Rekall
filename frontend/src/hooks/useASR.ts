@@ -186,18 +186,36 @@ export function useASR(
       }
       switch (parsed.type) {
         case 'partial':
+          // eslint-disable-next-line no-console
+          console.debug('[asr] ⟵ partial', {
+            seg: parsed.segment_id,
+            text: parsed.text,
+            len: parsed.text.length,
+          })
           setPartial(parsed.text)
           callbacksRef.current?.onPartial?.(parsed.text, String(parsed.segment_id))
           break
         case 'final':
+          // eslint-disable-next-line no-console
+          console.debug('[asr] ⟵ FINAL ', {
+            seg: parsed.segment_id,
+            text: parsed.text,
+            len: parsed.text.length,
+            startMs: parsed.start_ms,
+            endMs: parsed.end_ms,
+          })
           setPartial('')
           setFinals((cur) => [...cur, parsed])
           callbacksRef.current?.onFinal?.(parsed.text, String(parsed.segment_id))
           break
         case 'error':
+          // eslint-disable-next-line no-console
+          console.warn('[asr] ⟵ error', parsed.code, parsed.message)
           setError({ code: parsed.code, message: parsed.message })
           break
         default:
+          // eslint-disable-next-line no-console
+          console.debug('[asr] ⟵ event', parsed)
           break
       }
     }

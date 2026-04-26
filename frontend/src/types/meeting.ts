@@ -123,15 +123,24 @@ export interface WsMessage {
 
 /** A single caption entry in the merged meeting transcript feed. */
 export interface CaptionEntry {
-  /** Stable composite key: `${userId}:${segmentId}`. */
+  /** Unique per entry, FE-generated. NOT derived from the ASR segment_id —
+   *  Whisper resets segment ids per audio window, so the same number is
+   *  reused across utterances and would collide. */
   key: string
   userId: string
-  segmentId: string
-  /** "partial" gets replaced when a "final" with the same key arrives. */
+  /** "partial" while the speaker is mid-utterance; "final" once Whisper
+   *  commits or after a silence-detection timeout closes it. */
   kind: 'partial' | 'final'
   text: string
-  /** Wall-clock ms since epoch when the chunk was produced. */
+  /** Wall-clock ms since epoch when the FIRST chunk for this entry arrived
+   *  — i.e. when the speaker started this utterance. Stays put as the
+   *  partial is updated so the displayed timestamp doesn't keep ticking. */
   timestamp: number
+  /** Wall-clock ms of the most recent update. Used by the silence-gap
+   *  check: if a new partial arrives more than ~2s after the last update
+   *  for the same user, we finalize the old entry and start a new one
+   *  with a fresh timestamp. Not displayed. */
+  lastUpdate: number
 }
 
 export interface KnockEntry {
