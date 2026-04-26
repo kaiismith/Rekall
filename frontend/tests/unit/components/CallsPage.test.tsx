@@ -158,8 +158,11 @@ describe('CallsPage', () => {
     renderPage()
 
     await waitFor(() => {
+      // The page now passes a second `scope` argument (null when no
+      // ?scope= query is present) — match both positions.
       expect(callServiceModule.callService.list).toHaveBeenCalledWith(
         expect.objectContaining({ page: 1 }),
+        null,
       )
     })
   })
@@ -188,6 +191,31 @@ describe('CallsPage', () => {
     await waitFor(() => {
       // Component renders error.message for Error instances
       expect(screen.getByText('Network timeout')).toBeInTheDocument()
+    })
+  })
+
+  // ── Scope picker + badge (Task 12.5) ────────────────────────────────────────
+
+  it('renders an "Open" ScopeBadge on rows with no scope', async () => {
+    vi.mocked(callServiceModule.callService.list).mockResolvedValue(mockCallsPage)
+
+    renderPage()
+
+    await waitFor(() => {
+      expect(screen.getByText('Q1 Sales Discovery')).toBeInTheDocument()
+    })
+    // Each call row carries a ScopeBadge — both fixtures lack scope_type so
+    // they render as "Open". The badge label is the chip's aria-label.
+    expect(screen.getAllByLabelText('Open').length).toBeGreaterThanOrEqual(2)
+  })
+
+  it('renders the scope picker chip in the page header', async () => {
+    vi.mocked(callServiceModule.callService.list).mockResolvedValue(mockCallsPage)
+
+    renderPage()
+
+    await waitFor(() => {
+      expect(screen.getByText('All scopes')).toBeInTheDocument()
     })
   })
 })
