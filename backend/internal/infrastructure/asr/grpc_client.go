@@ -74,6 +74,10 @@ func NewGRPCClient(cfg ClientConfig) (*GRPCClient, error) {
 	conn, err := grpc.NewClient(
 		cfg.Addr,
 		grpc.WithTransportCredentials(creds),
+		// Force the hand-rolled codec — the default proto codec walks
+		// MessageInfo descriptors that our hand-maintained pb stubs don't
+		// populate, and panics inside protoimpl reflection.
+		grpc.WithDefaultCallOptions(grpc.ForceCodec(pb.Codec())),
 		grpc.WithKeepaliveParams(keepalive.ClientParameters{
 			Time:                30 * time.Second,
 			Timeout:             10 * time.Second,

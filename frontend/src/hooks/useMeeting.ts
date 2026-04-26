@@ -13,6 +13,7 @@ import type {
   BackgroundOption,
   ChatMessage,
   ParticipantDirectoryEntry,
+  CaptionEntry,
 } from '@/types/meeting'
 import {
   MAX_MESSAGE_LENGTH,
@@ -23,6 +24,37 @@ import {
 } from '@/config/chat'
 
 const EMOJI_RATE_LIMIT_MS = 500
+
+// Caps the in-memory caption feed so a long meeting can't grow unbounded.
+// Older finals scroll off the top once exceeded — the panel auto-scrolls to
+// the bottom anyway so participants always see the latest.
+const CAPTION_BUFFER_MAX = 400
+
+/**
+ * Reducer for the caption feed.
+ *
+ * - If we've already seen this `key` (same userId+segmentId), replace the
+ *   prior entry in place. This is how a partial gets upgraded to a final
+ *   without showing both, and how a re-emitted partial overwrites the old
+ *   text rather than appending duplicates.
+ * - Otherwise append. Trim from the front when exceeding CAPTION_BUFFER_MAX.
+ */
+function mergeCaption(prev: CaptionEntry[], next: CaptionEntry): CaptionEntry[] {
+  const idx = prev.findIndex((e) => e.key === next.key)
+  if (idx >= 0) {
+    // Don't downgrade a final to a partial — a late partial echo could
+    // otherwise overwrite a final we already finalized.
+    if (prev[idx].kind === 'final' && next.kind === 'partial') return prev
+    const out = prev.slice()
+    out[idx] = next
+    return out
+  }
+  const out = prev.length >= CAPTION_BUFFER_MAX
+    ? prev.slice(prev.length - CAPTION_BUFFER_MAX + 1)
+    : prev.slice()
+  out.push(next)
+  return out
+}
 const MAX_ACTIVE_REACTIONS = 10
 const BG_STORAGE_KEY = 'rekall_bg_preference'
 const CUSTOM_BG_KEY = 'rekall_bg_custom'
@@ -110,6 +142,11 @@ export interface UseMeetingReturn {
   loadOlderMessages: () => Promise<void>
   retryHistoryFetch: () => void
   dismissChatSendError: () => void
+  // ── live captions ──────────────────────────────────────────────────────────
+  /** Merged transcript feed across all opted-in speakers in the meeting. */
+  captions: CaptionEntry[]
+  /** Push a local ASR chunk into the feed and relay it over the meeting WS. */
+  sendCaptionChunk: (kind: 'partial' | 'final', text: string, segmentId: string) => void
 }
 
 const RTC_CONFIG: RTCConfiguration = {
@@ -186,6 +223,16 @@ export function useMeeting({ code, onEnd }: UseMeetingOptions): UseMeetingReturn
 
   // ── remote participant media state (from room_state / media_state events) ──
   const [mediaStates, setMediaStates] = useState<Record<string, MediaState>>({})
+
+  // ── live captions state ────────────────────────────────────────────────────
+  // Captions are a per-user opt-in: each participant decides whether to
+  // start their own ASR session and open their captions panel. The hub
+  // relays caption_chunk events from any opted-in speaker to everyone, so
+  // we always maintain the merged transcript feed — listeners who turn the
+  // panel on mid-meeting see the recent history immediately. Each entry is
+  // keyed by `${userId}:${segmentId}`; a partial is replaced in place when
+  // the matching final arrives.
+  const [captions, setCaptions] = useState<CaptionEntry[]>([])
 
   // ── chat state ─────────────────────────────────────────────────────────────
   const [messages, setMessages] = useState<ChatMessage[]>([])
@@ -609,6 +656,21 @@ export function useMeeting({ code, onEnd }: UseMeetingOptions): UseMeetingReturn
         cleanup()
         onEnd?.()
         break
+
+      case 'caption_chunk': {
+        if (!msg.user_id || !msg.caption_segment_id || !msg.caption_text) break
+        if (msg.caption_kind !== 'partial' && msg.caption_kind !== 'final') break
+        const entry: CaptionEntry = {
+          key:       `${msg.user_id}:${msg.caption_segment_id}`,
+          userId:    msg.user_id,
+          segmentId: msg.caption_segment_id,
+          kind:      msg.caption_kind,
+          text:      msg.caption_text,
+          timestamp: msg.caption_ts ?? Date.now(),
+        }
+        setCaptions((prev) => mergeCaption(prev, entry))
+        break
+      }
 
       case 'pong':
         break
@@ -1312,6 +1374,35 @@ export function useMeeting({ code, onEnd }: UseMeetingOptions): UseMeetingReturn
     }
   }, [code, isLoadingHistory, hasMoreHistory, messages])
 
+  // ── live captions: relay local ASR chunks ─────────────────────────────────
+  // Relay a local ASR chunk to other participants over the meeting WS. Also
+  // appends to the local captions feed so the speaker sees their own text
+  // alongside the others' (the backend excludes the sender from the relay).
+  const sendCaptionChunk = useCallback((
+    kind: 'partial' | 'final',
+    text: string,
+    segmentId: string,
+  ) => {
+    const uid = localUserIdRef.current
+    if (!uid || !text || !segmentId) return
+    const ts = Date.now()
+    setCaptions((prev) => mergeCaption(prev, {
+      key:       `${uid}:${segmentId}`,
+      userId:    uid,
+      segmentId,
+      kind,
+      text,
+      timestamp: ts,
+    }))
+    send({
+      type: 'caption_chunk',
+      caption_kind: kind,
+      caption_text: text,
+      caption_segment_id: segmentId,
+      caption_ts: ts,
+    })
+  }, [send])
+
   // ─────────────────────────────────────────────────────────────────────────
   return {
     meeting,
@@ -1371,5 +1462,8 @@ export function useMeeting({ code, onEnd }: UseMeetingOptions): UseMeetingReturn
     loadOlderMessages,
     retryHistoryFetch,
     dismissChatSendError,
+    // ── live captions ─────────────────────────────────────────────────────
+    captions,
+    sendCaptionChunk,
   }
 }

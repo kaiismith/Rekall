@@ -47,6 +47,7 @@ type MeetingResponse struct {
 	CreatedAt           time.Time            `json:"created_at"`
 	DurationSeconds     *int64               `json:"duration_seconds,omitempty"`
 	ParticipantPreviews []ParticipantPreview `json:"participant_previews"`
+	TranscriptionEnabled bool                `json:"transcription_enabled"`
 }
 
 // MeetingFromEntity builds a MeetingResponse from a Meeting entity.
@@ -67,6 +68,7 @@ func MeetingFromEntity(m *entities.Meeting, baseURL string) MeetingResponse {
 		EndedAt:             m.EndedAt,
 		CreatedAt:           m.CreatedAt,
 		ParticipantPreviews: []ParticipantPreview{},
+		TranscriptionEnabled: m.TranscriptionEnabled,
 	}
 }
 

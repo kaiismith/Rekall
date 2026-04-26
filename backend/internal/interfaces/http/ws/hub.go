@@ -134,6 +134,7 @@ func NewHub(
 		MsgTypeEmojiReaction: handleEmojiReaction,
 		MsgTypeHandRaise:     handleHandRaise,
 		MsgTypeChatMessage:   handleChatMessage,
+		MsgTypeCaptionChunk:  handleCaptionChunk,
 	}
 	return h
 }
@@ -462,3 +463,4 @@ func (h *Hub) broadcastExcept(sender *Client, msg OutboundMessage) {
 func (h *Hub) ActiveCount() int {
 	return len(h.clients)
 }
+

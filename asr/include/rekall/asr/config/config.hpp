@@ -27,6 +27,7 @@ struct ServerConfig {
     std::string grpc_listen    = "127.0.0.1:9090";
     std::string metrics_listen = "0.0.0.0:9091";
     bool allow_insecure_ws     = false;
+    bool allow_insecure_grpc   = false;  // dev only: gRPC off loopback w/o mTLS
     bool grpc_bind_all         = false;
     std::vector<std::string> ws_allowed_origins;
 };

@@ -33,7 +33,9 @@ import { EmojiButton } from '@/components/meeting/EmojiButton'
 import { BackgroundButton } from '@/components/meeting/BackgroundButton'
 import { ChatButton } from '@/components/meeting/ChatButton'
 import { ChatPanel } from '@/components/meeting/chat/ChatPanel'
-import { LiveCaptions } from '@/components/calls/LiveCaptions'
+import { CaptionsButton } from '@/components/meeting/CaptionsButton'
+import { MeetingCaptionsPanel } from '@/components/meeting/MeetingCaptionsPanel'
+import { useASR } from '@/hooks/useASR'
 import { DeviceSettingsDialog } from '@/components/meeting/DeviceSettingsDialog'
 import { tokens } from '@/theme'
 import type { EmojiReaction } from '@/types/meeting'
@@ -124,6 +126,8 @@ export function MeetingRoomPage() {
     loadOlderMessages,
     retryHistoryFetch,
     dismissChatSendError,
+    captions,
+    sendCaptionChunk,
   } = useMeeting({
     code: code ?? '',
     onEnd: () => {
@@ -131,6 +135,47 @@ export function MeetingRoomPage() {
       navigate('/meetings')
     },
   })
+
+  // ── Live captions: per-user opt-in (no host permission, no meeting flag).
+  // Each participant decides for themselves whether to open the captions
+  // panel. Turning it on starts a local ASR session against your own mic
+  // and broadcasts the resulting chunks via the meeting WS hub; turning it
+  // off tears the session down. Other participants who also have captions
+  // on will see your text attributed to you, and vice versa.
+  const [captionsOn, setCaptionsOn] = useState(false)
+
+  const asr = useASR(
+    code ?? null,
+    'meeting',
+    {
+      onPartial: (text, segId) => sendCaptionChunk('partial', text, segId),
+      onFinal:   (text, segId) => sendCaptionChunk('final',   text, segId),
+    },
+  )
+
+  // Stable handle to the latest asr API so the intent-driven effect below
+  // doesn't re-fire on every render (asr is a fresh object identity each
+  // render). useASR owns its own reconnect backoff for transient drops; the
+  // page only signals user intent.
+  const asrRef = useRef(asr)
+  asrRef.current = asr
+
+  // Drive ASR purely from user intent. Starting/stopping here in response to
+  // asr.state changes caused a feedback loop: a session that ended (for any
+  // reason — flush, server idle, network blip) flipped state back to
+  // 'ended', this effect re-fired, called start() again, repeat — hundreds
+  // of sessions per second. The fix is to react ONLY to the inputs the user
+  // controls.
+  useEffect(() => {
+    const shouldStream = captionsOn
+                      && roomState === 'in_meeting'
+                      && !isMuted
+    if (shouldStream) {
+      void asrRef.current.start()
+    } else {
+      void asrRef.current.stop()
+    }
+  }, [captionsOn, roomState, isMuted])
 
   // Log every roomState transition so we can see in devtools exactly where
   // the page lands. Easy to grep on `[meeting]`.
@@ -415,14 +460,19 @@ export function MeetingRoomPage() {
         )}
 
         {/* ── Live-captions sidebar ────────────────────────────────────────── */}
-        {/* Visible only when the host enabled transcription at meeting creation
-            AND we're actually in the meeting room. The LiveCaptions component
-            additionally hides itself when the backend reports
-            ASR_NOT_CONFIGURED, so this works gracefully on deployments where
-            the C++ ASR service isn't running. */}
-        {meeting?.transcription_enabled && roomState === 'in_meeting' && meeting?.code && (
-          <Box sx={{ width: 320, borderLeft: '1px solid', borderColor: 'divider', p: 2, overflowY: 'auto', flexShrink: 0 }}>
-            <LiveCaptions callId={meeting.code} kind="meeting" />
+        {/* Personal opt-in: shown only to participants who clicked the
+            captions button in their own control bar. The captions array is
+            maintained even when the panel is closed, so reopening shows
+            recent history immediately. */}
+        {captionsOn && roomState === 'in_meeting' && (
+          <Box sx={{ width: 340, borderLeft: '1px solid', borderColor: 'divider', p: 2, flexShrink: 0, display: 'flex' }}>
+            <MeetingCaptionsPanel
+              captions={captions}
+              directory={participantDirectory}
+              localUserId={user?.id ?? null}
+              isStreamingLocal={asr.state === 'streaming'}
+              isDisabled={false}
+            />
           </Box>
         )}
       </Box>
@@ -456,6 +506,10 @@ export function MeetingRoomPage() {
           unreadCount={unreadCount}
           isOpen={isChatPanelOpen}
           onToggle={isChatPanelOpen ? closeChatPanel : openChatPanel}
+        />
+        <CaptionsButton
+          enabled={captionsOn}
+          onToggle={() => setCaptionsOn((on) => !on)}
         />
         <Tooltip title="Device settings">
           <IconButton

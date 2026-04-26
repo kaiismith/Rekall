@@ -29,6 +29,19 @@ export interface UseASRResult {
   stop: () => Promise<void>
 }
 
+/**
+ * Optional per-chunk hooks. The meeting flow uses these to relay each
+ * partial / final to the meeting WebSocket so other participants can render
+ * the local speaker's transcript with attribution. `segmentId` is stable
+ * across the partial→final transition for a single utterance, allowing the
+ * receiving side to replace the in-flight partial in place rather than
+ * appending duplicates.
+ */
+export interface ASRStreamCallbacks {
+  onPartial?: (text: string, segmentId: string) => void
+  onFinal?: (text: string, segmentId: string) => void
+}
+
 const RECONNECT_BACKOFFS_MS = [500, 1000, 2000, 4000, 8000]
 const MAX_RECONNECTS = RECONNECT_BACKOFFS_MS.length
 
@@ -50,7 +63,11 @@ function logSafe(message: string, data?: Record<string, unknown>): void {
  */
 export type ASRSessionKind = 'call' | 'meeting'
 
-export function useASR(id: string | null, kind: ASRSessionKind = 'call'): UseASRResult {
+export function useASR(
+  id: string | null,
+  kind: ASRSessionKind = 'call',
+  callbacks?: ASRStreamCallbacks,
+): UseASRResult {
   const [state, setState] = useState<ASRHookState>('idle')
   const [partial, setPartial] = useState('')
   const [finals, setFinals] = useState<ASRFinalEvent[]>([])
@@ -63,6 +80,12 @@ export function useASR(id: string | null, kind: ASRSessionKind = 'call'): UseASR
   const sessionRef       = useRef<ASRSessionPayload | null>(null)
   const reconnectsRef    = useRef(0)
   const stoppedRef       = useRef(false)
+
+  // Hold the latest callbacks in a ref so we don't re-create openSession on
+  // every parent render — the callbacks themselves are typically inline
+  // arrows that change identity each render.
+  const callbacksRef = useRef<ASRStreamCallbacks | undefined>(callbacks)
+  callbacksRef.current = callbacks
 
   // ── Cleanup of audio + WS resources ────────────────────────────────────────
   const teardown = useCallback(async () => {
@@ -142,6 +165,12 @@ export function useASR(id: string | null, kind: ASRSessionKind = 'call'): UseASR
         logSafe('streaming started')
       } catch (e) {
         const err = normaliseError(e)
+        // Surface the actual cause to the console — the captions panel only
+        // shows a short message; failures here (worklet load, mic permission)
+        // are otherwise invisible. Audio bytes never appear in this code path,
+        // so logging is safe.
+        // eslint-disable-next-line no-console
+        console.error('[asr] onopen failed', err, e)
         setError(err)
         setState('error')
         await teardown()
@@ -158,10 +187,12 @@ export function useASR(id: string | null, kind: ASRSessionKind = 'call'): UseASR
       switch (parsed.type) {
         case 'partial':
           setPartial(parsed.text)
+          callbacksRef.current?.onPartial?.(parsed.text, String(parsed.segment_id))
           break
         case 'final':
           setPartial('')
           setFinals((cur) => [...cur, parsed])
+          callbacksRef.current?.onFinal?.(parsed.text, String(parsed.segment_id))
           break
         case 'error':
           setError({ code: parsed.code, message: parsed.message })
@@ -211,6 +242,11 @@ export function useASR(id: string | null, kind: ASRSessionKind = 'call'): UseASR
 
   // ── Public API ─────────────────────────────────────────────────────────────
   const start = useCallback(async () => {
+    // Idempotent: if a session is already in flight or running, do nothing.
+    // The parent intent-driven effect can fire start() multiple times under
+    // React 18 strict-mode double-invocation or rapid input flips; without
+    // this guard we'd stack multiple sessions on top of each other.
+    if (wsRef.current || sessionRef.current) return
     stoppedRef.current = false
     reconnectsRef.current = 0
     setFinals([])
@@ -219,6 +255,10 @@ export function useASR(id: string | null, kind: ASRSessionKind = 'call'): UseASR
   }, [openSession])
 
   const stop = useCallback(async () => {
+    // Nothing to tear down — the parent intent effect calls stop() on mount
+    // and on every "captions off" transition; bail before mutating state so
+    // we don't churn an idle hook into 'ended'.
+    if (!wsRef.current && !sessionRef.current) return
     stoppedRef.current = true
     const session = sessionRef.current
     const ws = wsRef.current

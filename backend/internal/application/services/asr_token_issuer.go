@@ -214,9 +214,9 @@ type MeetingRequestInput struct {
 // have a meeting_participants row with joined_at IS NOT NULL AND left_at IS
 // NULL). The host is implicitly an active participant once they've joined.
 //
-// Gating: the meeting's `transcription_enabled` flag MUST be true; otherwise
-// the endpoint returns 403 TRANSCRIPTION_DISABLED. Ended meetings return
-// 410 MEETING_ENDED.
+// Captions are a per-user opt-in: any active participant may request a
+// session at any time. There is no meeting-wide flag and no host approval.
+// Ended meetings return 410 MEETING_ENDED.
 //
 // The C++ ASR service has no notion of "call" vs "meeting" — both flows pass
 // a UUID in the JWT's `cid` claim. Here we use meeting.id so the C++ side's
@@ -240,10 +240,6 @@ func (s *ASRTokenIssuer) RequestForMeeting(ctx context.Context, in MeetingReques
 	}
 	if meeting.IsEnded() {
 		return nil, apperr.Gone("MEETING_ENDED", "meeting has ended")
-	}
-	if !meeting.TranscriptionEnabled {
-		return nil, apperr.ForbiddenCode("TRANSCRIPTION_DISABLED",
-			"live captions are not enabled for this meeting")
 	}
 
 	// Active-participant check: host doesn't get a free pass — they too must

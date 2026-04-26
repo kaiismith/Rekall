@@ -195,10 +195,14 @@ void GrpcServer::start() {
                                            slurp(deps_.cfg.tls.grpc_cert)});
         creds = grpc::SslServerCredentials(opts);
     } else {
-        // Insecure is acceptable only when bound to loopback.
-        if (deps_.cfg.server.grpc_bind_all) {
+        // Insecure is acceptable only when bound to loopback, OR the operator
+        // explicitly opted in via allow_insecure_grpc (dev / docker-compose
+        // bridge networking, where the backend reaches asr:9090 across a
+        // user-defined network and loopback isn't reachable).
+        if (deps_.cfg.server.grpc_bind_all && !deps_.cfg.server.allow_insecure_grpc) {
             throw std::runtime_error(
-                "grpc bound off loopback without mTLS — refuse to start");
+                "grpc bound off loopback without mTLS — refuse to start "
+                "(set ASR_ALLOW_INSECURE_GRPC=true for local dev)");
         }
         creds = grpc::InsecureServerCredentials();
     }

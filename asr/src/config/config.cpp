@@ -149,18 +149,28 @@ Config Config::load(const std::filesystem::path& path) {
     Config c;
 
     // ── server ───────────────────────────────────────────────────────────────
+    // Listen-address env vars use short names (ASR_WS_LISTEN, ASR_GRPC_LISTEN,
+    // ASR_METRICS_LISTEN) to match docker-compose and the docs. Do NOT use
+    // env_var_for() here — that would derive ASR_SERVER_WS_LISTEN etc., which
+    // nobody sets, and the yaml-cpp parser is currently unreliable for the
+    // server.* subtree, so we'd silently fall back to the built-in default
+    // (127.0.0.1:9090 for gRPC) — making the service unreachable from other
+    // containers on the docker bridge.
     c.server.ws_listen          = pick<std::string>(root, "server.ws_listen",
-                                                    env_var_for("server.ws_listen"),
+                                                    "ASR_WS_LISTEN",
                                                     c.server.ws_listen);
     c.server.grpc_listen        = pick<std::string>(root, "server.grpc_listen",
-                                                    env_var_for("server.grpc_listen"),
+                                                    "ASR_GRPC_LISTEN",
                                                     c.server.grpc_listen);
     c.server.metrics_listen     = pick<std::string>(root, "server.metrics_listen",
-                                                    env_var_for("server.metrics_listen"),
+                                                    "ASR_METRICS_LISTEN",
                                                     c.server.metrics_listen);
     c.server.allow_insecure_ws  = pick<bool>(root, "server.allow_insecure_ws",
                                              "ASR_ALLOW_INSECURE_WS",
                                              c.server.allow_insecure_ws);
+    c.server.allow_insecure_grpc = pick<bool>(root, "server.allow_insecure_grpc",
+                                              "ASR_ALLOW_INSECURE_GRPC",
+                                              c.server.allow_insecure_grpc);
     c.server.grpc_bind_all      = pick<bool>(root, "server.grpc_bind_all",
                                              "ASR_GRPC_BIND_ALL",
                                              c.server.grpc_bind_all);
@@ -310,6 +320,32 @@ Config Config::load(const std::filesystem::path& path) {
             m.suppress_non_speech_tokens = e["suppress_non_speech_tokens"]
                 ? e["suppress_non_speech_tokens"].as<bool>() : m.suppress_non_speech_tokens;
             c.models.entries.push_back(std::move(m));
+        }
+    }
+
+    // Env-var fallback. If YAML produced no entries (file missing, empty, or
+    // the loader couldn't reach the models block), allow a single model to be
+    // registered from env vars. This keeps the container bootable in
+    // container-only deployments where YAML may be omitted entirely.
+    if (c.models.entries.empty()) {
+        if (auto path_v = getenv_opt("ASR_MODEL_DEFAULT_PATH")) {
+            ModelEntry m;
+            m.id   = getenv_opt("ASR_MODEL_DEFAULT_ID").value_or("default");
+            m.path = *path_v;
+            if (auto lang = getenv_opt("ASR_MODEL_DEFAULT_LANGUAGE")) m.language = *lang;
+            if (auto nt   = getenv_opt("ASR_MODEL_DEFAULT_N_THREADS"))   m.n_threads = std::stoi(*nt);
+            if (auto bs   = getenv_opt("ASR_MODEL_DEFAULT_BEAM_SIZE"))   m.beam_size = std::stoi(*bs);
+            if (auto bo   = getenv_opt("ASR_MODEL_DEFAULT_BEST_OF"))     m.best_of   = std::stoi(*bo);
+            if (auto tmp  = getenv_opt("ASR_MODEL_DEFAULT_TEMPERATURE")) m.temperature = std::stof(*tmp);
+            c.models.entries.push_back(std::move(m));
+            if (c.models.default_id.empty() ||
+                c.models.default_id == "small.en") {  // built-in default sentinel
+                c.models.default_id = c.models.entries.front().id;
+            }
+            std::fprintf(stderr,
+                "config: applied env-var model fallback id=%s path=%s\n",
+                c.models.entries.front().id.c_str(),
+                c.models.entries.front().path.c_str());
         }
     }
     std::fprintf(stderr,

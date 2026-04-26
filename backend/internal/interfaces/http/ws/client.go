@@ -66,6 +66,12 @@ const (
 
 	// Chat
 	MsgTypeChatMessage = "chat_message" // persistent in-room text message
+
+	// Live captions (relayed, not persisted). Each speaker who runs ASR locally
+	// sends caption_chunk events; the hub fans them out so everyone sees the
+	// merged transcript with per-speaker attribution. Captions are a per-user
+	// opt-in — there is no meeting-wide flag.
+	MsgTypeCaptionChunk = "caption_chunk"
 )
 
 // InboundMessage is a generic envelope for messages received from a client.
@@ -84,6 +90,11 @@ type InboundMessage struct {
 	// Chat
 	Body     string `json:"body,omitempty"`      // chat_message
 	ClientID string `json:"client_id,omitempty"` // chat_message (echoed back)
+	// Live captions
+	CaptionKind      string `json:"caption_kind,omitempty"`       // "partial" | "final"
+	CaptionText      string `json:"caption_text,omitempty"`
+	CaptionSegmentID string `json:"caption_segment_id,omitempty"` // stable per speaker+utterance
+	CaptionTimestamp int64  `json:"caption_ts,omitempty"`         // ms since epoch (sender clock)
 }
 
 // RoomStateParticipant is a snapshot of one participant's ephemeral state.
@@ -120,6 +131,11 @@ type OutboundMessage struct {
 	ClientID string     `json:"client_id,omitempty"` // chat_message (echoed back)
 	Body     string     `json:"body,omitempty"`      // chat_message
 	SentAt   *time.Time `json:"sent_at,omitempty"`   // chat_message
+	// Live captions (relay)
+	CaptionKind      string `json:"caption_kind,omitempty"`
+	CaptionText      string `json:"caption_text,omitempty"`
+	CaptionSegmentID string `json:"caption_segment_id,omitempty"`
+	CaptionTimestamp int64  `json:"caption_ts,omitempty"`
 }
 
 // closeSignal carries a WebSocket close frame to be sent by writePump.
