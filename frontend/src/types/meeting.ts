@@ -87,6 +87,7 @@ export type WsMsgType =
   | 'hand_raise'
   | 'room_state'
   | 'chat_message'
+  | 'caption_chunk'
 
 export interface WsMessage {
   type: WsMsgType
@@ -113,6 +114,24 @@ export interface WsMessage {
   // Identity fields attached to participant.joined / chat broadcasts
   full_name?: string
   initials?: string
+  // caption_chunk
+  caption_kind?: 'partial' | 'final'
+  caption_text?: string
+  caption_segment_id?: string
+  caption_ts?: number
+}
+
+/** A single caption entry in the merged meeting transcript feed. */
+export interface CaptionEntry {
+  /** Stable composite key: `${userId}:${segmentId}`. */
+  key: string
+  userId: string
+  segmentId: string
+  /** "partial" gets replaced when a "final" with the same key arrives. */
+  kind: 'partial' | 'final'
+  text: string
+  /** Wall-clock ms since epoch when the chunk was produced. */
+  timestamp: number
 }
 
 export interface KnockEntry {

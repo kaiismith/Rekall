@@ -115,10 +115,23 @@ services:
       ASR_GRPC_LISTEN: "0.0.0.0:9090"
       ASR_METRICS_LISTEN: "0.0.0.0:9091"
       ASR_GRPC_BIND_ALL: "true"
+      # Local-dev: backend reaches asr:9090 across the docker bridge, so the
+      # gRPC port can't bind to loopback. Skip mTLS enforcement here. Do NOT
+      # set this in production — provision real certs via the tls.* keys.
+      ASR_ALLOW_INSECURE_GRPC: "true"
       ASR_WS_ALLOWED_ORIGINS: ${ASR_WS_ALLOWED_ORIGINS:-http://localhost:5173,http://localhost:3000}
       ASR_ALLOW_INSECURE_WS: "true"
       ASR_LOG_LEVEL: ${ASR_LOG_LEVEL:-info}
       ASR_LOG_FORMAT: json
+      # Model fallback (used when YAML loader can't populate models.entries).
+      # The container ships ggml-tiny.en.bin under the mounted models volume.
+      ASR_MODEL_DEFAULT_ID: ${ASR_MODEL_DEFAULT_ID:-tiny.en}
+      ASR_MODEL_DEFAULT_PATH: ${ASR_MODEL_DEFAULT_PATH:-/var/lib/rekall-asr/models/ggml-tiny.en.bin}
+      ASR_MODEL_DEFAULT_LANGUAGE: ${ASR_MODEL_DEFAULT_LANGUAGE:-en}
+      ASR_MODEL_DEFAULT_N_THREADS: ${ASR_MODEL_DEFAULT_N_THREADS:-2}
+      ASR_MODEL_DEFAULT_BEAM_SIZE: ${ASR_MODEL_DEFAULT_BEAM_SIZE:-3}
+      ASR_MODEL_DEFAULT_BEST_OF: ${ASR_MODEL_DEFAULT_BEST_OF:-3}
+      ASR_MODELS_DEFAULT: ${ASR_MODELS_DEFAULT:-tiny.en}
     volumes:
       - ./asr/models:/var/lib/rekall-asr/models:ro
       # Mount the live config from the host so edits take effect on `up`

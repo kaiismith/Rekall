@@ -56,11 +56,13 @@ export const asrService = {
   },
 
   /**
-   * Build the URL the AudioWorklet processor module is loaded from. We
-   * compile the worklet as a separate entry so the browser fetches it as a
-   * standalone script (worklets cannot use module bundlers' default loaders).
+   * URL the AudioWorklet processor is loaded from. Served as a static
+   * asset under public/ so dev and production resolve to the same path
+   * without bundler involvement — `new URL('…ts', import.meta.url)` does
+   * NOT survive Vite's prod build for AudioWorklet purposes (the URL ends
+   * up pointing at a non-existent .ts file and addModule() throws).
    */
   buildAudioWorkletUrl(): string {
-    return new URL('../workers/pcmWorklet.ts', import.meta.url).toString()
+    return '/pcm-worklet.js'
   },
 }
