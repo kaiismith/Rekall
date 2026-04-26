@@ -51,7 +51,7 @@ func newTestDeps(t *testing.T) httpiface.RouterDeps {
 	callSvc := services.NewCallService(nil, nil, nil, log)
 	userSvc := services.NewUserService(nil, log)
 	orgSvc := services.NewOrganizationService(nil, nil, nil, nil, nil, "http://localhost", 48*time.Hour, log)
-	deptSvc := services.NewDepartmentService(nil, nil, nil, log)
+	deptSvc := services.NewDepartmentService(nil, nil, nil, nil, log)
 
 	return httpiface.RouterDeps{
 		Logger:         log,

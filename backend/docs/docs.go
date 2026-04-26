@@ -144,6 +144,124 @@ const docTemplate = `{
                         }
                     }
                 }
+            },
+            "patch": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Updates the authenticated user's profile. Only the full_name field is editable via this endpoint; email, role, and verified status require different flows. Silently ignores any additional fields in the request body.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Auth"
+                ],
+                "summary": "Update current user",
+                "parameters": [
+                    {
+                        "description": "Profile fields to update",
+                        "name": "body",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/github_com_rekall_backend_internal_interfaces_http_dto.UpdateMeRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Updated user profile",
+                        "schema": {
+                            "$ref": "#/definitions/github_com_rekall_backend_internal_interfaces_http_dto.UserResponseEnvelope"
+                        }
+                    },
+                    "401": {
+                        "description": "Missing or invalid token",
+                        "schema": {
+                            "$ref": "#/definitions/github_com_rekall_backend_internal_interfaces_http_dto.ErrorResponse"
+                        }
+                    },
+                    "422": {
+                        "description": "Validation error",
+                        "schema": {
+                            "$ref": "#/definitions/github_com_rekall_backend_internal_interfaces_http_dto.ErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal server error",
+                        "schema": {
+                            "$ref": "#/definitions/github_com_rekall_backend_internal_interfaces_http_dto.ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/v1/auth/password/change": {
+            "post": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Verifies the authenticated user's current password and installs a new one. Revokes every OTHER refresh token for the user — forcing other devices to re-authenticate — while issuing a freshly rotated refresh cookie for the current browser so this session stays signed in. Password must be 8+ characters with at least one letter and one digit.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Auth"
+                ],
+                "summary": "Change password",
+                "parameters": [
+                    {
+                        "description": "Current and new password",
+                        "name": "body",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/github_com_rekall_backend_internal_interfaces_http_dto.ChangePasswordRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Password updated; other sessions signed out",
+                        "schema": {
+                            "$ref": "#/definitions/github_com_rekall_backend_internal_interfaces_http_dto.MessageResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "Current password is incorrect (INVALID_CURRENT_PASSWORD)",
+                        "schema": {
+                            "$ref": "#/definitions/github_com_rekall_backend_internal_interfaces_http_dto.ErrorResponse"
+                        }
+                    },
+                    "401": {
+                        "description": "Missing or invalid token",
+                        "schema": {
+                            "$ref": "#/definitions/github_com_rekall_backend_internal_interfaces_http_dto.ErrorResponse"
+                        }
+                    },
+                    "422": {
+                        "description": "Validation error — new password policy not met",
+                        "schema": {
+                            "$ref": "#/definitions/github_com_rekall_backend_internal_interfaces_http_dto.ErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal server error",
+                        "schema": {
+                            "$ref": "#/definitions/github_com_rekall_backend_internal_interfaces_http_dto.ErrorResponse"
+                        }
+                    }
+                }
             }
         },
         "/api/v1/auth/password/forgot": {
@@ -472,6 +590,23 @@ const docTemplate = `{
                         "description": "Filter by user UUID",
                         "name": "user_id",
                         "in": "query"
+                    },
+                    {
+                        "enum": [
+                            "organization",
+                            "department",
+                            "open"
+                        ],
+                        "type": "string",
+                        "description": "Filter by scope",
+                        "name": "filter[scope_type]",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "UUID of the org or dept; required when scope_type is organization or department",
+                        "name": "filter[scope_id]",
+                        "in": "query"
                     }
                 ],
                 "responses": {
@@ -482,13 +617,19 @@ const docTemplate = `{
                         }
                     },
                     "400": {
-                        "description": "Invalid query parameter (e.g. malformed UUID)",
+                        "description": "Invalid query parameter (e.g. malformed UUID or scope params)",
                         "schema": {
                             "$ref": "#/definitions/github_com_rekall_backend_internal_interfaces_http_dto.ErrorResponse"
                         }
                     },
                     "401": {
                         "description": "Missing or invalid token",
+                        "schema": {
+                            "$ref": "#/definitions/github_com_rekall_backend_internal_interfaces_http_dto.ErrorResponse"
+                        }
+                    },
+                    "403": {
+                        "description": "Caller is not a member of the requested scope",
                         "schema": {
                             "$ref": "#/definitions/github_com_rekall_backend_internal_interfaces_http_dto.ErrorResponse"
                         }
@@ -1412,6 +1553,23 @@ const docTemplate = `{
                     },
                     {
                         "enum": [
+                            "organization",
+                            "department",
+                            "open"
+                        ],
+                        "type": "string",
+                        "description": "Filter by scope",
+                        "name": "filter[scope_type]",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "UUID of the org or dept; required when scope_type is organization or department",
+                        "name": "filter[scope_id]",
+                        "in": "query"
+                    },
+                    {
+                        "enum": [
                             "created_at_desc",
                             "created_at_asc",
                             "duration_desc",
@@ -1433,8 +1591,20 @@ const docTemplate = `{
                             "$ref": "#/definitions/github_com_rekall_backend_internal_interfaces_http_dto.MeetingListResponse"
                         }
                     },
+                    "400": {
+                        "description": "Malformed scope parameters",
+                        "schema": {
+                            "$ref": "#/definitions/github_com_rekall_backend_internal_interfaces_http_dto.ErrorResponse"
+                        }
+                    },
                     "401": {
                         "description": "Missing or invalid token",
+                        "schema": {
+                            "$ref": "#/definitions/github_com_rekall_backend_internal_interfaces_http_dto.ErrorResponse"
+                        }
+                    },
+                    "403": {
+                        "description": "Caller is not a member of the requested scope",
                         "schema": {
                             "$ref": "#/definitions/github_com_rekall_backend_internal_interfaces_http_dto.ErrorResponse"
                         }
@@ -1628,7 +1798,7 @@ const docTemplate = `{
         },
         "/api/v1/meetings/{code}/ws": {
             "get": {
-                "description": "Upgrades the connection to WebSocket and places the caller into the meeting hub. The JWT access token must be passed as the ` + "`" + `token` + "`" + ` query parameter because WebSocket clients cannot send custom headers during the handshake. Callers who are scope members join directly; others enter the waiting room (knock flow).",
+                "description": "Upgrades the connection to WebSocket and places the caller into the meeting hub. Callers authenticate by presenting a short-lived ticket obtained from POST /meetings/:code/ws-ticket; the ticket is single-use and is consumed atomically at upgrade time. Callers who are scope members join directly; others enter the waiting room (knock flow).",
                 "produces": [
                     "application/json"
                 ],
@@ -1647,8 +1817,8 @@ const docTemplate = `{
                     },
                     {
                         "type": "string",
-                        "description": "JWT access token",
-                        "name": "token",
+                        "description": "Short-lived WS ticket (see /ws-ticket)",
+                        "name": "ticket",
                         "in": "query",
                         "required": true
                     }
@@ -1661,7 +1831,7 @@ const docTemplate = `{
                         }
                     },
                     "401": {
-                        "description": "Missing or invalid token",
+                        "description": "Missing (TICKET_REQUIRED) or invalid (TICKET_INVALID) or code-mismatched (TICKET_MISMATCH) ticket",
                         "schema": {
                             "$ref": "#/definitions/github_com_rekall_backend_internal_interfaces_http_dto.ErrorResponse"
                         }
@@ -1674,6 +1844,65 @@ const docTemplate = `{
                     },
                     "404": {
                         "description": "Meeting not found",
+                        "schema": {
+                            "$ref": "#/definitions/github_com_rekall_backend_internal_interfaces_http_dto.ErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal server error",
+                        "schema": {
+                            "$ref": "#/definitions/github_com_rekall_backend_internal_interfaces_http_dto.ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/v1/meetings/{code}/ws-ticket": {
+            "post": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Exchanges the caller's bearer token for a short-lived (60s), single-use ticket that authenticates the meeting WebSocket handshake. The ticket is bound to the calling user and the meeting code. Returns the ticket value and a fully-qualified ws_url path.",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Meetings"
+                ],
+                "summary": "Issue a WebSocket ticket for a meeting",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "example": "abc-defg-hij",
+                        "description": "Meeting code",
+                        "name": "code",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "201": {
+                        "description": "Ticket issued",
+                        "schema": {
+                            "$ref": "#/definitions/github_com_rekall_backend_internal_interfaces_http_dto.WSTicketResponse"
+                        }
+                    },
+                    "401": {
+                        "description": "Missing or invalid bearer token",
+                        "schema": {
+                            "$ref": "#/definitions/github_com_rekall_backend_internal_interfaces_http_dto.ErrorResponse"
+                        }
+                    },
+                    "404": {
+                        "description": "Meeting not found (MEETING_NOT_FOUND)",
+                        "schema": {
+                            "$ref": "#/definitions/github_com_rekall_backend_internal_interfaces_http_dto.ErrorResponse"
+                        }
+                    },
+                    "410": {
+                        "description": "Meeting has ended (MEETING_ENDED)",
                         "schema": {
                             "$ref": "#/definitions/github_com_rekall_backend_internal_interfaces_http_dto.ErrorResponse"
                         }
@@ -2850,6 +3079,14 @@ const docTemplate = `{
                     "type": "string",
                     "example": "https://storage.example.com/calls/rec-001.mp4"
                 },
+                "scope_id": {
+                    "type": "string",
+                    "example": "00000000-0000-0000-0000-000000000003"
+                },
+                "scope_type": {
+                    "type": "string",
+                    "example": "organization"
+                },
                 "started_at": {
                     "type": "string",
                     "example": "2026-01-15T09:00:00Z"
@@ -2890,6 +3127,23 @@ const docTemplate = `{
                 "success": {
                     "type": "boolean",
                     "example": true
+                }
+            }
+        },
+        "github_com_rekall_backend_internal_interfaces_http_dto.ChangePasswordRequest": {
+            "type": "object",
+            "required": [
+                "current_password",
+                "new_password"
+            ],
+            "properties": {
+                "current_password": {
+                    "type": "string",
+                    "example": "OldP@ssw0rd123"
+                },
+                "new_password": {
+                    "type": "string",
+                    "example": "NewP@ssw0rd123"
                 }
             }
         },
@@ -2948,6 +3202,18 @@ const docTemplate = `{
             "properties": {
                 "metadata": {
                     "type": "object"
+                },
+                "scope_id": {
+                    "type": "string",
+                    "example": "00000000-0000-0000-0000-000000000003"
+                },
+                "scope_type": {
+                    "type": "string",
+                    "enum": [
+                        "organization",
+                        "department"
+                    ],
+                    "example": "organization"
                 },
                 "title": {
                     "type": "string",
@@ -3010,6 +3276,11 @@ const docTemplate = `{
                 "name": {
                     "type": "string",
                     "example": "Acme Corp"
+                },
+                "owner_email": {
+                    "description": "OwnerEmail, when set by a platform admin, names the user who becomes\nthe org's owner. When omitted, the calling admin themselves becomes the\nowner. Unknown emails return 422.",
+                    "type": "string",
+                    "example": "alice@example.com"
                 }
             }
         },
@@ -3573,6 +3844,20 @@ const docTemplate = `{
                 }
             }
         },
+        "github_com_rekall_backend_internal_interfaces_http_dto.UpdateMeRequest": {
+            "type": "object",
+            "required": [
+                "full_name"
+            ],
+            "properties": {
+                "full_name": {
+                    "type": "string",
+                    "maxLength": 100,
+                    "minLength": 1,
+                    "example": "Alice Nguyen"
+                }
+            }
+        },
         "github_com_rekall_backend_internal_interfaces_http_dto.UpdateMemberRoleRequest": {
             "type": "object",
             "required": [
@@ -3657,6 +3942,32 @@ const docTemplate = `{
             "properties": {
                 "data": {
                     "$ref": "#/definitions/github_com_rekall_backend_internal_interfaces_http_dto.UserResponse"
+                },
+                "success": {
+                    "type": "boolean",
+                    "example": true
+                }
+            }
+        },
+        "github_com_rekall_backend_internal_interfaces_http_dto.WSTicketPayload": {
+            "type": "object",
+            "properties": {
+                "expires_at": {
+                    "type": "string"
+                },
+                "ticket": {
+                    "type": "string"
+                },
+                "ws_url": {
+                    "type": "string"
+                }
+            }
+        },
+        "github_com_rekall_backend_internal_interfaces_http_dto.WSTicketResponse": {
+            "type": "object",
+            "properties": {
+                "data": {
+                    "$ref": "#/definitions/github_com_rekall_backend_internal_interfaces_http_dto.WSTicketPayload"
                 },
                 "success": {
                     "type": "boolean",

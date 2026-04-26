@@ -316,7 +316,7 @@ func (h *AuthHandler) UpdateMe(c *gin.Context) {
 // @Produce      json
 // @Security     BearerAuth
 // @Param        body  body      dto.ChangePasswordRequest  true  "Current and new password"
-// @Success      200   {object}  dto.OkResponse             "Password updated; other sessions signed out"
+// @Success      200   {object}  dto.MessageResponse        "Password updated; other sessions signed out"
 // @Failure      400   {object}  dto.ErrorResponse          "Current password is incorrect (INVALID_CURRENT_PASSWORD)"
 // @Failure      401   {object}  dto.ErrorResponse          "Missing or invalid token"
 // @Failure      422   {object}  dto.ErrorResponse          "Validation error — new password policy not met"
