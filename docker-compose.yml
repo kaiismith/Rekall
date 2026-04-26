@@ -46,6 +46,9 @@ services:
       JWT_SECRET: ${JWT_SECRET:-change-me-in-production}
       JWT_ISSUER: ${JWT_ISSUER:-rekall}
       APP_BASE_URL: ${APP_BASE_URL:-http://localhost:5173}
+      # Platform admin (boot-time reconciliation)
+      PLATFORM_ADMIN_EMAILS: ${PLATFORM_ADMIN_EMAILS:-}
+      PLATFORM_ADMIN_BOOTSTRAP_PASSWORD: ${PLATFORM_ADMIN_BOOTSTRAP_PASSWORD:-}
       # SMTP → Mailpit (local dev)
       SMTP_HOST: mailpit
       SMTP_PORT: 1025
