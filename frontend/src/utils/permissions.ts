@@ -62,3 +62,16 @@ export function canAddDeptMember(
  * other.
  */
 export const canPromoteDeptMember = canManageOrg
+
+/**
+ * Delete the organization itself. Stricter than `canManageOrg` because
+ * org-level admins cannot delete the org — only the owner (and platform
+ * admins, for ops intervention) may.
+ */
+export function canDeleteOrg(
+  membership: OrgMember | null | undefined,
+  user: User | null | undefined,
+): boolean {
+  if (isPlatformAdmin(user)) return true
+  return membership?.role === 'owner'
+}

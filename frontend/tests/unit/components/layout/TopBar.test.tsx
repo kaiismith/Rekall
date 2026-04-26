@@ -6,6 +6,7 @@ import theme from '@/theme'
 import { TopBar } from '@/components/layout/TopBar'
 import { useUIStore } from '@/store/uiStore'
 import { useAuthStore } from '@/store/authStore'
+import { useOrgsStore } from '@/store/orgsStore'
 
 function renderTopBar() {
   return render(
@@ -32,6 +33,9 @@ describe('TopBar', () => {
       accessToken: 'tok',
       isInitialised: true,
     })
+    // Seed the orgs store so the OrgSwitcher's lazy-load skeleton is replaced
+    // with the trigger label immediately.
+    useOrgsStore.setState({ orgs: [], isLoading: false, error: null })
   })
 
   it('renders the toggle sidebar button', () => {
@@ -88,5 +92,22 @@ describe('TopBar', () => {
     // Profile and Settings moved to the sidebar — they should NOT be in the menu.
     expect(screen.queryByRole('menuitem', { name: /profile/i })).not.toBeInTheDocument()
     expect(screen.queryByRole('menuitem', { name: /settings/i })).not.toBeInTheDocument()
+  })
+
+  // ── OrgSwitcher mount (Task 11.2) ──────────────────────────────────────────
+
+  it('mounts the OrgSwitcher (defaults to "Personal" when not on a scoped route)', () => {
+    renderTopBar()
+    // The switcher trigger renders "Personal" as its visible label whenever
+    // the URL is not under /organizations/:id. The TopBar test wrapper uses
+    // MemoryRouter at "/" so we expect Personal here.
+    expect(screen.getByText('Personal')).toBeInTheDocument()
+  })
+
+  it('OrgSwitcher trigger has aria-haspopup="menu" so screen readers announce it', () => {
+    renderTopBar()
+    const trigger = screen.getByText('Personal').closest('button')
+    expect(trigger).not.toBeNull()
+    expect(trigger!.getAttribute('aria-haspopup')).toBe('menu')
   })
 })
