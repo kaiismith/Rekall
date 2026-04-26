@@ -183,7 +183,7 @@ func main() {
 		cfg.Auth.InvitationTTL,
 		log,
 	)
-	deptSvc := services.NewDepartmentService(deptRepo, deptMemberRepo, memberRepo, log)
+	deptSvc := services.NewDepartmentService(deptRepo, deptMemberRepo, memberRepo, userRepo, log)
 	meetingSvc := services.NewMeetingService(
 		meetingRepo,
 		meetingParticipRepo,

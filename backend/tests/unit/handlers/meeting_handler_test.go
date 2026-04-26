@@ -320,6 +320,103 @@ func TestMeetingListMineHandler_ServiceError(t *testing.T) {
 	mr.AssertExpectations(t)
 }
 
+// ─── ListMine — scope filter (Task 4.6) ────────────────────────────────────
+
+// Builds a meeting service that lets the test inject the membership repo so
+// scope filters can pass membership validation.
+func newMeetingServiceWithMembers(
+	mr *mockMeetingRepo,
+	pr *mockParticipantRepo,
+	memberRepo *mockMemberRepo,
+	deptMemberRepo *mockDeptMemberRepo,
+) *services.MeetingService {
+	return services.NewMeetingService(mr, pr, memberRepo, deptMemberRepo,
+		"http://rekall.test", zap.NewNop())
+}
+
+func TestMeetingListMineHandler_ScopeOpen_PassesFilter(t *testing.T) {
+	hostID := uuid.New()
+	mr := new(mockMeetingRepo)
+	pr := new(mockParticipantRepo)
+	h := newMeetingHandler(newMeetingService(mr, pr))
+	r := newMeetingRouter(h, hostID)
+
+	mr.On("ListByUser", mock.Anything, hostID, mock.MatchedBy(func(f ports.ListMeetingsFilter) bool {
+		return f.Scope != nil && f.Scope.Kind == ports.ScopeKindOpen
+	})).Return([]*ports.MeetingListItem{}, nil)
+
+	w := doRequest(r, http.MethodGet, "/meetings/mine?filter%5Bscope_type%5D=open", nil)
+
+	assert.Equal(t, http.StatusOK, w.Code)
+	mr.AssertExpectations(t)
+}
+
+func TestMeetingListMineHandler_ScopeOrg_NonMember_403(t *testing.T) {
+	hostID, orgID := uuid.New(), uuid.New()
+	mr := new(mockMeetingRepo)
+	pr := new(mockParticipantRepo)
+	memberRepo := new(mockMemberRepo)
+	memberRepo.On("GetByOrgAndUser", mock.Anything, orgID, hostID).
+		Return(nil, apperr.NotFound("OrgMembership", orgID.String()))
+
+	h := newMeetingHandler(newMeetingServiceWithMembers(mr, pr, memberRepo, new(mockDeptMemberRepo)))
+	r := newMeetingRouter(h, hostID)
+
+	url := "/meetings/mine?filter%5Bscope_type%5D=organization&filter%5Bscope_id%5D=" + orgID.String()
+	w := doRequest(r, http.MethodGet, url, nil)
+
+	assert.Equal(t, http.StatusForbidden, w.Code)
+	mr.AssertNotCalled(t, "ListByUser", mock.Anything, mock.Anything, mock.Anything)
+}
+
+func TestMeetingListMineHandler_ScopeOrg_Member_200(t *testing.T) {
+	hostID, orgID := uuid.New(), uuid.New()
+	mr := new(mockMeetingRepo)
+	pr := new(mockParticipantRepo)
+	memberRepo := new(mockMemberRepo)
+	memberRepo.On("GetByOrgAndUser", mock.Anything, orgID, hostID).
+		Return(&entities.OrgMembership{Role: "member"}, nil)
+	mr.On("ListByUser", mock.Anything, hostID, mock.MatchedBy(func(f ports.ListMeetingsFilter) bool {
+		return f.Scope != nil && f.Scope.Kind == ports.ScopeKindOrganization && f.Scope.ID == orgID
+	})).Return([]*ports.MeetingListItem{}, nil)
+
+	h := newMeetingHandler(newMeetingServiceWithMembers(mr, pr, memberRepo, new(mockDeptMemberRepo)))
+	r := newMeetingRouter(h, hostID)
+
+	url := "/meetings/mine?filter%5Bscope_type%5D=organization&filter%5Bscope_id%5D=" + orgID.String()
+	w := doRequest(r, http.MethodGet, url, nil)
+
+	assert.Equal(t, http.StatusOK, w.Code)
+	mr.AssertExpectations(t)
+	memberRepo.AssertExpectations(t)
+}
+
+func TestMeetingListMineHandler_ScopeMalformedUUID_400(t *testing.T) {
+	hostID := uuid.New()
+	mr := new(mockMeetingRepo)
+	pr := new(mockParticipantRepo)
+	h := newMeetingHandler(newMeetingService(mr, pr))
+	r := newMeetingRouter(h, hostID)
+
+	w := doRequest(r, http.MethodGet,
+		"/meetings/mine?filter%5Bscope_type%5D=organization&filter%5Bscope_id%5D=not-a-uuid", nil)
+
+	assert.Equal(t, http.StatusBadRequest, w.Code)
+	mr.AssertNotCalled(t, "ListByUser", mock.Anything, mock.Anything, mock.Anything)
+}
+
+func TestMeetingListMineHandler_ScopeUnknownType_400(t *testing.T) {
+	hostID := uuid.New()
+	mr := new(mockMeetingRepo)
+	pr := new(mockParticipantRepo)
+	h := newMeetingHandler(newMeetingService(mr, pr))
+	r := newMeetingRouter(h, hostID)
+
+	w := doRequest(r, http.MethodGet, "/meetings/mine?filter%5Bscope_type%5D=other", nil)
+
+	assert.Equal(t, http.StatusBadRequest, w.Code)
+}
+
 // ─── End ─────────────────────────────────────────────────────────────────────
 
 func TestMeetingEndHandler_Success(t *testing.T) {

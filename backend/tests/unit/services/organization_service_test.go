@@ -249,12 +249,18 @@ func TestGetOrganization_Success(t *testing.T) {
 
 func TestGetOrganization_NotMember(t *testing.T) {
 	memberRepo := new(mockMemberRepo)
-	svc := newOrgService(new(mockOrgRepo), memberRepo, new(mockInviteRepo), new(mockUserRepo), new(mockMailer))
+	userRepo := new(mockUserRepo)
+	svc := newOrgService(new(mockOrgRepo), memberRepo, new(mockInviteRepo), userRepo, new(mockMailer))
 	ctx := context.Background()
 
 	orgID, outsiderID := uuid.New(), uuid.New()
 	memberRepo.On("GetByOrgAndUser", ctx, orgID, outsiderID).
 		Return(nil, apperr.NotFound("OrgMembership", outsiderID.String()))
+	// Outsider is not a platform admin — userRepo.GetByID returns a plain
+	// member User, so the platform-admin fallthrough does NOT engage and
+	// the call is forbidden.
+	userRepo.On("GetByID", ctx, outsiderID).
+		Return(&entities.User{ID: outsiderID, Role: "member"}, nil)
 
 	_, err := svc.GetOrganization(ctx, orgID, outsiderID)
 
@@ -289,11 +295,15 @@ func TestUpdateOrganization_AdminSuccess(t *testing.T) {
 
 func TestUpdateOrganization_MemberForbidden(t *testing.T) {
 	memberRepo := new(mockMemberRepo)
-	svc := newOrgService(new(mockOrgRepo), memberRepo, new(mockInviteRepo), new(mockUserRepo), new(mockMailer))
+	userRepo := new(mockUserRepo)
+	svc := newOrgService(new(mockOrgRepo), memberRepo, new(mockInviteRepo), userRepo, new(mockMailer))
 	ctx := context.Background()
 
 	orgID, memberID := uuid.New(), uuid.New()
 	memberRepo.On("GetByOrgAndUser", ctx, orgID, memberID).Return(membership(orgID, memberID, "member"), nil)
+	// Plain member at the platform level — no fallthrough.
+	userRepo.On("GetByID", ctx, memberID).
+		Return(&entities.User{ID: memberID, Role: "member"}, nil)
 
 	_, err := svc.UpdateOrganization(ctx, orgID, memberID, "New Name")
 
@@ -459,12 +469,15 @@ func TestUpdateMemberRole_InvalidRole(t *testing.T) {
 
 func TestUpdateMemberRole_NotManager_Forbidden(t *testing.T) {
 	memberRepo := new(mockMemberRepo)
-	svc := newOrgService(new(mockOrgRepo), memberRepo, new(mockInviteRepo), new(mockUserRepo), new(mockMailer))
+	userRepo := new(mockUserRepo)
+	svc := newOrgService(new(mockOrgRepo), memberRepo, new(mockInviteRepo), userRepo, new(mockMailer))
 	ctx := context.Background()
 
 	orgID, callerID := uuid.New(), uuid.New()
 	// Caller is a plain "member" — cannot manage members.
 	memberRepo.On("GetByOrgAndUser", ctx, orgID, callerID).Return(membership(orgID, callerID, "member"), nil)
+	userRepo.On("GetByID", ctx, callerID).
+		Return(&entities.User{ID: callerID, Role: "member"}, nil)
 
 	err := svc.UpdateMemberRole(ctx, orgID, callerID, uuid.New(), "member")
 	require.Error(t, err)
@@ -488,12 +501,16 @@ func TestUpdateMemberRole_TargetNotFound(t *testing.T) {
 }
 
 func TestRemoveMember_SelfRemoval_AsPlainMember(t *testing.T) {
-	// Plain members can still remove themselves (isSelf branch bypasses CanManageMembers).
+	// Plain members can still remove themselves (isSelf branch bypasses CanManageOrg).
 	memberRepo := new(mockMemberRepo)
-	svc := newOrgService(new(mockOrgRepo), memberRepo, new(mockInviteRepo), new(mockUserRepo), new(mockMailer))
+	userRepo := new(mockUserRepo)
+	svc := newOrgService(new(mockOrgRepo), memberRepo, new(mockInviteRepo), userRepo, new(mockMailer))
 
 	orgID, userID := uuid.New(), uuid.New()
 	memberRepo.On("GetByOrgAndUser", mock.Anything, orgID, userID).Return(membership(orgID, userID, "member"), nil)
+	// Plain member at the platform level — lazy user-fetch fires.
+	userRepo.On("GetByID", mock.Anything, userID).
+		Return(&entities.User{ID: userID, Role: "member"}, nil)
 	memberRepo.On("Delete", mock.Anything, orgID, userID).Return(nil)
 
 	require.NoError(t, svc.RemoveMember(context.Background(), orgID, userID, userID))
@@ -501,10 +518,13 @@ func TestRemoveMember_SelfRemoval_AsPlainMember(t *testing.T) {
 
 func TestRemoveMember_NotManager_Forbidden(t *testing.T) {
 	memberRepo := new(mockMemberRepo)
-	svc := newOrgService(new(mockOrgRepo), memberRepo, new(mockInviteRepo), new(mockUserRepo), new(mockMailer))
+	userRepo := new(mockUserRepo)
+	svc := newOrgService(new(mockOrgRepo), memberRepo, new(mockInviteRepo), userRepo, new(mockMailer))
 
 	orgID, callerID, targetID := uuid.New(), uuid.New(), uuid.New()
 	memberRepo.On("GetByOrgAndUser", mock.Anything, orgID, callerID).Return(membership(orgID, callerID, "member"), nil)
+	userRepo.On("GetByID", mock.Anything, callerID).
+		Return(&entities.User{ID: callerID, Role: "member"}, nil)
 
 	err := svc.RemoveMember(context.Background(), orgID, callerID, targetID)
 	require.Error(t, err)
@@ -573,10 +593,13 @@ func TestRemoveMember_DeleteError(t *testing.T) {
 
 func TestInviteUser_NotManager_Forbidden(t *testing.T) {
 	memberRepo := new(mockMemberRepo)
-	svc := newOrgService(new(mockOrgRepo), memberRepo, new(mockInviteRepo), new(mockUserRepo), new(mockMailer))
+	userRepo := new(mockUserRepo)
+	svc := newOrgService(new(mockOrgRepo), memberRepo, new(mockInviteRepo), userRepo, new(mockMailer))
 
 	orgID, reqID := uuid.New(), uuid.New()
 	memberRepo.On("GetByOrgAndUser", mock.Anything, orgID, reqID).Return(membership(orgID, reqID, "member"), nil)
+	userRepo.On("GetByID", mock.Anything, reqID).
+		Return(&entities.User{ID: reqID, Role: "member"}, nil)
 
 	err := svc.InviteUser(context.Background(), orgID, reqID, "new@x.com", "member")
 	require.Error(t, err)
@@ -867,13 +890,16 @@ func TestRemoveMember_AdminCanRemoveMember(t *testing.T) {
 
 func TestRemoveMember_SelfRemoval(t *testing.T) {
 	memberRepo := new(mockMemberRepo)
-	svc := newOrgService(new(mockOrgRepo), memberRepo, new(mockInviteRepo), new(mockUserRepo), new(mockMailer))
+	userRepo := new(mockUserRepo)
+	svc := newOrgService(new(mockOrgRepo), memberRepo, new(mockInviteRepo), userRepo, new(mockMailer))
 	ctx := context.Background()
 
 	orgID, memberID := uuid.New(), uuid.New()
 	mem := membership(orgID, memberID, "member")
 
 	memberRepo.On("GetByOrgAndUser", ctx, orgID, memberID).Return(mem, nil)
+	userRepo.On("GetByID", ctx, memberID).
+		Return(&entities.User{ID: memberID, Role: "member"}, nil)
 	memberRepo.On("Delete", ctx, orgID, memberID).Return(nil)
 
 	err := svc.RemoveMember(ctx, orgID, memberID, memberID)
@@ -901,11 +927,14 @@ func TestRemoveMember_CannotRemoveOwner(t *testing.T) {
 
 func TestRemoveMember_PlainMemberCannotRemoveOther(t *testing.T) {
 	memberRepo := new(mockMemberRepo)
-	svc := newOrgService(new(mockOrgRepo), memberRepo, new(mockInviteRepo), new(mockUserRepo), new(mockMailer))
+	userRepo := new(mockUserRepo)
+	svc := newOrgService(new(mockOrgRepo), memberRepo, new(mockInviteRepo), userRepo, new(mockMailer))
 	ctx := context.Background()
 
 	orgID, requesterID, targetID := uuid.New(), uuid.New(), uuid.New()
 	memberRepo.On("GetByOrgAndUser", ctx, orgID, requesterID).Return(membership(orgID, requesterID, "member"), nil)
+	userRepo.On("GetByID", ctx, requesterID).
+		Return(&entities.User{ID: requesterID, Role: "member"}, nil)
 
 	err := svc.RemoveMember(ctx, orgID, requesterID, targetID)
 
@@ -945,11 +974,14 @@ func TestInviteUser_Success(t *testing.T) {
 
 func TestInviteUser_NonAdminForbidden(t *testing.T) {
 	memberRepo := new(mockMemberRepo)
-	svc := newOrgService(new(mockOrgRepo), memberRepo, new(mockInviteRepo), new(mockUserRepo), new(mockMailer))
+	userRepo := new(mockUserRepo)
+	svc := newOrgService(new(mockOrgRepo), memberRepo, new(mockInviteRepo), userRepo, new(mockMailer))
 	ctx := context.Background()
 
 	orgID, memberID := uuid.New(), uuid.New()
 	memberRepo.On("GetByOrgAndUser", ctx, orgID, memberID).Return(membership(orgID, memberID, "member"), nil)
+	userRepo.On("GetByID", ctx, memberID).
+		Return(&entities.User{ID: memberID, Role: "member"}, nil)
 
 	err := svc.InviteUser(ctx, orgID, memberID, "someone@example.com", "member")
 
