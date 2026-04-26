@@ -21,7 +21,13 @@ export const useAuthStore = create<AuthState>()((set) => ({
   isInitialised: false,
 
   setAuth: (user, accessToken) => set({ user, accessToken }),
-  clearAuth: () => set({ user: null, accessToken: null }),
+  clearAuth: () => {
+    set({ user: null, accessToken: null })
+    // Drop the orgs/depts caches so the next sign-in does not reuse the
+    // previous user's membership data. Done dynamically to avoid a circular
+    // import (orgsStore is a sibling module that may be loaded before authStore).
+    void import('@/store/orgsStore').then((m) => m.useOrgsStore.getState().invalidate())
+  },
   setInitialised: () => set({ isInitialised: true }),
 }))
 

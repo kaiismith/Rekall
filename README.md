@@ -81,6 +81,74 @@ make test        # run backend + frontend tests
 
 ---
 
+## Organizations and scopes
+
+Rekall organises work along two axes: **who** (account → organization → department) and **where the item lives** (an item's *scope*).
+
+### Hierarchy
+
+```
+Account                        — your individual user
+  └─ Organization              — a workspace of teammates (e.g. "Acme")
+        └─ Department          — a sub-team within the org (e.g. "Engineering")
+```
+
+A user may belong to multiple organizations, and to multiple departments within the same org.
+
+### Scope
+
+Every meeting and call has a **scope**, which is one of:
+
+- **Open** — not attached to any team. Visible to the host and the participants only. Meetings created from the Recall page default to Open.
+- **Organization** — attached to an org. Visible to every member of that org.
+- **Department** — attached to a specific department within an org. Visible to every member of that dept.
+
+### URL grammar
+
+The hierarchy maps directly onto routes — every level is bookmarkable:
+
+| | |
+|---|---|
+| `/dashboard` | Personal landing |
+| `/meetings`, `/calls` | Flat lists across all the items you can see, with a Scope filter chip |
+| `/organizations` | List of orgs you belong to |
+| `/organizations/:id` | Org detail with tabs: Overview / Departments / Meetings / Calls |
+| `/organizations/:id/meetings` | Org-scoped meetings list |
+| `/organizations/:id/calls` | Org-scoped calls list |
+| `/organizations/:orgId/departments/:deptId` | Department detail with tabs: Overview / Meetings / Calls |
+| `/organizations/:orgId/departments/:deptId/meetings` | Dept-scoped meetings list |
+| `/organizations/:orgId/departments/:deptId/calls` | Dept-scoped calls list |
+
+The flat lists understand a `?scope=` query parameter (`open`, `org:<uuid>`, or `dept:<orgUuid>:<deptUuid>`) so any filter is shareable.
+
+The TopBar's **Org Switcher** lets you jump between Personal and any org you're a member of.
+
+---
+
+## Platform administration
+
+Some operations — most notably *creating an organization* — are restricted to **platform admins**. Platform admins are declared via environment variables, not via in-app promotion, so the admin list is a deployment concern.
+
+### Role hierarchy
+
+| Role | Granted by | Capabilities |
+|---|---|---|
+| **Platform admin** | `PLATFORM_ADMIN_EMAILS` env var | Create orgs (optionally on behalf of any user via `owner_email`); intervene on any org or department as if they held the highest role |
+| **Org owner / admin** | `OrgMembership.role = owner \| admin` | Invite members, create/rename/delete departments, assign department heads |
+| **Department head** | `DepartmentMembership.role = head` | Add/remove members of *their* department; cannot rename or delete the department, cannot create new departments |
+| **Member** | Default | Read meetings and calls in scopes they belong to |
+
+### Environment variables
+
+| Var | Description |
+|---|---|
+| `PLATFORM_ADMIN_EMAILS` | Comma-separated, lowercased emails. On every server boot the listed users are promoted to `role=admin`; any current admin not on the list is demoted to `member`. |
+| `PLATFORM_ADMIN_BOOTSTRAP_PASSWORD` | Optional. When set, missing admin users are auto-created on first boot with this password. Subsequent boots do **not** re-apply it — rotation goes through the normal password-reset flow. |
+
+The reconciliation runs once on startup before the HTTP server begins accepting requests; the `created`/`promoted`/`demoted` counts are logged for ops visibility.
+
+---
+
 ## Project status
 
 Rekall is in **active early development**. The meeting and workspace layers are usable today; the recall and AI layers — transcription, summaries, AI Ask, dashboards — are what come next.

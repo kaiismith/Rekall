@@ -41,6 +41,9 @@ import {
 import { ScopedMeetingsPage } from './ScopedMeetingsPage'
 import { ScopedCallsPage } from './ScopedCallsPage'
 import { useOrgsStore } from '@/store/orgsStore'
+import { useAuthStore } from '@/store/authStore'
+import { canAddDeptMember, canPromoteDeptMember } from '@/utils/permissions'
+import { useStalePermissionHandler } from '@/hooks/useStalePermissionHandler'
 
 const TABS = ['overview', 'meetings', 'calls'] as const
 type Tab = (typeof TABS)[number]
@@ -135,6 +138,10 @@ function DeptHero({ orgId, deptId }: { orgId: string; deptId: string }) {
 
 function DeptOverviewPanel({ orgId, deptId }: { orgId: string; deptId: string }) {
   const queryClient = useQueryClient()
+  const user = useAuthStore((s) => s.user)
+  const handleStale = useStalePermissionHandler({
+    invalidate: () => queryClient.invalidateQueries({ queryKey: ['dept-members', deptId] }),
+  })
   const [addOpen, setAddOpen] = useState(false)
   const [userId, setUserId] = useState('')
   const [role, setRole] = useState<'head' | 'member'>('member')
@@ -144,6 +151,17 @@ function DeptOverviewPanel({ orgId, deptId }: { orgId: string; deptId: string })
     queryKey: ['dept-members', deptId],
     queryFn: () => organizationService.listDeptMembers(deptId),
   })
+
+  // Caller's own org + dept membership for affordance gating.
+  const { data: orgMembers } = useQuery({
+    queryKey: ['org-members', orgId],
+    queryFn: () => organizationService.listMembers(orgId),
+  })
+  const orgMembership = orgMembers?.find((m) => m.user_id === user?.id) ?? null
+  const deptMembership = members?.find((m) => m.user_id === user?.id) ?? null
+
+  const canAdd = canAddDeptMember(orgMembership, deptMembership, user)
+  const canPromote = canPromoteDeptMember(orgMembership, user)
 
   const addMutation = useMutation({
     mutationFn: () => organizationService.addDeptMember(deptId, { user_id: userId, role }),
@@ -155,6 +173,10 @@ function DeptOverviewPanel({ orgId, deptId }: { orgId: string; deptId: string })
       queryClient.invalidateQueries({ queryKey: ['dept-members', deptId] })
     },
     onError: (e) => {
+      if (handleStale(e)) {
+        setAddOpen(false)
+        return
+      }
       setError(e instanceof ApiError ? e.message : 'Failed to add member')
     },
   })
@@ -164,6 +186,7 @@ function DeptOverviewPanel({ orgId, deptId }: { orgId: string; deptId: string })
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['dept-members', deptId] })
     },
+    onError: (e) => handleStale(e),
   })
 
   if (isError) return <AccessDeniedState />
@@ -174,14 +197,16 @@ function DeptOverviewPanel({ orgId, deptId }: { orgId: string; deptId: string })
         <Typography variant="h6" sx={{ fontWeight: 600 }}>
           Members
         </Typography>
-        <GradientButton
-          fullWidth={false}
-          size="small"
-          startIcon={<PersonAddIcon />}
-          onClick={() => setAddOpen(true)}
-        >
-          Add member
-        </GradientButton>
+        {canAdd && (
+          <GradientButton
+            fullWidth={false}
+            size="small"
+            startIcon={<PersonAddIcon />}
+            onClick={() => setAddOpen(true)}
+          >
+            Add member
+          </GradientButton>
+        )}
       </Stack>
 
       {isLoading ? (
@@ -211,13 +236,15 @@ function DeptOverviewPanel({ orgId, deptId }: { orgId: string; deptId: string })
                   })}
                 </TableCell>
                 <TableCell align="right">
-                  <IconButton
-                    size="small"
-                    onClick={() => removeMutation.mutate(m.user_id)}
-                    aria-label="Remove member"
-                  >
-                    <DeleteIcon fontSize="small" />
-                  </IconButton>
+                  {(canAdd || m.user_id === user?.id) && (
+                    <IconButton
+                      size="small"
+                      onClick={() => removeMutation.mutate(m.user_id)}
+                      aria-label={m.user_id === user?.id ? 'Leave department' : 'Remove member'}
+                    >
+                      <DeleteIcon fontSize="small" />
+                    </IconButton>
+                  )}
                 </TableCell>
               </TableRow>
             ))}
@@ -247,7 +274,8 @@ function DeptOverviewPanel({ orgId, deptId }: { orgId: string; deptId: string })
               fullWidth
             >
               <MenuItem value="member">Member</MenuItem>
-              <MenuItem value="head">Head</MenuItem>
+              {/* Promotion to head is reserved for org admins / platform admins. */}
+              {canPromote && <MenuItem value="head">Head</MenuItem>}
             </Select>
             {error && <Alert severity="error">{error}</Alert>}
           </Stack>
