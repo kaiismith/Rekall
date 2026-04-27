@@ -83,19 +83,19 @@ function mergeCaption(
         // fresh timestamp + key.
         // eslint-disable-next-line no-console
         console.debug('[captions] partial → SILENCE_GAP, finalize+new', {
-          gap_ms:        gap,
+          gap_ms: gap,
           finalized_key: prev[openIdx].key,
           finalized_text: prev[openIdx].text,
-          new_text:      incoming.text,
+          new_text: incoming.text,
         })
         const out = prev.slice()
         out[openIdx] = { ...prev[openIdx], kind: 'final' }
         out.push({
-          key:        freshCaptionKey(incoming.userId),
-          userId:     incoming.userId,
-          kind:       'partial',
-          text:       incoming.text,
-          timestamp:  incoming.timestamp,
+          key: freshCaptionKey(incoming.userId),
+          userId: incoming.userId,
+          kind: 'partial',
+          text: incoming.text,
+          timestamp: incoming.timestamp,
           lastUpdate: incoming.timestamp,
         })
         return capCaptions(out)
@@ -105,15 +105,15 @@ function mergeCaption(
       // doesn't keep ticking.
       // eslint-disable-next-line no-console
       console.debug('[captions] partial → UPDATE open', {
-        key:      prev[openIdx].key,
-        gap_ms:   gap,
+        key: prev[openIdx].key,
+        gap_ms: gap,
         old_text: prev[openIdx].text,
         new_text: incoming.text,
       })
       const out = prev.slice()
       out[openIdx] = {
         ...prev[openIdx],
-        text:       incoming.text,
+        text: incoming.text,
         lastUpdate: incoming.timestamp,
       }
       return out
@@ -126,11 +126,11 @@ function mergeCaption(
     return capCaptions([
       ...prev,
       {
-        key:        freshCaptionKey(incoming.userId),
-        userId:     incoming.userId,
-        kind:       'partial',
-        text:       incoming.text,
-        timestamp:  incoming.timestamp,
+        key: freshCaptionKey(incoming.userId),
+        userId: incoming.userId,
+        kind: 'partial',
+        text: incoming.text,
+        timestamp: incoming.timestamp,
         lastUpdate: incoming.timestamp,
       },
     ])
@@ -141,15 +141,15 @@ function mergeCaption(
   if (openIdx >= 0) {
     // eslint-disable-next-line no-console
     console.debug('[captions] FINAL → commit open partial', {
-      key:      prev[openIdx].key,
+      key: prev[openIdx].key,
       partial_text: prev[openIdx].text,
-      final_text:   incoming.text,
+      final_text: incoming.text,
     })
     const out = prev.slice()
     out[openIdx] = {
       ...prev[openIdx],
-      kind:       'final',
-      text:       incoming.text,
+      kind: 'final',
+      text: incoming.text,
       lastUpdate: incoming.timestamp,
     }
     return out
@@ -161,11 +161,11 @@ function mergeCaption(
   return capCaptions([
     ...prev,
     {
-      key:        freshCaptionKey(incoming.userId),
-      userId:     incoming.userId,
-      kind:       'final',
-      text:       incoming.text,
-      timestamp:  incoming.timestamp,
+      key: freshCaptionKey(incoming.userId),
+      userId: incoming.userId,
+      kind: 'final',
+      text: incoming.text,
+      timestamp: incoming.timestamp,
       lastUpdate: incoming.timestamp,
     },
   ])
@@ -216,7 +216,11 @@ export interface UseMeetingReturn {
   forceMute: (userId: string) => void
   // ── device selection ────────────────────────────────────────────────────────
   /** Available input/output devices, refreshed on demand. */
-  availableDevices: { cameras: MediaDeviceInfo[]; mics: MediaDeviceInfo[]; speakers: MediaDeviceInfo[] }
+  availableDevices: {
+    cameras: MediaDeviceInfo[]
+    mics: MediaDeviceInfo[]
+    speakers: MediaDeviceInfo[]
+  }
   /** Currently selected device IDs (empty string = browser default). */
   selectedDeviceIds: { camera: string; mic: string; speaker: string }
   /** Re-enumerates devices via navigator.mediaDevices.enumerateDevices. */
@@ -289,16 +293,23 @@ function loadStoredBackground(): BackgroundOption {
       return { type: 'image', src, label: 'Custom' }
     }
     return opt
-  } catch { return { type: 'none' } }
+  } catch {
+    return { type: 'none' }
+  }
 }
 
 function loadCustomBgSrc(): string | null {
-  try { return localStorage.getItem(CUSTOM_BG_KEY) } catch { return null }
+  try {
+    return localStorage.getItem(CUSTOM_BG_KEY)
+  } catch {
+    return null
+  }
 }
 
 // Lightweight tagged logger for the meeting lifecycle. Easy to grep in
 // devtools (filter on `[meeting]`). Remove once the flow is stable.
 function mlog(tag: string, ...args: unknown[]): void {
+  // eslint-disable-next-line no-console
   console.log(`%c[meeting] ${tag}`, 'color:#a78bfa;font-weight:600', ...args)
 }
 
@@ -337,7 +348,8 @@ export function useMeeting({ code, onEnd }: UseMeetingOptions): UseMeetingReturn
   const [reactionQueue, setReactionQueue] = useState<EmojiReaction[]>([])
 
   // ── virtual background state ───────────────────────────────────────────────
-  const [activeBackground, setActiveBackgroundState] = useState<BackgroundOption>(loadStoredBackground)
+  const [activeBackground, setActiveBackgroundState] =
+    useState<BackgroundOption>(loadStoredBackground)
   const [bgSupported] = useState(() => VirtualBackgroundPipeline.isSupported())
   const [customBgSrc, setCustomBgSrc] = useState<string | null>(loadCustomBgSrc)
 
@@ -361,7 +373,9 @@ export function useMeeting({ code, onEnd }: UseMeetingOptions): UseMeetingReturn
   const [isLoadingHistory, setIsLoadingHistory] = useState(false)
   const [hasMoreHistory, setHasMoreHistory] = useState(false)
   const [chatHistoryError, setChatHistoryError] = useState<string | null>(null)
-  const [participantDirectory, setParticipantDirectory] = useState<Record<string, ParticipantDirectoryEntry>>({})
+  const [participantDirectory, setParticipantDirectory] = useState<
+    Record<string, ParticipantDirectoryEntry>
+  >({})
   const [chatFlashKey, setChatFlashKey] = useState(0)
   const [chatSendError, setChatSendError] = useState<string | null>(null)
 
@@ -372,9 +386,9 @@ export function useMeeting({ code, onEnd }: UseMeetingOptions): UseMeetingReturn
   const bgPipelineRef = useRef<VirtualBackgroundPipeline | null>(null)
   const localTracksRef = useRef<{
     audioTrack: MediaStreamTrack | null
-    videoTrack: MediaStreamTrack | null   // original camera track
-    screenTrack: MediaStreamTrack | null  // screen capture track
-    canvasTrack: MediaStreamTrack | null  // virtual BG canvas track
+    videoTrack: MediaStreamTrack | null // original camera track
+    screenTrack: MediaStreamTrack | null // screen capture track
+    canvasTrack: MediaStreamTrack | null // virtual BG canvas track
   }>({ audioTrack: null, videoTrack: null, screenTrack: null, canvasTrack: null })
   const lastEmojiSentRef = useRef(0)
   const chatSendTimestampsRef = useRef<number[]>([])
@@ -390,12 +404,24 @@ export function useMeeting({ code, onEnd }: UseMeetingOptions): UseMeetingReturn
   const isHandRaisedRef = useRef(false)
 
   // Sync refs with state.
-  useEffect(() => { isMutedRef.current = isMuted }, [isMuted])
-  useEffect(() => { isCameraOffRef.current = isCameraOff }, [isCameraOff])
-  useEffect(() => { isScreenSharingRef.current = isScreenSharing }, [isScreenSharing])
-  useEffect(() => { isHandRaisedRef.current = isHandRaised }, [isHandRaised])
-  useEffect(() => { localUserIdRef.current = user?.id ?? null }, [user])
-  useEffect(() => { isChatPanelOpenRef.current = isChatPanelOpen }, [isChatPanelOpen])
+  useEffect(() => {
+    isMutedRef.current = isMuted
+  }, [isMuted])
+  useEffect(() => {
+    isCameraOffRef.current = isCameraOff
+  }, [isCameraOff])
+  useEffect(() => {
+    isScreenSharingRef.current = isScreenSharing
+  }, [isScreenSharing])
+  useEffect(() => {
+    isHandRaisedRef.current = isHandRaised
+  }, [isHandRaised])
+  useEffect(() => {
+    localUserIdRef.current = user?.id ?? null
+  }, [user])
+  useEffect(() => {
+    isChatPanelOpenRef.current = isChatPanelOpen
+  }, [isChatPanelOpen])
 
   // ── WS send helper ─────────────────────────────────────────────────────────
   const send = useCallback((msg: WsMessage) => {
@@ -414,7 +440,9 @@ export function useMeeting({ code, onEnd }: UseMeetingOptions): UseMeetingReturn
     Object.values(peersRef.current).forEach((pc) => {
       const sender = pc.getSenders().find((s) => s.track?.kind === 'video')
       if (sender && newTrack) {
-        sender.replaceTrack(newTrack).catch(() => { /* connection may be closed */ })
+        sender.replaceTrack(newTrack).catch(() => {
+          /* connection may be closed */
+        })
       }
     })
     // Mirror the active video track in the LOCAL preview so the user sees
@@ -437,32 +465,35 @@ export function useMeeting({ code, onEnd }: UseMeetingOptions): UseMeetingReturn
   }, [])
 
   // ── Peer connection helpers ────────────────────────────────────────────────
-  const getPeer = useCallback((userId: string): RTCPeerConnection => {
-    if (peersRef.current[userId]) return peersRef.current[userId]
+  const getPeer = useCallback(
+    (userId: string): RTCPeerConnection => {
+      if (peersRef.current[userId]) return peersRef.current[userId]
 
-    mlog('getPeer: creating', { userId })
-    const pc = new RTCPeerConnection(RTC_CONFIG)
+      mlog('getPeer: creating', { userId })
+      const pc = new RTCPeerConnection(RTC_CONFIG)
 
-    pc.onicecandidate = (e) => {
-      if (e.candidate) {
-        send({ type: 'ice_candidate', to: userId, payload: e.candidate })
+      pc.onicecandidate = (e) => {
+        if (e.candidate) {
+          send({ type: 'ice_candidate', to: userId, payload: e.candidate })
+        }
       }
-    }
 
-    pc.onnegotiationneeded = async () => {
-      try {
-        const offer = await pc.createOffer()
-        await pc.setLocalDescription(offer)
-        send({ type: 'offer', to: userId, payload: offer })
-      } catch (err) {
-        mlog('getPeer: onnegotiationneeded FAILED', { userId, err })
+      pc.onnegotiationneeded = async () => {
+        try {
+          const offer = await pc.createOffer()
+          await pc.setLocalDescription(offer)
+          send({ type: 'offer', to: userId, payload: offer })
+        } catch (err) {
+          mlog('getPeer: onnegotiationneeded FAILED', { userId, err })
+        }
       }
-    }
 
-    peersRef.current[userId] = pc
-    setPeers((prev) => ({ ...prev, [userId]: pc }))
-    return pc
-  }, [send])
+      peersRef.current[userId] = pc
+      setPeers((prev) => ({ ...prev, [userId]: pc }))
+      return pc
+    },
+    [send],
+  )
 
   const removePeer = useCallback((userId: string) => {
     peersRef.current[userId]?.close()
@@ -475,14 +506,17 @@ export function useMeeting({ code, onEnd }: UseMeetingOptions): UseMeetingReturn
   }, [])
 
   // ── VAD ───────────────────────────────────────────────────────────────────
-  const startVad = useCallback((stream: MediaStream) => {
-    vadRef.current = new VadDetector(({ speaking, level }) => {
-      setIsSpeaking(speaking)
-      setAudioLevel(level)
-      send({ type: 'speaking_state', payload: { speaking } })
-    })
-    vadRef.current.start(stream)
-  }, [send])
+  const startVad = useCallback(
+    (stream: MediaStream) => {
+      vadRef.current = new VadDetector(({ speaking, level }) => {
+        setIsSpeaking(speaking)
+        setAudioLevel(level)
+        send({ type: 'speaking_state', payload: { speaking } })
+      })
+      vadRef.current.start(stream)
+    },
+    [send],
+  )
 
   // ── Media acquisition ─────────────────────────────────────────────────────
   const acquireMedia = useCallback(async (): Promise<MediaStream> => {
@@ -529,7 +563,9 @@ export function useMeeting({ code, onEnd }: UseMeetingOptions): UseMeetingReturn
             localTracksRef.current.canvasTrack = canvasTrack
             setActiveBackgroundState(stored)
           }
-        } catch { /* ignore */ }
+        } catch {
+          /* ignore */
+        }
       })()
     }
 
@@ -537,279 +573,310 @@ export function useMeeting({ code, onEnd }: UseMeetingOptions): UseMeetingReturn
   }, [startVad, bgSupported])
 
   // ── Track helper: add local tracks to a peer connection ───────────────────
-  const addLocalTracksToPeer = useCallback((pc: RTCPeerConnection, stream: MediaStream) => {
-    const activeVideo = getActiveVideoTrack()
-    stream.getAudioTracks().forEach((t) => pc.addTrack(t, stream))
-    if (activeVideo) {
-      pc.addTrack(activeVideo, stream)
-    } else {
-      stream.getVideoTracks().forEach((t) => pc.addTrack(t, stream))
-    }
-  }, [getActiveVideoTrack])
+  const addLocalTracksToPeer = useCallback(
+    (pc: RTCPeerConnection, stream: MediaStream) => {
+      const activeVideo = getActiveVideoTrack()
+      stream.getAudioTracks().forEach((t) => pc.addTrack(t, stream))
+      if (activeVideo) {
+        pc.addTrack(activeVideo, stream)
+      } else {
+        stream.getVideoTracks().forEach((t) => pc.addTrack(t, stream))
+      }
+    },
+    [getActiveVideoTrack],
+  )
 
   // ── WS message handler ────────────────────────────────────────────────────
-  const handleMessage = useCallback(async (msg: WsMessage) => {
-    switch (msg.type) {
-      case 'participant.joined': {
-        if (!msg.user_id) break
-        // Record display info so chat messages from this user render with a
-        // name immediately — no per-user fetch required.
-        if (msg.full_name || msg.initials) {
-          setParticipantDirectory(prev => (
-            prev[msg.user_id!]
-              ? prev
-              : { ...prev, [msg.user_id!]: {
-                  full_name: msg.full_name ?? 'User',
-                  initials: msg.initials ?? '?',
-                } }
-          ))
-        }
-        // Acquire local media on first admission, but never build a peer
-        // connection to ourselves. The backend broadcasts participant.joined
-        // to all admitted clients — including the joiner — so the host
-        // (alone in a fresh meeting) would otherwise create an RTCPeer with
-        // their own user_id, send an offer "to themselves", and crash on
-        // negotiation. Guard against that.
-        const localUid = localUserIdRef.current
-        const stream = localStream ?? (await acquireMedia())
-        if (msg.user_id === localUid) break
-        const pc = getPeer(msg.user_id)
-        addLocalTracksToPeer(pc, stream)
-        break
-      }
-
-      case 'participant.left': {
-        if (!msg.user_id) break
-        removePeer(msg.user_id)
-        setRemoteSpeaking((prev) => { const n = { ...prev }; delete n[msg.user_id!]; return n })
-        setMediaStates((prev) => { const n = { ...prev }; delete n[msg.user_id!]; return n })
-        setHandRaisedUsers((prev) => { const s = new Set(prev); s.delete(msg.user_id!); return s })
-        break
-      }
-
-      case 'offer': {
-        if (!msg.from || !msg.payload) break
-        const pc = getPeer(msg.from)
-        await pc.setRemoteDescription(msg.payload as RTCSessionDescriptionInit)
-        const answer = await pc.createAnswer()
-        await pc.setLocalDescription(answer)
-        send({ type: 'answer', to: msg.from, payload: answer })
-        break
-      }
-
-      case 'answer': {
-        if (!msg.from || !msg.payload) break
-        const pc = peersRef.current[msg.from]
-        if (pc) await pc.setRemoteDescription(msg.payload as RTCSessionDescriptionInit)
-        break
-      }
-
-      case 'ice_candidate': {
-        if (!msg.from || !msg.payload) break
-        const pc = peersRef.current[msg.from]
-        if (pc) await pc.addIceCandidate(msg.payload as RTCIceCandidateInit)
-        break
-      }
-
-      case 'speaking_state': {
-        if (msg.from) {
-          const payload = msg.payload as { speaking: boolean } | undefined
-          setRemoteSpeaking((prev) => ({ ...prev, [msg.from!]: payload?.speaking ?? false }))
-        }
-        break
-      }
-
-      // ── In-room controls ──────────────────────────────────────────────────
-      case 'room_state': {
-        const parts = msg.participants ?? []
-        const states: Record<string, MediaState> = {}
-        const raised = new Set<string>()
-        const dirPatch: Record<string, ParticipantDirectoryEntry> = {}
-        parts.forEach((p) => {
-          states[p.user_id] = { audio: p.audio, video: p.video }
-          if (p.hand_raised) raised.add(p.user_id)
-          if (p.full_name || p.initials) {
-            dirPatch[p.user_id] = {
-              full_name: p.full_name ?? 'User',
-              initials: p.initials ?? '?',
-            }
+  const handleMessage = useCallback(
+    async (msg: WsMessage) => {
+      switch (msg.type) {
+        case 'participant.joined': {
+          if (!msg.user_id) break
+          // Record display info so chat messages from this user render with a
+          // name immediately — no per-user fetch required.
+          if (msg.full_name || msg.initials) {
+            setParticipantDirectory((prev) =>
+              prev[msg.user_id!]
+                ? prev
+                : {
+                    ...prev,
+                    [msg.user_id!]: {
+                      full_name: msg.full_name ?? 'User',
+                      initials: msg.initials ?? '?',
+                    },
+                  },
+            )
           }
-        })
-        setMediaStates(states)
-        setHandRaisedUsers(raised)
-        if (Object.keys(dirPatch).length > 0) {
-          setParticipantDirectory(prev => ({ ...dirPatch, ...prev }))
+          // Acquire local media on first admission, but never build a peer
+          // connection to ourselves. The backend broadcasts participant.joined
+          // to all admitted clients — including the joiner — so the host
+          // (alone in a fresh meeting) would otherwise create an RTCPeer with
+          // their own user_id, send an offer "to themselves", and crash on
+          // negotiation. Guard against that.
+          const localUid = localUserIdRef.current
+          const stream = localStream ?? (await acquireMedia())
+          if (msg.user_id === localUid) break
+          const pc = getPeer(msg.user_id)
+          addLocalTracksToPeer(pc, stream)
+          break
         }
-        break
-      }
 
-      case 'media_state': {
-        if (!msg.user_id) break
-        setMediaStates((prev) => ({
-          ...prev,
-          [msg.user_id!]: {
-            audio: msg.audio ?? prev[msg.user_id!]?.audio ?? true,
-            video: msg.video ?? prev[msg.user_id!]?.video ?? true,
-          },
-        }))
-        break
-      }
-
-      case 'force_mute': {
-        // The server only sends this to the targeted participant.
-        if (!isMutedRef.current) {
-          const track = localTracksRef.current.audioTrack
-          if (track) track.enabled = false
-          setIsMuted(true)
-          send({ type: 'media_state', audio: false, video: !isCameraOffRef.current })
+        case 'participant.left': {
+          if (!msg.user_id) break
+          removePeer(msg.user_id)
+          setRemoteSpeaking((prev) => {
+            const n = { ...prev }
+            delete n[msg.user_id!]
+            return n
+          })
+          setMediaStates((prev) => {
+            const n = { ...prev }
+            delete n[msg.user_id!]
+            return n
+          })
+          setHandRaisedUsers((prev) => {
+            const s = new Set(prev)
+            s.delete(msg.user_id!)
+            return s
+          })
+          break
         }
-        break
-      }
 
-      case 'emoji_reaction': {
-        const userId = msg.from_id ?? msg.user_id ?? msg.from
-        if (!userId || !msg.emoji) break
-        const id = generateId()
-        const reaction: EmojiReaction = { id, userId, emoji: msg.emoji, timestamp: Date.now() }
-        setReactionQueue((prev) => {
-          const next = [...prev, reaction]
-          return next.length > MAX_ACTIVE_REACTIONS ? next.slice(next.length - MAX_ACTIVE_REACTIONS) : next
-        })
-        setTimeout(() => {
-          setReactionQueue((prev) => prev.filter((r) => r.id !== id))
-        }, 3000)
-        break
-      }
+        case 'offer': {
+          if (!msg.from || !msg.payload) break
+          const pc = getPeer(msg.from)
+          await pc.setRemoteDescription(msg.payload as RTCSessionDescriptionInit)
+          const answer = await pc.createAnswer()
+          await pc.setLocalDescription(answer)
+          send({ type: 'answer', to: msg.from, payload: answer })
+          break
+        }
 
-      case 'hand_raise': {
-        if (!msg.user_id) break
-        const raised = msg.raised ?? false
-        setHandRaisedUsers((prev) => {
-          const s = new Set(prev)
-          if (raised) { s.add(msg.user_id!) } else { s.delete(msg.user_id!) }
-          return s
-        })
-        break
-      }
+        case 'answer': {
+          if (!msg.from || !msg.payload) break
+          const pc = peersRef.current[msg.from]
+          if (pc) await pc.setRemoteDescription(msg.payload as RTCSessionDescriptionInit)
+          break
+        }
 
-      // ── Chat ──────────────────────────────────────────────────────────────
-      case 'chat_message': {
-        if (!msg.id || !msg.user_id || msg.body == null) break
-        const serverId = msg.id
-        const serverClientId = msg.client_id
-        const senderId = msg.user_id
-        const body = msg.body
-        const sentAt = msg.sent_at ? new Date(msg.sent_at).getTime() : Date.now()
-        const localUid = localUserIdRef.current
+        case 'ice_candidate': {
+          if (!msg.from || !msg.payload) break
+          const pc = peersRef.current[msg.from]
+          if (pc) await pc.addIceCandidate(msg.payload as RTCIceCandidateInit)
+          break
+        }
 
-        // Cancel the pending-timeout for this client_id if we have one — the
-        // server echo has arrived, so the send is confirmed.
-        if (serverClientId) {
-          const handle = pendingMsgTimeoutsRef.current[serverClientId]
-          if (handle) {
-            clearTimeout(handle)
-            delete pendingMsgTimeoutsRef.current[serverClientId]
+        case 'speaking_state': {
+          if (msg.from) {
+            const payload = msg.payload as { speaking: boolean } | undefined
+            setRemoteSpeaking((prev) => ({ ...prev, [msg.from!]: payload?.speaking ?? false }))
           }
+          break
         }
 
-        setMessages(prev => {
-          // Dedup: already have this server id → ignore.
-          if (prev.some(m => m.id === serverId)) return prev
-
-          // Optimistic reconcile: match by client_id on a pending OR failed
-          // entry (failed → retried → confirmed is a valid flow).
-          if (serverClientId) {
-            const idx = prev.findIndex(m => m.clientId === serverClientId)
-            if (idx !== -1) {
-              const next = prev.slice()
-              next[idx] = {
-                ...next[idx],
-                id: serverId,
-                sentAt,
-                pending: false,
-                failed: false,
+        // ── In-room controls ──────────────────────────────────────────────────
+        case 'room_state': {
+          const parts = msg.participants ?? []
+          const states: Record<string, MediaState> = {}
+          const raised = new Set<string>()
+          const dirPatch: Record<string, ParticipantDirectoryEntry> = {}
+          parts.forEach((p) => {
+            states[p.user_id] = { audio: p.audio, video: p.video }
+            if (p.hand_raised) raised.add(p.user_id)
+            if (p.full_name || p.initials) {
+              dirPatch[p.user_id] = {
+                full_name: p.full_name ?? 'User',
+                initials: p.initials ?? '?',
               }
-              return next
+            }
+          })
+          setMediaStates(states)
+          setHandRaisedUsers(raised)
+          if (Object.keys(dirPatch).length > 0) {
+            setParticipantDirectory((prev) => ({ ...dirPatch, ...prev }))
+          }
+          break
+        }
+
+        case 'media_state': {
+          if (!msg.user_id) break
+          setMediaStates((prev) => ({
+            ...prev,
+            [msg.user_id!]: {
+              audio: msg.audio ?? prev[msg.user_id!]?.audio ?? true,
+              video: msg.video ?? prev[msg.user_id!]?.video ?? true,
+            },
+          }))
+          break
+        }
+
+        case 'force_mute': {
+          // The server only sends this to the targeted participant.
+          if (!isMutedRef.current) {
+            const track = localTracksRef.current.audioTrack
+            if (track) track.enabled = false
+            setIsMuted(true)
+            send({ type: 'media_state', audio: false, video: !isCameraOffRef.current })
+          }
+          break
+        }
+
+        case 'emoji_reaction': {
+          const userId = msg.from_id ?? msg.user_id ?? msg.from
+          if (!userId || !msg.emoji) break
+          const id = generateId()
+          const reaction: EmojiReaction = { id, userId, emoji: msg.emoji, timestamp: Date.now() }
+          setReactionQueue((prev) => {
+            const next = [...prev, reaction]
+            return next.length > MAX_ACTIVE_REACTIONS
+              ? next.slice(next.length - MAX_ACTIVE_REACTIONS)
+              : next
+          })
+          setTimeout(() => {
+            setReactionQueue((prev) => prev.filter((r) => r.id !== id))
+          }, 3000)
+          break
+        }
+
+        case 'hand_raise': {
+          if (!msg.user_id) break
+          const raised = msg.raised ?? false
+          setHandRaisedUsers((prev) => {
+            const s = new Set(prev)
+            if (raised) {
+              s.add(msg.user_id!)
+            } else {
+              s.delete(msg.user_id!)
+            }
+            return s
+          })
+          break
+        }
+
+        // ── Chat ──────────────────────────────────────────────────────────────
+        case 'chat_message': {
+          if (!msg.id || !msg.user_id || msg.body == null) break
+          const serverId = msg.id
+          const serverClientId = msg.client_id
+          const senderId = msg.user_id
+          const body = msg.body
+          const sentAt = msg.sent_at ? new Date(msg.sent_at).getTime() : Date.now()
+          const localUid = localUserIdRef.current
+
+          // Cancel the pending-timeout for this client_id if we have one — the
+          // server echo has arrived, so the send is confirmed.
+          if (serverClientId) {
+            const handle = pendingMsgTimeoutsRef.current[serverClientId]
+            if (handle) {
+              clearTimeout(handle)
+              delete pendingMsgTimeoutsRef.current[serverClientId]
             }
           }
 
-          // New message from someone else (or own send without matching client_id).
-          return [...prev, { id: serverId, userId: senderId, body, sentAt }]
-        })
+          setMessages((prev) => {
+            // Dedup: already have this server id → ignore.
+            if (prev.some((m) => m.id === serverId)) return prev
 
-        // Unread: count only remote messages while the panel is closed.
-        if (!isChatPanelOpenRef.current && senderId !== localUid) {
-          setUnreadCount(c => c + 1)
+            // Optimistic reconcile: match by client_id on a pending OR failed
+            // entry (failed → retried → confirmed is a valid flow).
+            if (serverClientId) {
+              const idx = prev.findIndex((m) => m.clientId === serverClientId)
+              if (idx !== -1) {
+                const next = prev.slice()
+                next[idx] = {
+                  ...next[idx],
+                  id: serverId,
+                  sentAt,
+                  pending: false,
+                  failed: false,
+                }
+                return next
+              }
+            }
+
+            // New message from someone else (or own send without matching client_id).
+            return [...prev, { id: serverId, userId: senderId, body, sentAt }]
+          })
+
+          // Unread: count only remote messages while the panel is closed.
+          if (!isChatPanelOpenRef.current && senderId !== localUid) {
+            setUnreadCount((c) => c + 1)
+          }
+          break
         }
-        break
-      }
 
-      // ── Knock flow ────────────────────────────────────────────────────────
-      case 'knock.requested': {
-        if (msg.knock_id && msg.user_id) {
-          setKnocks((prev) => [
-            ...prev.filter((k) => k.knock_id !== msg.knock_id),
-            { knock_id: msg.knock_id!, user_id: msg.user_id! },
-          ])
+        // ── Knock flow ────────────────────────────────────────────────────────
+        case 'knock.requested': {
+          if (msg.knock_id && msg.user_id) {
+            setKnocks((prev) => [
+              ...prev.filter((k) => k.knock_id !== msg.knock_id),
+              { knock_id: msg.knock_id!, user_id: msg.user_id! },
+            ])
+          }
+          break
         }
-        break
+
+        case 'knock.resolved':
+        case 'knock.cancelled': {
+          if (msg.knock_id) setKnocks((prev) => prev.filter((k) => k.knock_id !== msg.knock_id))
+          break
+        }
+
+        case 'knock.approved': {
+          setRoomState('in_meeting')
+          await acquireMedia()
+          break
+        }
+
+        case 'knock.denied':
+          setRoomState('denied')
+          break
+
+        case 'meeting.ended':
+          setRoomState('ended')
+          cleanup()
+          onEnd?.()
+          break
+
+        case 'caption_chunk': {
+          if (!msg.user_id || !msg.caption_text) break
+          if (msg.caption_kind !== 'partial' && msg.caption_kind !== 'final') break
+          // eslint-disable-next-line no-console
+          console.debug('[captions] WS ← from peer', {
+            user: msg.user_id.slice(0, 8),
+            kind: msg.caption_kind,
+            seg: msg.caption_segment_id,
+            text: msg.caption_text,
+          })
+          // mergeCaption ignores segment_id by design (Whisper resets it per
+          // window); we keep it on the wire for any future debugging consumer
+          // but don't pass it through.
+          setCaptions((prev) =>
+            mergeCaption(prev, {
+              userId: msg.user_id!,
+              kind: msg.caption_kind!,
+              text: msg.caption_text!,
+              timestamp: msg.caption_ts ?? Date.now(),
+            }),
+          )
+          break
+        }
+
+        case 'pong':
+          break
       }
-
-      case 'knock.resolved':
-      case 'knock.cancelled': {
-        if (msg.knock_id) setKnocks((prev) => prev.filter((k) => k.knock_id !== msg.knock_id))
-        break
-      }
-
-      case 'knock.approved': {
-        setRoomState('in_meeting')
-        await acquireMedia()
-        break
-      }
-
-      case 'knock.denied':
-        setRoomState('denied')
-        break
-
-      case 'meeting.ended':
-        setRoomState('ended')
-        cleanup()
-        onEnd?.()
-        break
-
-      case 'caption_chunk': {
-        if (!msg.user_id || !msg.caption_text) break
-        if (msg.caption_kind !== 'partial' && msg.caption_kind !== 'final') break
-        // eslint-disable-next-line no-console
-        console.debug('[captions] WS ← from peer', {
-          user:    msg.user_id.slice(0, 8),
-          kind:    msg.caption_kind,
-          seg:     msg.caption_segment_id,
-          text:    msg.caption_text,
-        })
-        // mergeCaption ignores segment_id by design (Whisper resets it per
-        // window); we keep it on the wire for any future debugging consumer
-        // but don't pass it through.
-        setCaptions((prev) => mergeCaption(prev, {
-          userId:    msg.user_id!,
-          kind:      msg.caption_kind!,
-          text:      msg.caption_text!,
-          timestamp: msg.caption_ts ?? Date.now(),
-        }))
-        break
-      }
-
-      case 'pong':
-        break
-    }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [getPeer, removePeer, send, acquireMedia, addLocalTracksToPeer, localStream, onEnd, meeting])
+    },
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [getPeer, removePeer, send, acquireMedia, addLocalTracksToPeer, localStream, onEnd, meeting],
+  )
 
   // Ref to the latest handleMessage so the WS onmessage callback (bound once
   // when the effect mounts) always dispatches to the freshest handler rather
   // than a stale closure with a null localStream / missing callbacks.
   const handleMessageRef = useRef(handleMessage)
-  useEffect(() => { handleMessageRef.current = handleMessage }, [handleMessage])
+  useEffect(() => {
+    handleMessageRef.current = handleMessage
+  }, [handleMessage])
 
   // ── Cleanup ───────────────────────────────────────────────────────────────
   const cleanup = useCallback(() => {
@@ -817,7 +884,12 @@ export function useMeeting({ code, onEnd }: UseMeetingOptions): UseMeetingReturn
     bgPipelineRef.current?.destroy()
     bgPipelineRef.current = null
     localStream?.getTracks().forEach((t) => t.stop())
-    localTracksRef.current = { audioTrack: null, videoTrack: null, screenTrack: null, canvasTrack: null }
+    localTracksRef.current = {
+      audioTrack: null,
+      videoTrack: null,
+      screenTrack: null,
+      canvasTrack: null,
+    }
     Object.values(peersRef.current).forEach((pc) => pc.close())
     peersRef.current = {}
     // Clear any outstanding pending-message timeouts to avoid state updates
@@ -837,7 +909,7 @@ export function useMeeting({ code, onEnd }: UseMeetingOptions): UseMeetingReturn
     if (!accessToken || !code) return
     let cancelled = false
     void (async () => {
-      let fetched: Meeting | null = null
+      let fetched: Meeting | null
       try {
         const res = await meetingService.getByCode(code)
         fetched = res.data
@@ -859,10 +931,16 @@ export function useMeeting({ code, onEnd }: UseMeetingOptions): UseMeetingReturn
         setRoomState('ended')
         return
       }
-      try { await acquireMedia() } catch { /* permissions may be denied */ }
+      try {
+        await acquireMedia()
+      } catch {
+        /* permissions may be denied */
+      }
     })()
-    return () => { cancelled = true }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
+    return () => {
+      cancelled = true
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [accessToken, code])
 
   // ── Device selection ──────────────────────────────────────────────────────
@@ -903,94 +981,105 @@ export function useMeeting({ code, onEnd }: UseMeetingOptions): UseMeetingReturn
 
   // Acquire a fresh stream with a specific track replaced. Returns the new
   // stream so callers can wire it into peers and the local preview.
-  const acquireWithDevice = useCallback(async (
-    overrides: { audioId?: string; videoId?: string },
-  ): Promise<MediaStream> => {
-    const audioConstraint: MediaTrackConstraints = {
-      echoCancellation: true,
-      noiseSuppression: true,
-      autoGainControl: true,
-    }
-    if (overrides.audioId) audioConstraint.deviceId = { exact: overrides.audioId }
-
-    const videoConstraint: MediaTrackConstraints = {
-      width: 1280, height: 720, frameRate: 30,
-    }
-    if (overrides.videoId) videoConstraint.deviceId = { exact: overrides.videoId }
-
-    return navigator.mediaDevices.getUserMedia({
-      audio: audioConstraint,
-      video: videoConstraint,
-    })
-  }, [])
-
-  const switchCamera = useCallback(async (deviceId: string) => {
-    try {
-      const next = await acquireWithDevice({
-        audioId: selectedDeviceIds.mic || undefined,
-        videoId: deviceId || undefined,
-      })
-      const newVideo = next.getVideoTracks()[0]
-      const newAudio = next.getAudioTracks()[0]
-      // Stop the old camera track to release the device.
-      localTracksRef.current.videoTrack?.stop()
-      localTracksRef.current.videoTrack = newVideo ?? null
-      // Audio track came along for the ride; if we don't already have one,
-      // adopt it.
-      if (!localTracksRef.current.audioTrack && newAudio) {
-        localTracksRef.current.audioTrack = newAudio
-      } else {
-        // Stop the duplicate audio so we don't hold two mic handles.
-        newAudio?.stop()
+  const acquireWithDevice = useCallback(
+    async (overrides: { audioId?: string; videoId?: string }): Promise<MediaStream> => {
+      const audioConstraint: MediaTrackConstraints = {
+        echoCancellation: true,
+        noiseSuppression: true,
+        autoGainControl: true,
       }
-      if (newVideo) {
-        newVideo.enabled = !isCameraOffRef.current
-        // Push to peers and the local preview unless screen-sharing.
-        if (!isScreenSharingRef.current && !localTracksRef.current.canvasTrack) {
-          replaceVideoTrack(newVideo)
-        }
-      }
-      setLocalStream(next)
-      setSelectedDeviceIds((prev) => ({ ...prev, camera: deviceId }))
-    } catch (err) {
-      mlog('switchCamera FAILED', { deviceId, err })
-    }
-  }, [acquireWithDevice, replaceVideoTrack, selectedDeviceIds.mic])
+      if (overrides.audioId) audioConstraint.deviceId = { exact: overrides.audioId }
 
-  const switchMic = useCallback(async (deviceId: string) => {
-    try {
-      const next = await acquireWithDevice({
-        audioId: deviceId || undefined,
-        videoId: selectedDeviceIds.camera || undefined,
+      const videoConstraint: MediaTrackConstraints = {
+        width: 1280,
+        height: 720,
+        frameRate: 30,
+      }
+      if (overrides.videoId) videoConstraint.deviceId = { exact: overrides.videoId }
+
+      return navigator.mediaDevices.getUserMedia({
+        audio: audioConstraint,
+        video: videoConstraint,
       })
-      const newAudio = next.getAudioTracks()[0]
-      const newVideo = next.getVideoTracks()[0]
-      // Stop the old mic track and adopt the new one.
-      localTracksRef.current.audioTrack?.stop()
-      localTracksRef.current.audioTrack = newAudio ?? null
-      if (newAudio) {
-        newAudio.enabled = !isMutedRef.current
-        // Replace the audio sender on every peer.
-        Object.values(peersRef.current).forEach((pc) => {
-          const sender = pc.getSenders().find((s) => s.track?.kind === 'audio')
-          sender?.replaceTrack(newAudio).catch(() => { /* connection closed */ })
+    },
+    [],
+  )
+
+  const switchCamera = useCallback(
+    async (deviceId: string) => {
+      try {
+        const next = await acquireWithDevice({
+          audioId: selectedDeviceIds.mic || undefined,
+          videoId: deviceId || undefined,
         })
-        // Restart VAD on the new track.
-        vadRef.current?.stop()
-        startVad(next)
+        const newVideo = next.getVideoTracks()[0]
+        const newAudio = next.getAudioTracks()[0]
+        // Stop the old camera track to release the device.
+        localTracksRef.current.videoTrack?.stop()
+        localTracksRef.current.videoTrack = newVideo ?? null
+        // Audio track came along for the ride; if we don't already have one,
+        // adopt it.
+        if (!localTracksRef.current.audioTrack && newAudio) {
+          localTracksRef.current.audioTrack = newAudio
+        } else {
+          // Stop the duplicate audio so we don't hold two mic handles.
+          newAudio?.stop()
+        }
+        if (newVideo) {
+          newVideo.enabled = !isCameraOffRef.current
+          // Push to peers and the local preview unless screen-sharing.
+          if (!isScreenSharingRef.current && !localTracksRef.current.canvasTrack) {
+            replaceVideoTrack(newVideo)
+          }
+        }
+        setLocalStream(next)
+        setSelectedDeviceIds((prev) => ({ ...prev, camera: deviceId }))
+      } catch (err) {
+        mlog('switchCamera FAILED', { deviceId, err })
       }
-      // Discard the duplicate video unless we don't already have one.
-      if (!localTracksRef.current.videoTrack && newVideo) {
-        localTracksRef.current.videoTrack = newVideo
-      } else {
-        newVideo?.stop()
+    },
+    [acquireWithDevice, replaceVideoTrack, selectedDeviceIds.mic],
+  )
+
+  const switchMic = useCallback(
+    async (deviceId: string) => {
+      try {
+        const next = await acquireWithDevice({
+          audioId: deviceId || undefined,
+          videoId: selectedDeviceIds.camera || undefined,
+        })
+        const newAudio = next.getAudioTracks()[0]
+        const newVideo = next.getVideoTracks()[0]
+        // Stop the old mic track and adopt the new one.
+        localTracksRef.current.audioTrack?.stop()
+        localTracksRef.current.audioTrack = newAudio ?? null
+        if (newAudio) {
+          newAudio.enabled = !isMutedRef.current
+          // Replace the audio sender on every peer.
+          Object.values(peersRef.current).forEach((pc) => {
+            const sender = pc.getSenders().find((s) => s.track?.kind === 'audio')
+            sender?.replaceTrack(newAudio).catch(() => {
+              /* connection closed */
+            })
+          })
+          // Restart VAD on the new track.
+          vadRef.current?.stop()
+          startVad(next)
+        }
+        // Discard the duplicate video unless we don't already have one.
+        if (!localTracksRef.current.videoTrack && newVideo) {
+          localTracksRef.current.videoTrack = newVideo
+        } else {
+          newVideo?.stop()
+        }
+        setLocalStream(next)
+        setSelectedDeviceIds((prev) => ({ ...prev, mic: deviceId }))
+      } catch (err) {
+        mlog('switchMic FAILED', { deviceId, err })
       }
-      setLocalStream(next)
-      setSelectedDeviceIds((prev) => ({ ...prev, mic: deviceId }))
-    } catch (err) {
-      mlog('switchMic FAILED', { deviceId, err })
-    }
-  }, [acquireWithDevice, selectedDeviceIds.camera, startVad])
+    },
+    [acquireWithDevice, selectedDeviceIds.camera, startVad],
+  )
 
   const switchSpeaker = useCallback(async (deviceId: string) => {
     setSelectedDeviceIds((prev) => ({ ...prev, speaker: deviceId }))
@@ -999,9 +1088,14 @@ export function useMeeting({ code, onEnd }: UseMeetingOptions): UseMeetingReturn
     // still useful so the user knows the app sees the device.
     const videos = document.querySelectorAll<HTMLVideoElement>('video')
     for (const v of videos) {
-      const setSinkId = (v as HTMLVideoElement & { setSinkId?: (id: string) => Promise<void> }).setSinkId
+      const setSinkId = (v as HTMLVideoElement & { setSinkId?: (id: string) => Promise<void> })
+        .setSinkId
       if (typeof setSinkId === 'function') {
-        try { await setSinkId.call(v, deviceId) } catch { /* ignore */ }
+        try {
+          await setSinkId.call(v, deviceId)
+        } catch {
+          /* ignore */
+        }
       }
     }
   }, [])
@@ -1013,7 +1107,9 @@ export function useMeeting({ code, onEnd }: UseMeetingOptions): UseMeetingReturn
   }, [localStream, refreshDevices])
 
   useEffect(() => {
-    const handler = () => { void refreshDevices() }
+    const handler = () => {
+      void refreshDevices()
+    }
     navigator.mediaDevices?.addEventListener?.('devicechange', handler)
     return () => navigator.mediaDevices?.removeEventListener?.('devicechange', handler)
   }, [refreshDevices])
@@ -1053,14 +1149,22 @@ export function useMeeting({ code, onEnd }: UseMeetingOptions): UseMeetingReturn
       try {
         mlog('connect:getByCode →')
         const res = await meetingService.getByCode(code)
-        if (cancelled) { mlog('connect:cancelled after getByCode'); return }
-        mlog('connect:getByCode ←', { id: res.data.id, type: res.data.type, host_id: res.data.host_id, status: res.data.status })
+        if (cancelled) {
+          mlog('connect:cancelled after getByCode')
+          return
+        }
+        mlog('connect:getByCode ←', {
+          id: res.data.id,
+          type: res.data.type,
+          host_id: res.data.host_id,
+          status: res.data.status,
+        })
         setMeeting(res.data)
 
         // Populate participant directory from the meeting previews so chat
         // messages render names immediately on first paint.
         if (res.data.participant_previews?.length) {
-          setParticipantDirectory(prev => {
+          setParticipantDirectory((prev) => {
             const next = { ...prev }
             for (const p of res.data.participant_previews!) {
               if (!next[p.user_id]) {
@@ -1089,10 +1193,13 @@ export function useMeeting({ code, onEnd }: UseMeetingOptions): UseMeetingReturn
             const status = (err as { status?: number })?.status
             mlog('connect:ticket FAILED', { attempt: ticketAttempt, status, err })
             if (status && status >= 400 && status < 500) break
-            if (ticketAttempt < 2) await new Promise(r => setTimeout(r, 1000))
+            if (ticketAttempt < 2) await new Promise((r) => setTimeout(r, 1000))
           }
         }
-        if (cancelled) { mlog('connect:cancelled after ticket'); return }
+        if (cancelled) {
+          mlog('connect:cancelled after ticket')
+          return
+        }
         if (!wsPath) {
           mlog('connect:no ticket → roomState=error')
           setRoomState('error')
@@ -1111,7 +1218,7 @@ export function useMeeting({ code, onEnd }: UseMeetingOptions): UseMeetingReturn
 
         ws.onmessage = async (e) => {
           try {
-            const msg: WsMessage = JSON.parse(e.data as string)
+            const msg = JSON.parse(e.data as string) as WsMessage
             mlog('ws:onmessage', { type: msg.type, user_id: (msg as { user_id?: string }).user_id })
             const isAdmissionSignal =
               msg.type === 'room_state' ||
@@ -1157,7 +1264,7 @@ export function useMeeting({ code, onEnd }: UseMeetingOptions): UseMeetingReturn
       cancelled = true
       cleanup()
     }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [code, accessToken, joinRequested])
 
   // ── Chat history fetch on join ────────────────────────────────────────────
@@ -1167,11 +1274,13 @@ export function useMeeting({ code, onEnd }: UseMeetingOptions): UseMeetingReturn
   useEffect(() => {
     if (roomState !== 'in_meeting' || !code) return
     let cancelled = false
-    ;(async () => {
+    void (async () => {
       setIsLoadingHistory(true)
       setChatHistoryError(null)
       try {
-        const { messages: rows, has_more } = await meetingService.listMessages(code, { limit: HISTORY_PAGE_SIZE })
+        const { messages: rows, has_more } = await meetingService.listMessages(code, {
+          limit: HISTORY_PAGE_SIZE,
+        })
         if (cancelled) return
         setMessages(rows)
         setHasMoreHistory(has_more)
@@ -1183,14 +1292,19 @@ export function useMeeting({ code, onEnd }: UseMeetingOptions): UseMeetingReturn
         if (!cancelled) setIsLoadingHistory(false)
       }
     })()
-    return () => { cancelled = true }
+    return () => {
+      cancelled = true
+    }
   }, [roomState, code])
 
   // ── Public actions ────────────────────────────────────────────────────────
 
-  const respondToKnock = useCallback((knockId: string, approved: boolean) => {
-    send({ type: 'knock.respond', knock_id: knockId, approved })
-  }, [send])
+  const respondToKnock = useCallback(
+    (knockId: string, approved: boolean) => {
+      send({ type: 'knock.respond', knock_id: knockId, approved })
+    },
+    [send],
+  )
 
   const endMeeting = useCallback(async () => {
     await meetingService.end(code)
@@ -1224,7 +1338,8 @@ export function useMeeting({ code, onEnd }: UseMeetingOptions): UseMeetingReturn
     send({ type: 'media_state', audio: !isMutedRef.current, video: !nextOff })
     // Pause/resume BG pipeline when camera toggles.
     if (bgPipelineRef.current) {
-      nextOff ? bgPipelineRef.current.pause() : bgPipelineRef.current.resume()
+      if (nextOff) bgPipelineRef.current.pause()
+      else bgPipelineRef.current.resume()
     }
   }, [send])
 
@@ -1244,7 +1359,7 @@ export function useMeeting({ code, onEnd }: UseMeetingOptions): UseMeetingReturn
     } catch {
       // User dismissed the dialog — ignore.
     }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [replaceVideoTrack])
 
   const stopScreenShare = useCallback(() => {
@@ -1264,9 +1379,12 @@ export function useMeeting({ code, onEnd }: UseMeetingOptions): UseMeetingReturn
     }
   }, [replaceVideoTrack, activeBackground])
 
-  const forceMute = useCallback((userId: string) => {
-    send({ type: 'force_mute', target_id: userId })
-  }, [send])
+  const forceMute = useCallback(
+    (userId: string) => {
+      send({ type: 'force_mute', target_id: userId })
+    },
+    [send],
+  )
 
   // ── Hand raise ────────────────────────────────────────────────────────────
 
@@ -1278,93 +1396,115 @@ export function useMeeting({ code, onEnd }: UseMeetingOptions): UseMeetingReturn
 
   // ── Emoji ─────────────────────────────────────────────────────────────────
 
-  const sendEmojiReaction = useCallback((emoji: string) => {
-    const now = Date.now()
-    if (now - lastEmojiSentRef.current < EMOJI_RATE_LIMIT_MS) return
-    lastEmojiSentRef.current = now
-    send({ type: 'emoji_reaction', emoji })
-  }, [send])
+  const sendEmojiReaction = useCallback(
+    (emoji: string) => {
+      const now = Date.now()
+      if (now - lastEmojiSentRef.current < EMOJI_RATE_LIMIT_MS) return
+      lastEmojiSentRef.current = now
+      send({ type: 'emoji_reaction', emoji })
+    },
+    [send],
+  )
 
   // ── Virtual background ────────────────────────────────────────────────────
 
-  const uploadCustomBackground = useCallback((file: File): Promise<string | null> => {
-    if (!bgSupported) return Promise.resolve('Virtual backgrounds are not supported in this browser')
-    if (file.size > CUSTOM_BG_MAX_BYTES) return Promise.resolve('Image must be 2 MB or smaller')
+  const uploadCustomBackground = useCallback(
+    (file: File): Promise<string | null> => {
+      if (!bgSupported)
+        return Promise.resolve('Virtual backgrounds are not supported in this browser')
+      if (file.size > CUSTOM_BG_MAX_BYTES) return Promise.resolve('Image must be 2 MB or smaller')
 
-    return new Promise((resolve) => {
-      const reader = new FileReader()
-      reader.onerror = () => resolve('Failed to read file')
-      reader.onload = async (e) => {
-        const dataUrl = e.target?.result as string
-        if (!dataUrl) { resolve('Failed to read file'); return }
-
-        try {
-          localStorage.setItem(CUSTOM_BG_KEY, dataUrl)
-          localStorage.setItem(BG_STORAGE_KEY, JSON.stringify({ type: 'image', src: CUSTOM_SRC_SENTINEL, label: 'Custom' }))
-        } catch {
-          resolve('Not enough storage space for this image')
-          return
-        }
-
-        setCustomBgSrc(dataUrl)
-
-        const option: BackgroundOption = { type: 'image', src: dataUrl, label: 'Custom' }
-        const stream = localStream
-        if (stream) {
-          if (!bgPipelineRef.current) {
-            bgPipelineRef.current = new VirtualBackgroundPipeline(stream)
+      return new Promise((resolve) => {
+        const reader = new FileReader()
+        reader.onerror = () => resolve('Failed to read file')
+        reader.onload = async (e) => {
+          const dataUrl = e.target?.result as string
+          if (!dataUrl) {
+            resolve('Failed to read file')
+            return
           }
+
           try {
-            const canvasTrack = await bgPipelineRef.current.setBackground(option)
-            if (canvasTrack) {
-              localTracksRef.current.canvasTrack = canvasTrack
-              if (!isScreenSharingRef.current) replaceVideoTrack(canvasTrack)
+            localStorage.setItem(CUSTOM_BG_KEY, dataUrl)
+            localStorage.setItem(
+              BG_STORAGE_KEY,
+              JSON.stringify({ type: 'image', src: CUSTOM_SRC_SENTINEL, label: 'Custom' }),
+            )
+          } catch {
+            resolve('Not enough storage space for this image')
+            return
+          }
+
+          setCustomBgSrc(dataUrl)
+
+          const option: BackgroundOption = { type: 'image', src: dataUrl, label: 'Custom' }
+          const stream = localStream
+          if (stream) {
+            if (!bgPipelineRef.current) {
+              bgPipelineRef.current = new VirtualBackgroundPipeline(stream)
             }
-          } catch { /* pipeline error — still update UI state */ }
+            try {
+              const canvasTrack = await bgPipelineRef.current.setBackground(option)
+              if (canvasTrack) {
+                localTracksRef.current.canvasTrack = canvasTrack
+                if (!isScreenSharingRef.current) replaceVideoTrack(canvasTrack)
+              }
+            } catch {
+              /* pipeline error — still update UI state */
+            }
+          }
+
+          setActiveBackgroundState(option)
+          resolve(null)
         }
+        reader.readAsDataURL(file)
+      })
+    },
+    [bgSupported, localStream, replaceVideoTrack],
+  )
 
-        setActiveBackgroundState(option)
-        resolve(null)
+  const setBackground = useCallback(
+    async (option: BackgroundOption) => {
+      if (!bgSupported) return
+
+      if (option.type === 'none') {
+        bgPipelineRef.current?.destroy()
+        bgPipelineRef.current = null
+        localTracksRef.current.canvasTrack = null
+        setActiveBackgroundState({ type: 'none' })
+        localStorage.removeItem(BG_STORAGE_KEY)
+        // Restore raw camera track (unless screen sharing).
+        if (!isScreenSharingRef.current) {
+          const videoTrack = localTracksRef.current.videoTrack
+          if (videoTrack) replaceVideoTrack(videoTrack)
+        }
+        return
       }
-      reader.readAsDataURL(file)
-    })
-  }, [bgSupported, localStream, replaceVideoTrack])
 
-  const setBackground = useCallback(async (option: BackgroundOption) => {
-    if (!bgSupported) return
+      const stream = localStream
+      if (!stream) return
 
-    if (option.type === 'none') {
-      bgPipelineRef.current?.destroy()
-      bgPipelineRef.current = null
-      localTracksRef.current.canvasTrack = null
-      setActiveBackgroundState({ type: 'none' })
-      localStorage.removeItem(BG_STORAGE_KEY)
-      // Restore raw camera track (unless screen sharing).
-      if (!isScreenSharingRef.current) {
-        const videoTrack = localTracksRef.current.videoTrack
-        if (videoTrack) replaceVideoTrack(videoTrack)
+      if (!bgPipelineRef.current) {
+        bgPipelineRef.current = new VirtualBackgroundPipeline(stream)
       }
-      return
-    }
 
-    const stream = localStream
-    if (!stream) return
-
-    if (!bgPipelineRef.current) {
-      bgPipelineRef.current = new VirtualBackgroundPipeline(stream)
-    }
-
-    const canvasTrack = await bgPipelineRef.current.setBackground(option)
-    if (canvasTrack) {
-      localTracksRef.current.canvasTrack = canvasTrack
-      if (!isScreenSharingRef.current) {
-        replaceVideoTrack(canvasTrack)
+      const canvasTrack = await bgPipelineRef.current.setBackground(option)
+      if (canvasTrack) {
+        localTracksRef.current.canvasTrack = canvasTrack
+        if (!isScreenSharingRef.current) {
+          replaceVideoTrack(canvasTrack)
+        }
       }
-    }
 
-    setActiveBackgroundState(option)
-    try { localStorage.setItem(BG_STORAGE_KEY, JSON.stringify(option)) } catch { /* ignore */ }
-  }, [bgSupported, localStream, replaceVideoTrack])
+      setActiveBackgroundState(option)
+      try {
+        localStorage.setItem(BG_STORAGE_KEY, JSON.stringify(option))
+      } catch {
+        /* ignore */
+      }
+    },
+    [bgSupported, localStream, replaceVideoTrack],
+  )
 
   // ── Chat ──────────────────────────────────────────────────────────────────
 
@@ -1373,7 +1513,9 @@ export function useMeeting({ code, onEnd }: UseMeetingOptions): UseMeetingReturn
     setIsLoadingHistory(true)
     setChatHistoryError(null)
     try {
-      const { messages: rows, has_more } = await meetingService.listMessages(code, { limit: HISTORY_PAGE_SIZE })
+      const { messages: rows, has_more } = await meetingService.listMessages(code, {
+        limit: HISTORY_PAGE_SIZE,
+      })
       setMessages(rows)
       setHasMoreHistory(has_more)
     } catch (err) {
@@ -1383,7 +1525,9 @@ export function useMeeting({ code, onEnd }: UseMeetingOptions): UseMeetingReturn
     }
   }, [code])
 
-  const retryHistoryFetch = useCallback(() => { void fetchHistory() }, [fetchHistory])
+  const retryHistoryFetch = useCallback(() => {
+    void fetchHistory()
+  }, [fetchHistory])
 
   const openChatPanel = useCallback(() => {
     setIsChatPanelOpen(true)
@@ -1394,7 +1538,9 @@ export function useMeeting({ code, onEnd }: UseMeetingOptions): UseMeetingReturn
     setIsChatPanelOpen(false)
   }, [])
 
-  const dismissChatSendError = useCallback(() => { setChatSendError(null) }, [])
+  const dismissChatSendError = useCallback(() => {
+    setChatSendError(null)
+  }, [])
 
   // schedulePendingTimeout marks a pending entry `failed` if no echo arrives
   // within PENDING_MESSAGE_TIMEOUT_MS. Also exposes a way for the UI to
@@ -1402,77 +1548,83 @@ export function useMeeting({ code, onEnd }: UseMeetingOptions): UseMeetingReturn
   const schedulePendingTimeout = useCallback((clientId: string) => {
     const handle = setTimeout(() => {
       delete pendingMsgTimeoutsRef.current[clientId]
-      setMessages(prev => prev.map(m => (
-        m.clientId === clientId && m.pending
-          ? { ...m, pending: false, failed: true }
-          : m
-      )))
+      setMessages((prev) =>
+        prev.map((m) =>
+          m.clientId === clientId && m.pending ? { ...m, pending: false, failed: true } : m,
+        ),
+      )
     }, PENDING_MESSAGE_TIMEOUT_MS)
     pendingMsgTimeoutsRef.current[clientId] = handle
   }, [])
 
-  const sendChatMessage = useCallback((rawBody: string) => {
-    const body = rawBody.trim()
-    if (!body) return
+  const sendChatMessage = useCallback(
+    (rawBody: string) => {
+      const body = rawBody.trim()
+      if (!body) return
 
-    if (body.length > MAX_MESSAGE_LENGTH) {
-      setChatSendError(`Messages are limited to ${MAX_MESSAGE_LENGTH} characters`)
-      return
-    }
+      if (body.length > MAX_MESSAGE_LENGTH) {
+        setChatSendError(`Messages are limited to ${MAX_MESSAGE_LENGTH} characters`)
+        return
+      }
 
-    if (wsRef.current?.readyState !== WebSocket.OPEN) {
-      setChatSendError('Not connected — message could not be sent')
-      return
-    }
+      if (wsRef.current?.readyState !== WebSocket.OPEN) {
+        setChatSendError('Not connected — message could not be sent')
+        return
+      }
 
-    // Rolling rate limit: last RATE_LIMIT_MESSAGES timestamps within window.
-    const now = Date.now()
-    const recent = chatSendTimestampsRef.current.filter(t => now - t < RATE_LIMIT_WINDOW_MS)
-    if (recent.length >= RATE_LIMIT_MESSAGES) {
+      // Rolling rate limit: last RATE_LIMIT_MESSAGES timestamps within window.
+      const now = Date.now()
+      const recent = chatSendTimestampsRef.current.filter((t) => now - t < RATE_LIMIT_WINDOW_MS)
+      if (recent.length >= RATE_LIMIT_MESSAGES) {
+        chatSendTimestampsRef.current = recent
+        setChatFlashKey((k) => k + 1)
+        return
+      }
+      recent.push(now)
       chatSendTimestampsRef.current = recent
-      setChatFlashKey(k => k + 1)
-      return
-    }
-    recent.push(now)
-    chatSendTimestampsRef.current = recent
 
-    const uid = localUserIdRef.current
-    if (!uid) return
+      const uid = localUserIdRef.current
+      if (!uid) return
 
-    const clientId = generateId()
-    send({ type: 'chat_message', client_id: clientId, body })
-    schedulePendingTimeout(clientId)
+      const clientId = generateId()
+      send({ type: 'chat_message', client_id: clientId, body })
+      schedulePendingTimeout(clientId)
 
-    setMessages(prev => [
-      ...prev,
-      { id: clientId, clientId, userId: uid, body, sentAt: now, pending: true },
-    ])
-  }, [send, schedulePendingTimeout])
+      setMessages((prev) => [
+        ...prev,
+        { id: clientId, clientId, userId: uid, body, sentAt: now, pending: true },
+      ])
+    },
+    [send, schedulePendingTimeout],
+  )
 
   // Retry a previously-failed local message by re-sending with the SAME
   // client_id. The backend tolerates duplicate client_ids (each insert gets
   // its own server id) but on our side we re-use the local id so React keys
   // stay stable and the echoed message reconciles in-place.
-  const retrySendMessage = useCallback((localId: string) => {
-    const entry = messages.find(m => m.id === localId || m.clientId === localId)
-    if (!entry || !entry.clientId) return
-    if (!entry.failed && !entry.pending) return
+  const retrySendMessage = useCallback(
+    (localId: string) => {
+      const entry = messages.find((m) => m.id === localId || m.clientId === localId)
+      if (!entry || !entry.clientId) return
+      if (!entry.failed && !entry.pending) return
 
-    if (wsRef.current?.readyState !== WebSocket.OPEN) {
-      setChatSendError('Not connected — message could not be sent')
-      return
-    }
+      if (wsRef.current?.readyState !== WebSocket.OPEN) {
+        setChatSendError('Not connected — message could not be sent')
+        return
+      }
 
-    // Mark pending again and reschedule timeout.
-    setMessages(prev => prev.map(m => (
-      m.id === entry.id ? { ...m, pending: true, failed: false } : m
-    )))
-    send({ type: 'chat_message', client_id: entry.clientId, body: entry.body })
-    schedulePendingTimeout(entry.clientId)
-  }, [messages, send, schedulePendingTimeout])
+      // Mark pending again and reschedule timeout.
+      setMessages((prev) =>
+        prev.map((m) => (m.id === entry.id ? { ...m, pending: true, failed: false } : m)),
+      )
+      send({ type: 'chat_message', client_id: entry.clientId, body: entry.body })
+      schedulePendingTimeout(entry.clientId)
+    },
+    [messages, send, schedulePendingTimeout],
+  )
 
   const deleteFailedMessage = useCallback((localId: string) => {
-    setMessages(prev => prev.filter(m => m.id !== localId))
+    setMessages((prev) => prev.filter((m) => m.id !== localId))
   }, [])
 
   const loadOlderMessages = useCallback(async () => {
@@ -1488,9 +1640,9 @@ export function useMeeting({ code, onEnd }: UseMeetingOptions): UseMeetingReturn
       // Dedup by id before prepending (the oldest of the current list may
       // match the most recent of the older page in theory; we trust `before`
       // exclusivity but keep the safety check).
-      setMessages(prev => {
-        const existingIds = new Set(prev.map(m => m.id))
-        const unique = older.filter(m => !existingIds.has(m.id))
+      setMessages((prev) => {
+        const existingIds = new Set(prev.map((m) => m.id))
+        const unique = older.filter((m) => !existingIds.has(m.id))
         return [...unique, ...prev]
       })
       setHasMoreHistory(has_more)
@@ -1516,9 +1668,9 @@ export function useMeeting({ code, onEnd }: UseMeetingOptions): UseMeetingReturn
           if (e.kind === 'partial' && now - e.lastUpdate > CAPTION_SILENCE_GAP_MS) {
             // eslint-disable-next-line no-console
             console.debug('[captions] silence-finalizer → freeze partial', {
-              key:        e.key,
-              text:       e.text,
-              stale_ms:   now - e.lastUpdate,
+              key: e.key,
+              text: e.text,
+              stale_ms: now - e.lastUpdate,
             })
             changed = true
             return { ...e, kind: 'final' as const }
@@ -1535,28 +1687,29 @@ export function useMeeting({ code, onEnd }: UseMeetingOptions): UseMeetingReturn
   // Relay a local ASR chunk to other participants over the meeting WS. Also
   // appends to the local captions feed so the speaker sees their own text
   // alongside the others' (the backend excludes the sender from the relay).
-  const sendCaptionChunk = useCallback((
-    kind: 'partial' | 'final',
-    text: string,
-    segmentId: string,
-  ) => {
-    const uid = localUserIdRef.current
-    if (!uid || !text || !segmentId) return
-    const ts = Date.now()
-    setCaptions((prev) => mergeCaption(prev, {
-      userId: uid,
-      kind,
-      text,
-      timestamp: ts,
-    }))
-    send({
-      type: 'caption_chunk',
-      caption_kind: kind,
-      caption_text: text,
-      caption_segment_id: segmentId,
-      caption_ts: ts,
-    })
-  }, [send])
+  const sendCaptionChunk = useCallback(
+    (kind: 'partial' | 'final', text: string, segmentId: string) => {
+      const uid = localUserIdRef.current
+      if (!uid || !text || !segmentId) return
+      const ts = Date.now()
+      setCaptions((prev) =>
+        mergeCaption(prev, {
+          userId: uid,
+          kind,
+          text,
+          timestamp: ts,
+        }),
+      )
+      send({
+        type: 'caption_chunk',
+        caption_kind: kind,
+        caption_text: text,
+        caption_segment_id: segmentId,
+        caption_ts: ts,
+      })
+    },
+    [send],
+  )
 
   // ─────────────────────────────────────────────────────────────────────────
   return {

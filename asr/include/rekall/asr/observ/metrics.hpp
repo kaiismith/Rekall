@@ -47,6 +47,12 @@ class Metrics {
     prometheus::Histogram& session_duration_seconds();
     prometheus::Histogram& model_load_duration_seconds(const std::string& model_id);
 
+    // OpenAI engine (only used when engine.mode=openai).
+    prometheus::Counter&   openai_requests_total              (const std::string& outcome);
+    prometheus::Counter&   openai_retries_total               (const std::string& reason);
+    prometheus::Counter&   openai_audio_seconds_uploaded_total();
+    prometheus::Histogram& openai_request_duration_seconds   ();
+
     prometheus::Registry& registry() noexcept { return *registry_; }
 
    private:
@@ -67,6 +73,12 @@ class Metrics {
     prometheus::Family<prometheus::Histogram>& fam_inference_duration_;
     prometheus::Family<prometheus::Histogram>& fam_session_duration_;
     prometheus::Family<prometheus::Histogram>& fam_model_load_duration_;
+
+    // OpenAI engine families.
+    prometheus::Family<prometheus::Counter>&   fam_openai_requests_;
+    prometheus::Family<prometheus::Counter>&   fam_openai_retries_;
+    prometheus::Family<prometheus::Counter>&   fam_openai_audio_uploaded_;
+    prometheus::Family<prometheus::Histogram>& fam_openai_request_duration_;
 };
 
 }  // namespace rekall::asr::observ

@@ -15,6 +15,24 @@
 
 namespace rekall::asr::config {
 
+std::string_view to_string(EngineMode m) noexcept {
+    switch (m) {
+        case EngineMode::Local:  return "local";
+        case EngineMode::OpenAi: return "openai";
+    }
+    return "unknown";
+}
+
+EngineMode engine_mode_from_string(std::string_view s) {
+    std::string lc(s);
+    std::transform(lc.begin(), lc.end(), lc.begin(),
+                   [](unsigned char ch) { return std::tolower(ch); });
+    if (lc == "local")  return EngineMode::Local;
+    if (lc == "openai") return EngineMode::OpenAi;
+    throw ConfigError("engine.mode must be 'local' or 'openai' (got '" +
+                      std::string(s) + "')");
+}
+
 namespace {
 
 // Splits a comma-separated string, trimming each element.
@@ -44,11 +62,24 @@ bool parse_bool(std::string_view s) {
     return lc == "1" || lc == "true" || lc == "yes" || lc == "on";
 }
 
+// Trim trailing whitespace from `s` in place. Used to forgive `.env` lines
+// that operators format with trailing spaces.
+void rtrim_inplace(std::string& s) {
+    while (!s.empty()) {
+        const auto c = static_cast<unsigned char>(s.back());
+        if (c == ' ' || c == '\t' || c == '\r' || c == '\n') s.pop_back();
+        else break;
+    }
+}
+
 std::optional<std::string> getenv_opt(const std::string& key) {
     const char* v = std::getenv(key.c_str());
     if (v == nullptr) return std::nullopt;
     if (*v == '\0')   return std::nullopt;
-    return std::string(v);
+    std::string out(v);
+    rtrim_inplace(out);
+    if (out.empty()) return std::nullopt;
+    return out;
 }
 
 YAML::Node walk(const YAML::Node& root, std::string_view path) {
@@ -368,6 +399,52 @@ Config Config::load(const std::filesystem::path& path) {
                                                   "OTEL_EXPORTER_OTLP_ENDPOINT",
                                                   c.telemetry.otel_endpoint);
 
+    // ── engine ───────────────────────────────────────────────────────────────
+    {
+        // Default = "openai" so a fresh `make asr-build-openai` / docker
+        // build that hasn't fetched whisper.cpp still boots cleanly.
+        const std::string mode_str = pick<std::string>(root, "engine.mode",
+                                                       "ASR_ENGINE_MODE", "openai");
+        c.engine.mode = engine_mode_from_string(mode_str);
+    }
+    c.engine.openai.api_key_env = pick<std::string>(root, "engine.openai.api_key_env",
+        "ASR_ENGINE_OPENAI_API_KEY_ENV", c.engine.openai.api_key_env);
+    if (auto v = getenv_opt(c.engine.openai.api_key_env)) {
+        c.engine.openai.api_key = *v;
+    }
+    c.engine.openai.organization = pick<std::string>(root, "engine.openai.organization",
+        "ASR_ENGINE_OPENAI_ORGANIZATION", c.engine.openai.organization);
+    c.engine.openai.base_url = pick<std::string>(root, "engine.openai.base_url",
+        "ASR_ENGINE_OPENAI_BASE_URL", c.engine.openai.base_url);
+    c.engine.openai.model = pick<std::string>(root, "engine.openai.model",
+        "ASR_ENGINE_OPENAI_MODEL", c.engine.openai.model);
+    c.engine.openai.language = pick<std::string>(root, "engine.openai.language",
+        "ASR_ENGINE_OPENAI_LANGUAGE", c.engine.openai.language);
+    c.engine.openai.temperature = pick<float>(root, "engine.openai.temperature",
+        "ASR_ENGINE_OPENAI_TEMPERATURE", c.engine.openai.temperature);
+    c.engine.openai.response_format = pick<std::string>(root, "engine.openai.response_format",
+        "ASR_ENGINE_OPENAI_RESPONSE_FORMAT", c.engine.openai.response_format);
+    c.engine.openai.prompt = pick<std::string>(root, "engine.openai.prompt",
+        "ASR_ENGINE_OPENAI_PROMPT", c.engine.openai.prompt);
+    c.engine.openai.request_timeout_seconds = pick<std::uint32_t>(root,
+        "engine.openai.request_timeout_seconds",
+        "ASR_ENGINE_OPENAI_REQUEST_TIMEOUT_SECONDS",
+        c.engine.openai.request_timeout_seconds);
+    c.engine.openai.max_segment_seconds = pick<std::uint32_t>(root,
+        "engine.openai.max_segment_seconds",
+        "ASR_ENGINE_OPENAI_MAX_SEGMENT_SECONDS",
+        c.engine.openai.max_segment_seconds);
+    c.engine.openai.min_segment_seconds = pick<std::uint32_t>(root,
+        "engine.openai.min_segment_seconds",
+        "ASR_ENGINE_OPENAI_MIN_SEGMENT_SECONDS",
+        c.engine.openai.min_segment_seconds);
+    c.engine.openai.retries = pick<std::uint32_t>(root, "engine.openai.retries",
+        "ASR_ENGINE_OPENAI_RETRIES", c.engine.openai.retries);
+    c.engine.openai.retry_backoff_ms = pick<std::uint32_t>(root,
+        "engine.openai.retry_backoff_ms",
+        "ASR_ENGINE_OPENAI_RETRY_BACKOFF_MS",
+        c.engine.openai.retry_backoff_ms);
+
     // ── drop_privs (Linux only) ──────────────────────────────────────────────
     if (auto v = getenv_opt("ASR_DROP_PRIVS_TO")) {
         auto colon = v->find(':');
@@ -399,18 +476,69 @@ void Config::validate() const {
     if (worker_pool.size < 1 || worker_pool.size > 64) {
         throw ConfigError("worker_pool.size must be in [1, 64]");
     }
-    if (models.entries.empty()) {
-        throw ConfigError("models.entries must not be empty");
+
+    // Local-engine model validation. The openai engine doesn't load any local
+    // models, so allow an empty entries list there.
+    if (engine.mode == EngineMode::Local) {
+#ifndef REKALL_ASR_HAS_LOCAL
+        throw ConfigError(
+            "engine.mode=local but this build was compiled without the local "
+            "engine — rebuild with -DREKALL_ASR_ENGINE=local or =both");
+#endif
+        if (models.entries.empty()) {
+            throw ConfigError("models.entries must not be empty when engine.mode=local");
+        }
+        bool default_found = false;
+        for (const auto& m : models.entries) {
+            if (m.id.empty())   throw ConfigError("models.entries[].id must not be empty");
+            if (m.path.empty()) throw ConfigError("models.entries[" + m.id + "].path must not be empty");
+            if (m.id == models.default_id) default_found = true;
+        }
+        if (!default_found) {
+            throw ConfigError("models.default '" + models.default_id +
+                              "' does not match any models.entries[].id");
+        }
     }
-    bool default_found = false;
-    for (const auto& m : models.entries) {
-        if (m.id.empty())   throw ConfigError("models.entries[].id must not be empty");
-        if (m.path.empty()) throw ConfigError("models.entries[" + m.id + "].path must not be empty");
-        if (m.id == models.default_id) default_found = true;
-    }
-    if (!default_found) {
-        throw ConfigError("models.default '" + models.default_id +
-                          "' does not match any models.entries[].id");
+
+    // OpenAI engine validation.
+    if (engine.mode == EngineMode::OpenAi) {
+#ifndef REKALL_ASR_HAS_OPENAI
+        throw ConfigError(
+            "engine.mode=openai but this build was compiled without the openai "
+            "engine — rebuild with -DREKALL_ASR_ENGINE=openai or =both");
+#endif
+        if (engine.openai.api_key.empty()) {
+            throw ConfigError("engine.mode=openai but env var '" +
+                              engine.openai.api_key_env + "' is empty / unset");
+        }
+        if (engine.openai.request_timeout_seconds < 1 ||
+            engine.openai.request_timeout_seconds > 300) {
+            throw ConfigError("engine.openai.request_timeout_seconds must be in [1, 300]");
+        }
+        if (engine.openai.max_segment_seconds < engine.openai.min_segment_seconds) {
+            throw ConfigError("engine.openai.max_segment_seconds must be >= min_segment_seconds");
+        }
+        const auto& fmt = engine.openai.response_format;
+        if (fmt != "json" && fmt != "verbose_json" && fmt != "text") {
+            throw ConfigError("engine.openai.response_format must be 'json' | 'verbose_json' | 'text'");
+        }
+        // base_url must be https:// when set (cleartext proxies are refused).
+        if (!engine.openai.base_url.empty() &&
+            engine.openai.base_url.rfind("https://", 0) != 0) {
+            throw ConfigError("engine.openai.base_url must use https:// (got: '" +
+                              engine.openai.base_url + "')");
+        }
+        // Production guard: refuse openai mode in SERVER_ENV=production unless
+        // ASR_ALLOW_OPENAI_IN_PRODUCTION=true is also set.
+        if (const char* env = std::getenv("SERVER_ENV"); env != nullptr &&
+            std::string_view{env} == "production") {
+            const char* allow = std::getenv("ASR_ALLOW_OPENAI_IN_PRODUCTION");
+            if (allow == nullptr || !parse_bool(allow)) {
+                throw ConfigError(
+                    "engine.mode=openai is refused in SERVER_ENV=production "
+                    "without ASR_ALLOW_OPENAI_IN_PRODUCTION=true");
+            }
+        }
     }
     if (auth.token_max_ttl_seconds > 300) {
         throw ConfigError("auth.token_max_ttl_seconds must be <= 300");

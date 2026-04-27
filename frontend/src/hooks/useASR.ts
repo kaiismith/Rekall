@@ -6,6 +6,7 @@ import type {
   ASRHookState,
   ASRServerEvent,
   ASRSessionPayload,
+  EngineMode,
 } from '@/types/asr'
 
 /**
@@ -25,6 +26,12 @@ export interface UseASRResult {
   partial: string
   finals: ASRFinalEvent[]
   error: { code: string; message: string } | null
+  /**
+   * Engine reported by the asr service in its `ready` event. `undefined` when
+   * the server hasn't sent the field (older asr build) — older clients keep
+   * working as before, just without the badge / placeholder UI.
+   */
+  engineMode: EngineMode | undefined
   start: () => Promise<void>
   stop: () => Promise<void>
 }
@@ -72,14 +79,15 @@ export function useASR(
   const [partial, setPartial] = useState('')
   const [finals, setFinals] = useState<ASRFinalEvent[]>([])
   const [error, setError] = useState<{ code: string; message: string } | null>(null)
+  const [engineMode, setEngineMode] = useState<EngineMode | undefined>(undefined)
 
-  const wsRef            = useRef<WebSocket | null>(null)
-  const audioCtxRef      = useRef<AudioContext | null>(null)
-  const workletNodeRef   = useRef<AudioWorkletNode | null>(null)
-  const mediaStreamRef   = useRef<MediaStream | null>(null)
-  const sessionRef       = useRef<ASRSessionPayload | null>(null)
-  const reconnectsRef    = useRef(0)
-  const stoppedRef       = useRef(false)
+  const wsRef = useRef<WebSocket | null>(null)
+  const audioCtxRef = useRef<AudioContext | null>(null)
+  const workletNodeRef = useRef<AudioWorkletNode | null>(null)
+  const mediaStreamRef = useRef<MediaStream | null>(null)
+  const sessionRef = useRef<ASRSessionPayload | null>(null)
+  const reconnectsRef = useRef(0)
+  const stoppedRef = useRef(false)
 
   // Hold the latest callbacks in a ref so we don't re-create openSession on
   // every parent render — the callbacks themselves are typically inline
@@ -94,7 +102,11 @@ export function useASR(
       workletNodeRef.current = null
     }
     if (audioCtxRef.current) {
-      try { await audioCtxRef.current.close() } catch { /* ignore */ }
+      try {
+        await audioCtxRef.current.close()
+      } catch {
+        /* ignore */
+      }
       audioCtxRef.current = null
     }
     if (mediaStreamRef.current) {
@@ -102,7 +114,11 @@ export function useASR(
       mediaStreamRef.current = null
     }
     if (wsRef.current) {
-      try { wsRef.current.close(1000, 'client teardown') } catch { /* ignore */ }
+      try {
+        wsRef.current.close(1000, 'client teardown')
+      } catch {
+        /* ignore */
+      }
       wsRef.current = null
     }
   }, [])
@@ -115,11 +131,16 @@ export function useASR(
 
     let session: ASRSessionPayload
     try {
-      session = kind === 'meeting'
-        ? await asrService.requestForMeeting(id, {})
-        : await asrService.request(id, {})
+      session =
+        kind === 'meeting'
+          ? await asrService.requestForMeeting(id, {})
+          : await asrService.request(id, {})
       sessionRef.current = session
-      logSafe('session issued', { kind, session_id: session.session_id, model_id: session.model_id })
+      logSafe('session issued', {
+        kind,
+        session_id: session.session_id,
+        model_id: session.model_id,
+      })
     } catch (e) {
       const err = normaliseError(e)
       setError(err)
@@ -169,7 +190,7 @@ export function useASR(
         // shows a short message; failures here (worklet load, mic permission)
         // are otherwise invisible. Audio bytes never appear in this code path,
         // so logging is safe.
-        // eslint-disable-next-line no-console
+
         console.error('[asr] onopen failed', err, e)
         setError(err)
         setState('error')
@@ -185,6 +206,13 @@ export function useASR(
         return
       }
       switch (parsed.type) {
+        case 'ready':
+          // Pick up the engine the asr service is running. Optional field;
+          // older servers don't send it and engineMode stays undefined.
+          if (parsed.engine_mode === 'local' || parsed.engine_mode === 'openai') {
+            setEngineMode(parsed.engine_mode)
+          }
+          break
         case 'partial':
           // eslint-disable-next-line no-console
           console.debug('[asr] ⟵ partial', {
@@ -209,7 +237,6 @@ export function useASR(
           callbacksRef.current?.onFinal?.(parsed.text, String(parsed.segment_id))
           break
         case 'error':
-          // eslint-disable-next-line no-console
           console.warn('[asr] ⟵ error', parsed.code, parsed.message)
           setError({ code: parsed.code, message: parsed.message })
           break
@@ -237,6 +264,7 @@ export function useASR(
     ws.onerror = () => {
       // No payload — `onclose` fires next with a code we can act on.
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [id, kind, teardown])
 
   // ── Reconnect with capped exponential backoff ──────────────────────────────
@@ -282,7 +310,11 @@ export function useASR(
     const ws = wsRef.current
 
     if (ws && ws.readyState === WebSocket.OPEN) {
-      try { ws.send(JSON.stringify({ type: 'flush' })) } catch { /* ignore */ }
+      try {
+        ws.send(JSON.stringify({ type: 'flush' }))
+      } catch {
+        /* ignore */
+      }
       // Best-effort: wait briefly for a trailing final.
       await new Promise<void>((resolve) => setTimeout(resolve, 1000))
     }
@@ -292,23 +324,29 @@ export function useASR(
     if (session && id) {
       try {
         if (kind === 'meeting') await asrService.endForMeeting(id, session.session_id)
-        else                    await asrService.end(id, session.session_id)
-      } catch { /* best-effort */ }
+        else await asrService.end(id, session.session_id)
+      } catch {
+        /* best-effort */
+      }
     }
     sessionRef.current = null
   }, [id, kind, teardown])
 
   // ── Cleanup on unmount ─────────────────────────────────────────────────────
   useEffect(() => {
-    return () => { stoppedRef.current = true; void teardown() }
+    return () => {
+      stoppedRef.current = true
+      void teardown()
+    }
   }, [teardown])
 
-  return { state, partial, finals, error, start, stop }
+  return { state, partial, finals, error, engineMode, start, stop }
 }
 
 function normaliseError(e: unknown): { code: string; message: string } {
   if (typeof e === 'object' && e !== null && 'response' in e) {
-    const r = (e as { response?: { data?: { error?: { code?: string; message?: string } } } }).response
+    const r = (e as { response?: { data?: { error?: { code?: string; message?: string } } } })
+      .response
     const errObj = r?.data?.error
     if (errObj?.code) return { code: errObj.code, message: errObj.message ?? errObj.code }
   }

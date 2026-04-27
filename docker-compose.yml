@@ -107,10 +107,29 @@ services:
     build:
       context: ./asr
       dockerfile: docker/Dockerfile
+      args:
+        # Build-time engine selection — "both" (default), "local", or "openai".
+        # Use "openai" together with REKALL_ASR_IMAGE_TAG=openai to produce a
+        # slim cloud-only image that skips the whisper.cpp compile.
+        REKALL_ASR_ENGINE: ${REKALL_ASR_ENGINE:-both}
+    image: rekall-asr:${REKALL_ASR_IMAGE_TAG:-latest}
     container_name: rekall_asr
     restart: unless-stopped
     environment:
       ASR_TOKEN_SECRET: ${ASR_TOKEN_SECRET:?ASR_TOKEN_SECRET is required}
+      # Run-time engine. Must match (or be a subset of) REKALL_ASR_ENGINE above.
+      ASR_ENGINE_MODE: ${ASR_ENGINE_MODE:-openai}
+      OPENAI_API_KEY: ${OPENAI_API_KEY:-}
+      ASR_ALLOW_OPENAI_IN_PRODUCTION: ${ASR_ALLOW_OPENAI_IN_PRODUCTION:-false}
+      ASR_ENGINE_OPENAI_BASE_URL: ${ASR_ENGINE_OPENAI_BASE_URL:-}
+      ASR_ENGINE_OPENAI_MODEL: ${ASR_ENGINE_OPENAI_MODEL:-whisper-1}
+      ASR_ENGINE_OPENAI_LANGUAGE: ${ASR_ENGINE_OPENAI_LANGUAGE:-en}
+      ASR_ENGINE_OPENAI_RESPONSE_FORMAT: ${ASR_ENGINE_OPENAI_RESPONSE_FORMAT:-verbose_json}
+      ASR_ENGINE_OPENAI_REQUEST_TIMEOUT_SECONDS: ${ASR_ENGINE_OPENAI_REQUEST_TIMEOUT_SECONDS:-30}
+      ASR_ENGINE_OPENAI_MAX_SEGMENT_SECONDS: ${ASR_ENGINE_OPENAI_MAX_SEGMENT_SECONDS:-60}
+      ASR_ENGINE_OPENAI_MIN_SEGMENT_SECONDS: ${ASR_ENGINE_OPENAI_MIN_SEGMENT_SECONDS:-1}
+      ASR_ENGINE_OPENAI_RETRIES: ${ASR_ENGINE_OPENAI_RETRIES:-2}
+      ASR_ENGINE_OPENAI_RETRY_BACKOFF_MS: ${ASR_ENGINE_OPENAI_RETRY_BACKOFF_MS:-500}
       ASR_WS_LISTEN: "0.0.0.0:8081"
       ASR_GRPC_LISTEN: "0.0.0.0:9090"
       ASR_METRICS_LISTEN: "0.0.0.0:9091"

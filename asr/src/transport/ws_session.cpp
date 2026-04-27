@@ -13,6 +13,7 @@
 #include <boost/beast/http.hpp>
 #include <nlohmann/json.hpp>
 
+#include "rekall/asr/engine/engine_factory.hpp"
 #include "rekall/asr/observ/log_catalog.hpp"
 #include "rekall/asr/observ/metrics.hpp"
 #include "rekall/asr/util/correlation_id.hpp"
@@ -226,6 +227,7 @@ void WsSession::send_ready() {
         {"session_id",  session_->sid},
         {"model_id",    session_->model_id},
         {"sample_rate", 16000},
+        {"engine_mode", std::string(rekall::asr::config::to_string(deps_.cfg.engine.mode))},
     };
     rekall::asr::session::TranscriptEvent e;
     e.type    = rekall::asr::session::EventType::Info;
@@ -239,14 +241,22 @@ void WsSession::start_loops() {
     do_read();
     do_write_one();
 
-    // Spawn the worker thread that owns whisper inference for this session.
+    // Spawn the worker thread that owns transcription for this session. The
+    // concrete engine (whisper.cpp or OpenAI cloud) is selected by the factory
+    // based on the running config.
     auto session = session_;
     auto deps    = deps_;
     std::thread([session, deps]() {
         try {
-            rekall::asr::engine::Transcriber t(session, session->model,
-                                               deps.cfg.session, deps.metrics);
-            t.run(session->stop_source.get_token());
+            rekall::asr::engine::EngineDeps edeps{
+                .session     = session,
+                .model       = session->model,
+                .session_cfg = deps.cfg.session,
+                .engine_cfg  = deps.cfg.engine,
+                .metrics     = deps.metrics,
+            };
+            auto engine = rekall::asr::engine::make_engine(edeps);
+            engine->run(session->stop_source.get_token());
         } catch (const std::exception& e) {
             rekall::asr::observ::error(rekall::asr::observ::INFERENCE_FAILED, {
                 {"session_id", session->sid},

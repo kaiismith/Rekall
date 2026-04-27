@@ -90,6 +90,12 @@ message HealthResponse {
     uint32 active_sessions = 5;
     uint32 worker_pool_size = 6;
     uint32 worker_pool_in_use = 7;
+    // Engine selection surfaced for ops dashboards. Always set in v1.
+    // "local" | "openai".
+    string engine_mode = 8;
+    // Local engine: default model id. OpenAI engine: base url (e.g.
+    // "https://api.openai.com/v1"). Empty when not applicable.
+    string engine_target = 9;
 }
 
 message ReloadModelsRequest {

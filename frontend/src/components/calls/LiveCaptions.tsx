@@ -1,13 +1,5 @@
 import { useMemo } from 'react'
-import {
-  Alert,
-  Box,
-  Button,
-  CircularProgress,
-  Paper,
-  Stack,
-  Typography,
-} from '@mui/material'
+import { Alert, Box, Button, CircularProgress, Paper, Stack, Typography } from '@mui/material'
 import MicIcon from '@mui/icons-material/Mic'
 import StopIcon from '@mui/icons-material/Stop'
 
@@ -28,14 +20,21 @@ interface LiveCaptionsProps {
  * the panel.
  */
 export function LiveCaptions({ callId, kind = 'call' }: LiveCaptionsProps) {
-  const { state, partial, finals, error, start, stop } = useASR(callId, kind)
+  // Engine selection is operator-driven (config/env on the asr container).
+  // The hook surfaces `engineMode` for telemetry / debug consoles, but the
+  // user-facing UI deliberately does NOT render it — we don't want users
+  // perceiving a choice that doesn't belong to them.
+  const { state, partial, finals, error, engineMode, start, stop } = useASR(callId, kind)
 
   const finalText = useMemo(() => finals.map((f) => f.text).join(' '), [finals])
 
   if (error?.code === 'ASR_NOT_CONFIGURED') return null
 
   const isStreaming = state === 'streaming' || state === 'reconnecting'
-  const isBusy      = state === 'requesting' || state === 'connecting'
+  const isBusy = state === 'requesting' || state === 'connecting'
+  // Internally hide the rolling partial when the running engine is one-shot
+  // (no partial events arrive). Independent of how the mode was chosen.
+  const partialsAvailable = engineMode !== 'openai'
 
   return (
     <Paper variant="outlined" sx={{ p: 2 }}>
@@ -50,7 +49,9 @@ export function LiveCaptions({ callId, kind = 'call' }: LiveCaptionsProps) {
               color="error"
               variant="outlined"
               startIcon={<StopIcon />}
-              onClick={() => { void stop() }}
+              onClick={() => {
+                void stop()
+              }}
             >
               Stop
             </Button>
@@ -61,7 +62,9 @@ export function LiveCaptions({ callId, kind = 'call' }: LiveCaptionsProps) {
               variant="contained"
               startIcon={isBusy ? <CircularProgress size={16} color="inherit" /> : <MicIcon />}
               disabled={isBusy}
-              onClick={() => { void start() }}
+              onClick={() => {
+                void start()
+              }}
             >
               {isBusy ? 'Starting…' : 'Start captions'}
             </Button>
@@ -83,7 +86,7 @@ export function LiveCaptions({ callId, kind = 'call' }: LiveCaptionsProps) {
           <Typography component="span" variant="body1">
             {finalText}
           </Typography>
-          {partial && (
+          {partial && partialsAvailable && (
             <Typography
               component="span"
               variant="body1"
@@ -92,7 +95,7 @@ export function LiveCaptions({ callId, kind = 'call' }: LiveCaptionsProps) {
               {partial}
             </Typography>
           )}
-          {!finalText && !partial && state === 'streaming' && (
+          {state === 'streaming' && !finalText && (!partial || !partialsAvailable) && (
             <Typography variant="body2" color="text.secondary">
               Listening…
             </Typography>

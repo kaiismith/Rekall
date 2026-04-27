@@ -113,23 +113,54 @@ int main(int argc, char** argv) {
         return 1;
     }
 
+    // Audit log: which engine is doing inference?
+    rekall::asr::observ::info(rekall::asr::observ::ENGINE_SELECTED, {
+        {"mode",   std::string(rekall::asr::config::to_string(cfg.engine.mode))},
+        {"target", cfg.engine.mode == rekall::asr::config::EngineMode::OpenAi
+                       ? (cfg.engine.openai.base_url.empty()
+                              ? std::string{"https://api.openai.com/v1"}
+                              : cfg.engine.openai.base_url)
+                       : std::string{"<local-models>"}},
+        {"model",  cfg.engine.mode == rekall::asr::config::EngineMode::OpenAi
+                       ? cfg.engine.openai.model
+                       : cfg.models.default_id},
+    });
+    if (cfg.engine.mode == rekall::asr::config::EngineMode::OpenAi) {
+        rekall::asr::observ::warn(rekall::asr::observ::DATA_LEAVES_HOST, {
+            {"destination", cfg.engine.openai.base_url.empty()
+                            ? std::string{"https://api.openai.com/v1"}
+                            : cfg.engine.openai.base_url},
+            {"model",       cfg.engine.openai.model},
+        });
+    }
+
     auto jti = std::make_shared<rekall::asr::auth::JtiCache>(
         std::chrono::seconds(cfg.auth.jti_cache_ttl_seconds));
     rekall::asr::auth::JWTValidator validator(cfg.auth.token_secret, cfg.auth.token_audience,
                                               cfg.auth.token_issuer, jti);
 
     rekall::asr::engine::ModelRegistry models(metrics.get());
-    bool any_loaded = false;
-    for (const auto& e : cfg.models.entries) {
-        any_loaded = models.load(e) || any_loaded;
-    }
-    if (!any_loaded) {
-        rekall::asr::observ::error(rekall::asr::observ::FATAL, {
-            {"reason", "no models could be loaded"},
+    if (cfg.engine.mode == rekall::asr::config::EngineMode::Local) {
+        bool any_loaded = false;
+        for (const auto& e : cfg.models.entries) {
+            any_loaded = models.load(e) || any_loaded;
+        }
+        if (!any_loaded) {
+            rekall::asr::observ::error(rekall::asr::observ::FATAL, {
+                {"reason", "no models could be loaded"},
+            });
+            return 1;
+        }
+        models.set_default(cfg.models.default_id);
+    } else {
+        // OpenAI mode: skip local model loading entirely. The session manager
+        // tolerates an empty registry; the WS bind doesn't dereference
+        // session->model when the openai engine runs.
+        rekall::asr::observ::info(rekall::asr::observ::ENGINE_PROBE_OK, {
+            {"mode", "openai"},
+            {"note", "skipping local model registry — engine is openai"},
         });
-        return 1;
     }
-    models.set_default(cfg.models.default_id);
 
     rekall::asr::engine::WorkerPool workers(cfg.worker_pool.size, metrics.get());
     rekall::asr::session::SessionManager sessions(&models, cfg, metrics.get());

@@ -1,4 +1,5 @@
-.PHONY: up down logs restart build build-all build-bake up-asr build-asr migrate \
+.PHONY: asr-build-openai asr-run-openai asr-image-bundled asr-image-openai \
+        up down logs restart build build-all build-bake up-asr build-asr migrate \
         backend-test backend-lint backend-build \
         frontend-test frontend-lint frontend-build \
         asr-build asr-test asr-lint asr-load asr-image asr-proto-go
@@ -114,6 +115,46 @@ asr-load:
 
 asr-image:
 	docker build -f $(ASR_DIR)/docker/Dockerfile -t rekall-asr:dev $(ASR_DIR)
+
+# ─── Engine mode-switching: cloud-only build path ────────────────────────────
+# Fast onboarding path for new contributors / CPU-only laptops. Skips the
+# whisper.cpp compile + model download (~5–15 min) and produces a slim binary
+# that uploads each segment to OpenAI's transcription endpoint.
+
+ASR_BUILD_DIR_OPENAI := $(ASR_DIR)/build-openai
+
+asr-build-openai:
+	@if [ -z "$$OPENAI_API_KEY" ]; then \
+	  echo "OPENAI_API_KEY must be set in your environment to run with the openai engine."; \
+	  echo "Continuing the build because compile-time doesn't need the key, but"; \
+	  echo "make asr-run-openai will refuse to start without it."; \
+	fi
+	git submodule update --init -- $(ASR_DIR)/third_party/openai-cpp
+	cmake -G Ninja -B $(ASR_BUILD_DIR_OPENAI) -S $(ASR_DIR) \
+	      -DCMAKE_BUILD_TYPE=Release \
+	      -DREKALL_ASR_ENGINE=openai \
+	      $(if $(VCPKG_ROOT),-DCMAKE_TOOLCHAIN_FILE=$(VCPKG_TOOLCHAIN),)
+	cmake --build $(ASR_BUILD_DIR_OPENAI) --target rekall-asr -j
+
+asr-run-openai: asr-build-openai
+	@if [ -z "$$OPENAI_API_KEY" ]; then \
+	  echo "ERROR: OPENAI_API_KEY is required for asr-run-openai"; exit 1; \
+	fi
+	ASR_ENGINE_MODE=openai \
+	  $(ASR_BUILD_DIR_OPENAI)/rekall-asr --config $(ASR_DIR)/config/config.example.yaml
+
+# Tagged Docker images for the two engine flavours. `:latest` keeps the existing
+# (bundled) production meaning — building rekall-asr:openai produces a new tag
+# alongside it without disturbing what `:latest` points at.
+asr-image-bundled:
+	docker build -f $(ASR_DIR)/docker/Dockerfile \
+	  --build-arg REKALL_ASR_ENGINE=both \
+	  -t rekall-asr:latest $(ASR_DIR)
+
+asr-image-openai:
+	docker build -f $(ASR_DIR)/docker/Dockerfile \
+	  --build-arg REKALL_ASR_ENGINE=openai \
+	  -t rekall-asr:openai $(ASR_DIR)
 
 # Generates Go stubs into backend/internal/infrastructure/asr/pb/.
 asr-proto-go:

@@ -14,7 +14,32 @@
     "lint": "eslint src --ext .ts,.tsx --report-unused-disable-directives --max-warnings 0",
     "lint:fix": "eslint src --ext .ts,.tsx --fix",
     "format": "prettier --write \"src/**/*.{ts,tsx,css}\"",
-    "format:check": "prettier --check \"src/**/*.{ts,tsx,css}\""
+    "format:check": "prettier --check \"src/**/*.{ts,tsx,css}\"",
+    "typecheck": "tsc -p tsconfig.build.json --noEmit",
+    "test:hook": "bash tests/integration/pre-commit-hook.sh",
+    "prepare": "node scripts/install-husky.cjs"
+  },
+  "lint-staged": {
+    "src/**/*.{ts,tsx}": [
+      "prettier --write",
+      "eslint --fix --max-warnings 0"
+    ],
+    "tests/**/*.{ts,tsx}": [
+      "prettier --write",
+      "eslint --fix --max-warnings 0"
+    ],
+    "src/**/*.css": [
+      "prettier --write"
+    ],
+    "src/**/*.{json,md}": [
+      "prettier --write"
+    ],
+    "tests/**/*.{json,md}": [
+      "prettier --write"
+    ],
+    "*.{json,md}": [
+      "prettier --write"
+    ]
   },
   "dependencies": {
     "@emotion/react": "^11.13.3",
@@ -48,7 +73,9 @@
     "eslint-plugin-react": "^7.37.1",
     "eslint-plugin-react-hooks": "^5.1.0-rc.0",
     "eslint-plugin-react-refresh": "^0.4.12",
+    "husky": "^9.1.0",
     "jsdom": "^25.0.1",
+    "lint-staged": "^15.2.0",
     "postcss": "^8.4.47",
     "prettier": "^3.3.3",
     "tailwindcss": "^3.4.13",

@@ -28,11 +28,19 @@ export interface ASRSessionRequest {
 
 // ── Server → client events ───────────────────────────────────────────────────
 
+/**
+ * Engine running on the asr service. Surfaced so the captions UI can render a
+ * "Cloud" / "Local" badge and skip the partial placeholder when the engine is
+ * one-shot. Optional for backward compat with older servers.
+ */
+export type EngineMode = 'local' | 'openai'
+
 export interface ASRReadyEvent {
   type: 'ready'
   session_id: string
   model_id: string
   sample_rate: number
+  engine_mode?: EngineMode
 }
 
 export interface ASRPartialEvent {

@@ -103,14 +103,14 @@ export interface WsMessage {
   video?: boolean
   raised?: boolean
   emoji?: string
-  from_id?: string          // emoji_reaction sender
-  target_id?: string        // force_mute target (client → server)
+  from_id?: string // emoji_reaction sender
+  target_id?: string // force_mute target (client → server)
   participants?: RoomStateParticipant[]
   // chat_message
-  id?: string               // server-assigned message id (echo)
-  client_id?: string        // client-generated optimistic id (echo)
-  body?: string             // message body
-  sent_at?: string          // ISO8601 server timestamp
+  id?: string // server-assigned message id (echo)
+  client_id?: string // client-generated optimistic id (echo)
+  body?: string // message body
+  sent_at?: string // ISO8601 server timestamp
   // Identity fields attached to participant.joined / chat broadcasts
   full_name?: string
   initials?: string
@@ -152,13 +152,7 @@ export interface KnockEntry {
 export type MeetingRoomState =
   // Pre-meeting: camera/mic preview screen — user picks devices and confirms
   // before the WebSocket is opened.
-  | 'device_check'
-  | 'connecting'
-  | 'waiting_room'
-  | 'in_meeting'
-  | 'denied'
-  | 'ended'
-  | 'error'
+  'device_check' | 'connecting' | 'waiting_room' | 'in_meeting' | 'denied' | 'ended' | 'error'
 
 // ─── In-room control types ────────────────────────────────────────────────────
 
@@ -170,7 +164,7 @@ export interface MediaState {
 
 /** A single floating emoji reaction in the reaction queue. */
 export interface EmojiReaction {
-  id: string        // local UUID for React key
+  id: string // local UUID for React key
   userId: string
   emoji: string
   timestamp: number

@@ -193,6 +193,8 @@ func (c *GRPCClient) Health(ctx context.Context) (*ports.ASRHealth, error) {
 		ActiveSessions:  resp.GetActiveSessions(),
 		WorkerPoolSize:  resp.GetWorkerPoolSize(),
 		WorkerPoolInUse: resp.GetWorkerPoolInUse(),
+		EngineMode:      resp.GetEngineMode(),
+		EngineTarget:    resp.GetEngineTarget(),
 	}, nil
 }
 
