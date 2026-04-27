@@ -11,7 +11,15 @@ add_executable(rekall_asr_unit_tests
     unit/config_loader_test.cpp
     unit/correlation_id_test.cpp
     unit/transcript_event_test.cpp
+    unit/engine_factory_test.cpp
 )
+if(REKALL_ASR_HAS_OPENAI)
+    target_sources(rekall_asr_unit_tests PRIVATE
+        unit/wav_encoder_test.cpp
+        unit/openai_engine_test.cpp
+        unit/openai_client_no_secret_leak_test.cpp
+    )
+endif()
 target_link_libraries(rekall_asr_unit_tests PRIVATE
     rekall_asr_core
     GTest::gtest

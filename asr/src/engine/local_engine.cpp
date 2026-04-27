@@ -1,4 +1,4 @@
-#include "rekall/asr/engine/transcriber.hpp"
+#include "rekall/asr/engine/local_engine.hpp"
 
 #include <algorithm>
 #include <chrono>
@@ -75,7 +75,7 @@ void append_int16_to_float(std::vector<float>& dst, const std::vector<std::int16
 
 }  // namespace
 
-Transcriber::Transcriber(std::shared_ptr<rekall::asr::session::Session> session,
+LocalEngine::Transcriber(std::shared_ptr<rekall::asr::session::Session> session,
                          std::shared_ptr<LoadedModel> model,
                          rekall::asr::config::SessionConfig session_cfg,
                          rekall::asr::observ::Metrics* metrics)
@@ -88,21 +88,21 @@ Transcriber::Transcriber(std::shared_ptr<rekall::asr::session::Session> session,
     window_.reserve(window_max_samples_);
 }
 
-Transcriber::~Transcriber() {
+LocalEngine::~Transcriber() {
     if (state_ != nullptr) {
         whisper_free_state(state_);
         state_ = nullptr;
     }
 }
 
-bool Transcriber::ensure_state() {
+bool LocalEngine::ensure_state() {
     if (state_ != nullptr) return true;
     if (!model_ || model_->ctx() == nullptr) return false;
     state_ = whisper_init_state(model_->ctx());
     return state_ != nullptr;
 }
 
-void Transcriber::run(std::stop_token st) {
+void LocalEngine::run(std::stop_token st) {
     using namespace std::chrono;
     last_partial_emit_ = steady_clock::now();
 
@@ -181,7 +181,7 @@ void Transcriber::run(std::stop_token st) {
     }
 }
 
-void Transcriber::emit_partial() {
+void LocalEngine::emit_partial() {
     using namespace std::chrono;
     auto t0 = steady_clock::now();
 
@@ -240,7 +240,7 @@ void Transcriber::emit_partial() {
     if (metrics_ != nullptr) metrics_->partial_events_total(model_->id()).Increment();
 }
 
-void Transcriber::emit_final(std::uint64_t /*end_sample*/) {
+void LocalEngine::emit_final(std::uint64_t /*end_sample*/) {
     using namespace std::chrono;
     auto t0 = steady_clock::now();
 

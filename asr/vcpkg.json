@@ -8,6 +8,7 @@
     "boost-asio",
     "boost-beast",
     "boost-system",
+    "curl",
     "grpc",
     "gtest",
     "jwt-cpp",

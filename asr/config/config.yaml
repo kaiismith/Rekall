@@ -49,3 +49,27 @@ logging:
 
 telemetry:
   otel_endpoint: ""
+
+# Transcription engine selection. `local` runs whisper.cpp in-process;
+# `openai` uploads each VAD-bounded segment to OpenAI's transcription
+# endpoint (slow CPU laptops can validate the captions flow without paying
+# the whisper.cpp inference cost). The choice is operator-driven via this
+# YAML / env vars only — never exposed to end-users in the frontend.
+#
+# In SERVER_ENV=production, mode=openai is refused unless
+# ASR_ALLOW_OPENAI_IN_PRODUCTION=true is also set.
+engine:
+  mode: "openai"                          # local | openai
+  openai:
+    api_key_env:    "OPENAI_API_KEY"     # name of env var holding the secret
+    base_url:       ""                   # "" → https://api.openai.com/v1/
+    organization:   ""
+    model:          "whisper-1"
+    language:       "en"                 # BCP-47; "" → auto
+    temperature:    0.0
+    response_format: "verbose_json"      # "json" | "verbose_json" | "text"
+    request_timeout_seconds: 30
+    max_segment_seconds:     60
+    min_segment_seconds:      1
+    retries:                  2
+    retry_backoff_ms:       500

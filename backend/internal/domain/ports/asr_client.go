@@ -47,13 +47,17 @@ type EndSessionOutput struct {
 // ASRHealth is the live snapshot returned by ASRClient.Health, used by the
 // circuit breaker probe and a future /health endpoint.
 type ASRHealth struct {
-	Status            string // SERVING | NOT_SERVING
-	Version           string
-	UptimeSeconds     uint64
-	LoadedModels      []string
-	ActiveSessions    uint32
-	WorkerPoolSize    uint32
-	WorkerPoolInUse   uint32
+	Status          string // SERVING | NOT_SERVING
+	Version         string
+	UptimeSeconds   uint64
+	LoadedModels    []string
+	ActiveSessions  uint32
+	WorkerPoolSize  uint32
+	WorkerPoolInUse uint32
+	// Engine selection surfaced by the upstream service. "local" | "openai".
+	EngineMode string
+	// Local engine: default model id. OpenAI engine: base url. Empty otherwise.
+	EngineTarget string
 }
 
 // ASRClient is the application-facing port to the standalone C++ ASR service.

@@ -38,21 +38,62 @@ else()
         -Wall -Wextra -Wpedantic -Wshadow -Wnon-virtual-dtor)
 endif()
 
-# ── Vendored: whisper.cpp ────────────────────────────────────────────────────
+# ── Engine selection ─────────────────────────────────────────────────────────
+# REKALL_ASR_ENGINE = local | openai | both. Gates which transcription engine
+# is compiled in. The factory throws ConfigError naming this flag if config
+# requests an engine that wasn't compiled.
+set(REKALL_ASR_ENGINE "both" CACHE STRING
+    "Which transcription engine(s) to compile in: local | openai | both")
+set_property(CACHE REKALL_ASR_ENGINE PROPERTY STRINGS local openai both)
+
+if(NOT REKALL_ASR_ENGINE MATCHES "^(local|openai|both)$")
+    message(FATAL_ERROR
+        "REKALL_ASR_ENGINE must be 'local', 'openai', or 'both' (got: ${REKALL_ASR_ENGINE})")
+endif()
+
+set(REKALL_ASR_HAS_LOCAL  FALSE)
+set(REKALL_ASR_HAS_OPENAI FALSE)
+if(REKALL_ASR_ENGINE STREQUAL "local"  OR REKALL_ASR_ENGINE STREQUAL "both")
+    set(REKALL_ASR_HAS_LOCAL TRUE)
+endif()
+if(REKALL_ASR_ENGINE STREQUAL "openai" OR REKALL_ASR_ENGINE STREQUAL "both")
+    set(REKALL_ASR_HAS_OPENAI TRUE)
+endif()
+
+message(STATUS "rekall-asr engine selection: ${REKALL_ASR_ENGINE}"
+        "  (HAS_LOCAL=${REKALL_ASR_HAS_LOCAL} HAS_OPENAI=${REKALL_ASR_HAS_OPENAI})")
+
+# ── Vendored: whisper.cpp (only when local engine is enabled) ────────────────
 # Force STATIC linkage for whisper / ggml so everything ends up inside the
-# single `rekall-asr` binary. Otherwise the build emits libwhisper.so.1,
-# libggml.so.0, libggml-cpu.so.0, libggml-base.so.0 which the distroless
-# runtime image can't resolve at startup. BUILD_SHARED_LIBS scopes only to
-# this subdirectory because we set it before add_subdirectory.
-set(BUILD_SHARED_LIBS      OFF CACHE BOOL "" FORCE)
-set(WHISPER_BUILD_TESTS    OFF CACHE BOOL "" FORCE)
-set(WHISPER_BUILD_EXAMPLES OFF CACHE BOOL "" FORCE)
-set(WHISPER_BUILD_SERVER   OFF CACHE BOOL "" FORCE)
-if(EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/third_party/whisper.cpp/CMakeLists.txt")
-    add_subdirectory(third_party/whisper.cpp EXCLUDE_FROM_ALL)
-else()
-    message(WARNING
-        "third_party/whisper.cpp is empty. Run: git submodule update --init --recursive")
+# single `rekall-asr` binary. BUILD_SHARED_LIBS scopes only to this subdirectory
+# because we set it before add_subdirectory.
+if(REKALL_ASR_HAS_LOCAL)
+    set(BUILD_SHARED_LIBS      OFF CACHE BOOL "" FORCE)
+    set(WHISPER_BUILD_TESTS    OFF CACHE BOOL "" FORCE)
+    set(WHISPER_BUILD_EXAMPLES OFF CACHE BOOL "" FORCE)
+    set(WHISPER_BUILD_SERVER   OFF CACHE BOOL "" FORCE)
+    if(EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/third_party/whisper.cpp/CMakeLists.txt")
+        add_subdirectory(third_party/whisper.cpp EXCLUDE_FROM_ALL)
+    else()
+        message(FATAL_ERROR
+            "REKALL_ASR_ENGINE=${REKALL_ASR_ENGINE} but third_party/whisper.cpp "
+            "is empty. Run: git submodule update --init -- third_party/whisper.cpp")
+    endif()
+endif()
+
+# ── Vendored: openai-cpp (only when openai engine is enabled) ────────────────
+if(REKALL_ASR_HAS_OPENAI)
+    if(NOT EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/third_party/openai-cpp/include/openai/openai.hpp")
+        message(WARNING
+            "REKALL_ASR_ENGINE=${REKALL_ASR_ENGINE} expects "
+            "third_party/openai-cpp/include/openai/openai.hpp. "
+            "Run: git submodule update --init -- third_party/openai-cpp")
+    endif()
+    add_library(rekall_openai_cpp INTERFACE)
+    target_include_directories(rekall_openai_cpp INTERFACE
+        ${CMAKE_CURRENT_SOURCE_DIR}/third_party/openai-cpp/include)
+    find_package(CURL REQUIRED)
+    target_link_libraries(rekall_openai_cpp INTERFACE CURL::libcurl)
 endif()
 
 # ── Third-party (vcpkg) ──────────────────────────────────────────────────────
@@ -77,8 +118,8 @@ add_library(rekall_asr_core STATIC
     src/audio/ring_buffer.cpp
     src/audio/vad_segmenter.cpp
     src/config/config.cpp
+    src/engine/engine_factory.cpp
     src/engine/model_registry.cpp
-    src/engine/transcriber.cpp
     src/engine/worker_pool.cpp
     src/observ/log_catalog.cpp
     src/observ/metrics.cpp
@@ -92,6 +133,19 @@ add_library(rekall_asr_core STATIC
     src/transport/ws_session.cpp
     src/util/correlation_id.cpp
 )
+
+# Engine-specific sources, gated by the build-time selection.
+if(REKALL_ASR_HAS_LOCAL)
+    target_sources(rekall_asr_core PRIVATE src/engine/local_engine.cpp)
+    target_compile_definitions(rekall_asr_core PUBLIC REKALL_ASR_HAS_LOCAL=1)
+endif()
+if(REKALL_ASR_HAS_OPENAI)
+    target_sources(rekall_asr_core PRIVATE
+        src/engine/openai/openai_engine.cpp
+        src/engine/openai/openai_http_client.cpp
+        src/engine/openai/wav_encoder.cpp)
+    target_compile_definitions(rekall_asr_core PUBLIC REKALL_ASR_HAS_OPENAI=1)
+endif()
 
 # Apply strict warnings ONLY to our own code (PRIVATE so they don't propagate
 # to consumers like the executable / tests, which can opt in separately).
@@ -119,8 +173,12 @@ target_link_libraries(rekall_asr_core PUBLIC
     Threads::Threads
 )
 
-if(TARGET whisper)
+if(REKALL_ASR_HAS_LOCAL AND TARGET whisper)
     target_link_libraries(rekall_asr_core PUBLIC whisper)
+endif()
+
+if(REKALL_ASR_HAS_OPENAI)
+    target_link_libraries(rekall_asr_core PUBLIC rekall_openai_cpp)
 endif()
 
 # ── Binary ───────────────────────────────────────────────────────────────────

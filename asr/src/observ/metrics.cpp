@@ -57,7 +57,19 @@ Metrics::Metrics(const std::string& listen)
           .Help("session wall-clock duration").Register(*registry_)),
       fam_model_load_duration_(prometheus::BuildHistogram()
           .Name("asr_model_load_duration_seconds")
-          .Help("whisper model load duration").Register(*registry_)) {
+          .Help("whisper model load duration").Register(*registry_)),
+      fam_openai_requests_(prometheus::BuildCounter()
+          .Name("asr_openai_requests_total")
+          .Help("openai transcription requests by outcome").Register(*registry_)),
+      fam_openai_retries_(prometheus::BuildCounter()
+          .Name("asr_openai_retries_total")
+          .Help("openai transcription retries by reason").Register(*registry_)),
+      fam_openai_audio_uploaded_(prometheus::BuildCounter()
+          .Name("asr_openai_audio_seconds_uploaded_total")
+          .Help("seconds of audio uploaded to openai").Register(*registry_)),
+      fam_openai_request_duration_(prometheus::BuildHistogram()
+          .Name("asr_openai_request_duration_seconds")
+          .Help("openai transcription request round-trip").Register(*registry_)) {
     if (!listen.empty()) {
         exposer_ = std::make_unique<prometheus::Exposer>(listen);
         exposer_->RegisterCollectable(registry_);
@@ -101,6 +113,23 @@ prometheus::Histogram& Metrics::session_duration_seconds() {
 }
 prometheus::Histogram& Metrics::model_load_duration_seconds(const std::string& m) {
     return fam_model_load_duration_.Add({{"model_id", m}}, kModelLoadBuckets);
+}
+
+prometheus::Counter& Metrics::openai_requests_total(const std::string& outcome) {
+    return fam_openai_requests_.Add({{"outcome", outcome}});
+}
+prometheus::Counter& Metrics::openai_retries_total(const std::string& reason) {
+    return fam_openai_retries_.Add({{"reason", reason}});
+}
+prometheus::Counter& Metrics::openai_audio_seconds_uploaded_total() {
+    return fam_openai_audio_uploaded_.Add({});
+}
+prometheus::Histogram& Metrics::openai_request_duration_seconds() {
+    // Network round-trip + decode; wider tail than local inference.
+    static const prometheus::Histogram::BucketBoundaries kOpenAiBuckets = {
+        0.1, 0.25, 0.5, 1.0, 2.0, 4.0, 8.0, 16.0, 32.0,
+    };
+    return fam_openai_request_duration_.Add({}, kOpenAiBuckets);
 }
 
 }  // namespace rekall::asr::observ

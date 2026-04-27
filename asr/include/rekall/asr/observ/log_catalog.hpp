@@ -54,6 +54,17 @@ inline constexpr Event GRACEFUL_DRAIN_END     {"ASR_GRACEFUL_DRAIN_END",     "sh
 inline constexpr Event FATAL                  {"ASR_FATAL",                  "fatal runtime failure"};
 inline constexpr Event CONFIG_INVALID         {"ASR_CONFIG_INVALID",         "configuration invalid"};
 
+// ── Engine selection / OpenAI cloud engine ───────────────────────────────────
+inline constexpr Event ENGINE_SELECTED        {"ASR_ENGINE_SELECTED",        "transcription engine selected"};
+inline constexpr Event DATA_LEAVES_HOST       {"ASR_DATA_LEAVES_HOST",       "audio will be uploaded to a cloud transcription provider"};
+inline constexpr Event ENGINE_PROBE_OK        {"ASR_ENGINE_PROBE_OK",        "engine readiness probe succeeded"};
+inline constexpr Event ENGINE_PROBE_FAILED    {"ASR_ENGINE_PROBE_FAILED",    "engine readiness probe failed"};
+inline constexpr Event OPENAI_REQUEST_OK      {"ASR_OPENAI_REQUEST_OK",      "openai transcription request succeeded"};
+inline constexpr Event OPENAI_REQUEST_FAILED  {"ASR_OPENAI_REQUEST_FAILED",  "openai transcription request failed"};
+inline constexpr Event OPENAI_RATE_LIMITED    {"ASR_OPENAI_RATE_LIMITED",    "openai rate-limited request"};
+inline constexpr Event PARTIAL_NOT_SUPPORTED  {"ASR_PARTIAL_NOT_SUPPORTED",  "partial transcripts unavailable on this engine"};
+inline constexpr Event OPENAI_PROD_GUARD      {"ASR_OPENAI_PROD_GUARD",      "openai engine running in production with explicit override"};
+
 // ── Logger init ──────────────────────────────────────────────────────────────
 // Initialise the global spdlog logger named "asr". `level` is one of
 // debug/info/warn/error; `format` is "json" (default) or "text".

@@ -17,7 +17,7 @@
 
 #include "rekall/asr/auth/jwt_validator.hpp"
 #include "rekall/asr/config/config.hpp"
-#include "rekall/asr/engine/transcriber.hpp"
+#include "rekall/asr/engine/transcription_engine.hpp"
 #include "rekall/asr/engine/worker_pool.hpp"
 #include "rekall/asr/session/session_manager.hpp"
 

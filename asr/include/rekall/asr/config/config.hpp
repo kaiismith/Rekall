@@ -104,6 +104,38 @@ struct DropPrivs {
     std::uint32_t gid = 0;
 };
 
+enum class EngineMode { Local, OpenAi };
+
+struct OpenAiEngineConfig {
+    std::string  api_key_env  = "OPENAI_API_KEY";
+    std::string  api_key;                       // resolved from env at load
+    std::string  organization;
+    std::string  base_url;                      // "" → upstream default
+    std::string  model            = "whisper-1";
+    std::string  language         = "en";
+    float        temperature      = 0.0F;
+    std::string  response_format  = "verbose_json";
+    std::string  prompt;
+    std::uint32_t request_timeout_seconds = 30;
+    std::uint32_t max_segment_seconds     = 60;
+    std::uint32_t min_segment_seconds     =  1;
+    std::uint32_t retries                 =  2;
+    std::uint32_t retry_backoff_ms        = 500;
+};
+
+struct EngineConfig {
+    // Default to the cloud engine: it lets a fresh checkout produce captions
+    // without compiling whisper.cpp or downloading model weights. Operators
+    // who want in-process inference flip this to `local` in YAML / env.
+    EngineMode         mode = EngineMode::OpenAi;
+    OpenAiEngineConfig openai;
+};
+
+// Returns "local" / "openai".
+std::string_view to_string(EngineMode m) noexcept;
+// Throws ConfigError on unknown value.
+EngineMode engine_mode_from_string(std::string_view s);
+
 struct Config {
     ServerConfig     server;
     AuthConfig       auth;
@@ -115,6 +147,7 @@ struct Config {
     LoggingConfig    logging;
     TelemetryConfig  telemetry;
     DropPrivs        drop_privs;
+    EngineConfig     engine;
 
     // Loads YAML from `path`, applies env-var overrides, validates, and returns.
     // Throws ConfigError on any failure.

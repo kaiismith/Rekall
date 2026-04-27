@@ -189,6 +189,8 @@ type HealthResponse struct {
 	ActiveSessions   uint32   `protobuf:"varint,5,opt,name=active_sessions,json=activeSessions,proto3" json:"active_sessions,omitempty"`
 	WorkerPoolSize   uint32   `protobuf:"varint,6,opt,name=worker_pool_size,json=workerPoolSize,proto3" json:"worker_pool_size,omitempty"`
 	WorkerPoolInUse  uint32   `protobuf:"varint,7,opt,name=worker_pool_in_use,json=workerPoolInUse,proto3" json:"worker_pool_in_use,omitempty"`
+	EngineMode       string   `protobuf:"bytes,8,opt,name=engine_mode,json=engineMode,proto3" json:"engine_mode,omitempty"`
+	EngineTarget     string   `protobuf:"bytes,9,opt,name=engine_target,json=engineTarget,proto3" json:"engine_target,omitempty"`
 }
 
 func (x *HealthResponse) Reset()         { *x = HealthResponse{} }
@@ -204,6 +206,8 @@ func (x *HealthResponse) GetLoadedModels() []string     { if x != nil { return x
 func (x *HealthResponse) GetActiveSessions() uint32     { if x != nil { return x.ActiveSessions };  return 0 }
 func (x *HealthResponse) GetWorkerPoolSize() uint32     { if x != nil { return x.WorkerPoolSize };  return 0 }
 func (x *HealthResponse) GetWorkerPoolInUse() uint32    { if x != nil { return x.WorkerPoolInUse }; return 0 }
+func (x *HealthResponse) GetEngineMode() string         { if x != nil { return x.EngineMode };      return "" }
+func (x *HealthResponse) GetEngineTarget() string       { if x != nil { return x.EngineTarget };    return "" }
 
 // ─── ReloadModels ────────────────────────────────────────────────────────────
 

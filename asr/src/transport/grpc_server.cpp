@@ -132,6 +132,15 @@ class GrpcServer::Impl final : public rekall::asr::v1::ASR::Service {
             resp->set_worker_pool_size(static_cast<std::uint32_t>(deps_->workers->size()));
             resp->set_worker_pool_in_use(static_cast<std::uint32_t>(deps_->workers->in_use()));
         }
+        // Engine surface so ops dashboards can verify what's actually running.
+        resp->set_engine_mode(std::string(rekall::asr::config::to_string(deps_->cfg.engine.mode)));
+        if (deps_->cfg.engine.mode == rekall::asr::config::EngineMode::OpenAi) {
+            resp->set_engine_target(deps_->cfg.engine.openai.base_url.empty()
+                                    ? std::string{"https://api.openai.com/v1"}
+                                    : deps_->cfg.engine.openai.base_url);
+        } else {
+            resp->set_engine_target(deps_->cfg.models.default_id);
+        }
         return grpc::Status::OK;
     }
 

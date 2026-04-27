@@ -74,11 +74,40 @@ RUN --mount=type=cache,target=/var/cache/vcpkg-src,id=vcpkg-src-${VCPKG_REF} \
 WORKDIR /src
 COPY . .
 
-# Initialise the whisper.cpp submodule if it was committed; otherwise skip
-# (the CMakeLists prints a warning when the directory is empty).
-RUN if [ -d third_party/whisper.cpp/.git ]; then \
-        git -C third_party/whisper.cpp fetch --depth 1 origin || true; \
-    fi
+# Build-time engine selection. local|openai|both (default both).
+#   local  → links whisper.cpp; no libcurl runtime use
+#   openai → links libcurl + olrea/openai-cpp; no whisper compile, no models
+#   both   → everything (production default)
+# The image-tag convention is rekall-asr:latest for `both`, rekall-asr:openai
+# for the cloud-only slim build. See README "Engine modes" for details.
+ARG REKALL_ASR_ENGINE=both
+
+# Initialise only the submodules the build actually needs. Skipping the
+# whisper.cpp clone is what makes the openai-only build a ~1 minute cold path
+# instead of 5–15 minutes. If the submodule directory was COPYed in already
+# committed (the typical case), this is a no-op fetch; if it was bind-mounted
+# empty, we clone the upstream source so CMake can find the headers.
+RUN set -eu; \
+    case "${REKALL_ASR_ENGINE}" in \
+      local|both) \
+        if [ -d third_party/whisper.cpp/.git ]; then \
+          git -C third_party/whisper.cpp fetch --depth 1 origin || true; \
+        elif [ ! -f third_party/whisper.cpp/CMakeLists.txt ]; then \
+          rm -rf third_party/whisper.cpp; \
+          git clone --depth 1 https://github.com/ggml-org/whisper.cpp.git \
+              third_party/whisper.cpp; \
+        fi ;; \
+    esac; \
+    case "${REKALL_ASR_ENGINE}" in \
+      openai|both) \
+        if [ -d third_party/openai-cpp/.git ]; then \
+          git -C third_party/openai-cpp fetch --depth 1 origin || true; \
+        elif [ ! -f third_party/openai-cpp/include/openai/openai.hpp ]; then \
+          rm -rf third_party/openai-cpp; \
+          git clone --depth 1 https://github.com/olrea/openai-cpp.git \
+              third_party/openai-cpp; \
+        fi ;; \
+    esac
 
 # Cache mounts on vcpkg's downloads (tarballs) and buildtrees (compiler output)
 # turn the slow "compile gRPC + Boost + …" step from minutes into seconds on
@@ -103,6 +132,7 @@ RUN --mount=type=cache,target=${VCPKG_ROOT}/downloads,id=vcpkg-downloads \
         -DCMAKE_BUILD_TYPE=Release \
         -DCMAKE_TOOLCHAIN_FILE=${VCPKG_ROOT}/scripts/buildsystems/vcpkg.cmake \
         -DREKALL_ASR_BUILD_TESTS=OFF \
+        -DREKALL_ASR_ENGINE=${REKALL_ASR_ENGINE} \
         -DVCPKG_MAX_CONCURRENCY=${CONCURRENCY_FOR_VCPKG} \
     && cmake --build build --target rekall-asr -j${CONCURRENCY_FOR_VCPKG}
 
@@ -116,6 +146,13 @@ COPY --from=build /src/config/config.yaml /etc/rekall-asr/config.yaml
 COPY --from=build /usr/local/bin/grpc_health_probe /usr/local/bin/grpc_health_probe
 
 EXPOSE 8081 9090 9091
+
+# Default engine for a freshly-pulled image. The cloud engine works on any
+# image (bundled or slim) as long as OPENAI_API_KEY is provided at runtime.
+# Operators flip this to `local` when they want in-process whisper inference
+# (only valid on the bundled rekall-asr:latest image — the openai-only image
+# wasn't compiled with the local engine and will refuse to start in that mode).
+ENV ASR_ENGINE_MODE=openai
 
 # Distroless ships nonroot user uid:gid 65532.
 USER 65532:65532

@@ -114,6 +114,12 @@ make test              # backend + frontend tests (no docker needed)
 make migrate-up        # apply pending DB migrations
 make migrate-down      # roll back the most recent migration
 
+# Frontend pre-commit hook (auto-installed by `npm install` in frontend/):
+#   - prettier --write + eslint --fix on staged files (lint-staged)
+#   - project-wide tsc --noEmit when any *.ts/*.tsx is staged
+# Bypass with `git commit --no-verify`. CI re-runs the same checks.
+# See [`frontend/README.md`](frontend/README.md#pre-commit-hook) for details.
+
 # Build commands
 make build             # serial build of every basic-stack image (no asr)
 make build-all         # PARALLEL build of every image including asr
@@ -247,6 +253,55 @@ plain `docker compose up` means the asr container is never even built unless
 you explicitly opt in. See [`asr/README.md`](asr/README.md) for the full
 architecture, security model, and debugging tips, and
 [`.kiro/specs/asr-service/`](.kiro/specs/asr-service/) for the spec.
+
+### Path B-cloud — captions without compiling whisper.cpp
+
+If your machine is too slow to run `whisper.cpp` on CPU (or you just want to
+validate the captions flow without paying the 5–15 minute cold-build cost),
+the asr service ships a second engine that uploads each VAD-bounded segment
+to OpenAI's `/v1/audio/transcriptions` endpoint via the vendored
+[`olrea/openai-cpp`](https://github.com/olrea/openai-cpp) library. The image
+is ~80 MB, builds in ~1 minute, and needs no model files on disk.
+
+This is **operator-driven** — there is no UI to toggle the engine. The
+choice lives in `.env` and (optionally) [`asr/config/config.yaml`](asr/config/config.yaml).
+The frontend captions experience is identical aside from cloud mode emitting
+finals only (no rolling partial inside a segment).
+
+```bash
+# 1. Pull only the openai-cpp submodule.
+git submodule update --init -- asr/third_party/openai-cpp
+# Fresh clone? Add it explicitly:
+#   git submodule add https://github.com/olrea/openai-cpp.git \
+#       asr/third_party/openai-cpp
+
+# 2. Get a key at https://platform.openai.com/api-keys, then in .env set:
+#       OPENAI_API_KEY=sk-...
+#       ASR_ENGINE_MODE=openai
+#    Optional, for the slim Docker image:
+#       REKALL_ASR_ENGINE=openai
+#       REKALL_ASR_IMAGE_TAG=openai
+
+# 3a. Host build (fastest — ~1 min cold).
+make asr-build-openai
+make asr-run-openai
+
+# 3b. OR: slim Docker image alongside the existing rekall-asr:latest.
+REKALL_ASR_ENGINE=openai REKALL_ASR_IMAGE_TAG=openai \
+  docker compose --profile asr up -d --build asr
+```
+
+Production safety: the asr binary refuses to start with `ASR_ENGINE_MODE=openai`
+when `SERVER_ENV=production` unless `ASR_ALLOW_OPENAI_IN_PRODUCTION=true` is
+also set. A boot-time `ASR_DATA_LEAVES_HOST` warning is logged whenever cloud
+mode is active so audit pipelines can flag pods that send audio off-host.
+
+Switching back to local: in `.env` set `ASR_ENGINE_MODE=local`,
+`REKALL_ASR_ENGINE=both`, `REKALL_ASR_IMAGE_TAG=latest`, then
+`docker compose --profile asr up -d`. See
+[`asr/README.md` § Engine modes](asr/README.md#engine-modes) for the full
+reference and [`asr/docs/smoke-openai-mode.md`](asr/docs/smoke-openai-mode.md)
+for the manual smoke checklist.
 
 ---
 
