@@ -5,13 +5,15 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
+	"go.uber.org/zap"
+
 	"github.com/rekall/backend/internal/application/services"
 	"github.com/rekall/backend/internal/domain/ports"
-	handlerhelpers "github.com/rekall/backend/internal/interfaces/http/helpers"
 	"github.com/rekall/backend/internal/interfaces/http/dto"
+	handlerhelpers "github.com/rekall/backend/internal/interfaces/http/helpers"
+	"github.com/rekall/backend/internal/interfaces/http/middleware"
 	httputils "github.com/rekall/backend/internal/interfaces/http/utils"
 	apperr "github.com/rekall/backend/pkg/errors"
-	"go.uber.org/zap"
 )
 
 // CallHandler handles HTTP requests for the /calls resource.
@@ -32,16 +34,30 @@ func NewCallHandler(service *services.CallService, logger *zap.Logger) *CallHand
 // @Tags         Calls
 // @Produce      json
 // @Security     BearerAuth
-// @Param        page      query     int     false  "Page number (1-based)"                     minimum(1)  default(1)
-// @Param        per_page  query     int     false  "Number of items per page"                  minimum(1)  maximum(100) default(20)
-// @Param        status    query     string  false  "Filter by call status"                     Enums(pending,processing,done,failed)
-// @Param        user_id   query     string  false  "Filter by user UUID"                       format(uuid)
+// @Param        page                query     int     false  "Page number (1-based)"                     minimum(1)  default(1)
+// @Param        per_page            query     int     false  "Number of items per page"                  minimum(1)  maximum(100) default(20)
+// @Param        status              query     string  false  "Filter by call status"                     Enums(pending,processing,done,failed)
+// @Param        user_id             query     string  false  "Filter by user UUID"                       format(uuid)
+// @Param        filter[scope_type]  query     string  false  "Filter by scope"                           Enums(organization,department,open)
+// @Param        filter[scope_id]    query     string  false  "UUID of the org or dept; required when scope_type is organization or department"
 // @Success      200  {object}  dto.CallListResponse  "Paginated list of calls"
-// @Failure      400  {object}  dto.ErrorResponse     "Invalid query parameter (e.g. malformed UUID)"
+// @Failure      400  {object}  dto.ErrorResponse     "Invalid query parameter (e.g. malformed UUID or scope params)"
 // @Failure      401  {object}  dto.ErrorResponse     "Missing or invalid token"
+// @Failure      403  {object}  dto.ErrorResponse     "Caller is not a member of the requested scope"
 // @Failure      500  {object}  dto.ErrorResponse     "Internal server error"
 // @Router       /api/v1/calls [get]
 func (h *CallHandler) List(c *gin.Context) {
+	claims := middleware.ClaimsFromContext(c)
+	if claims == nil {
+		handlerhelpers.RespondError(c, h.logger, apperr.Unauthorized("authentication required"))
+		return
+	}
+	callerID, err := claims.SubjectAsUUID()
+	if err != nil {
+		handlerhelpers.RespondError(c, h.logger, apperr.Unauthorized("invalid token subject"))
+		return
+	}
+
 	page := httputils.QueryInt(c, "page", 1)
 	perPage := httputils.QueryInt(c, "per_page", 20)
 
@@ -60,7 +76,14 @@ func (h *CallHandler) List(c *gin.Context) {
 		filter.Status = &status
 	}
 
-	calls, total, err := h.service.ListCalls(c.Request.Context(), filter, page, perPage)
+	scope, err := dto.ParseScopeFilter(c)
+	if err != nil {
+		handlerhelpers.RespondError(c, h.logger, err)
+		return
+	}
+	filter.Scope = scope
+
+	calls, total, err := h.service.ListCalls(c.Request.Context(), callerID, filter, page, perPage)
 	if err != nil {
 		handlerhelpers.RespondError(c, h.logger, err)
 		return
@@ -121,9 +144,11 @@ func (h *CallHandler) Create(c *gin.Context) {
 	}
 
 	call, err := h.service.CreateCall(c.Request.Context(), services.CreateCallInput{
-		UserID:   req.UserID,
-		Title:    req.Title,
-		Metadata: req.Metadata,
+		UserID:    req.UserID,
+		Title:     req.Title,
+		Metadata:  req.Metadata,
+		ScopeType: req.ScopeType,
+		ScopeID:   req.ScopeID,
 	})
 	if err != nil {
 		handlerhelpers.RespondError(c, h.logger, err)
@@ -208,5 +233,3 @@ func (h *CallHandler) Delete(c *gin.Context) {
 
 	c.JSON(http.StatusNoContent, nil)
 }
-
-

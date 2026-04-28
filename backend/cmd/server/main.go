@@ -45,7 +45,10 @@ import (
 	"time"
 
 	"github.com/gin-gonic/gin"
+	"go.uber.org/zap"
+
 	"github.com/rekall/backend/internal/application/services"
+	infraasr "github.com/rekall/backend/internal/infrastructure/asr"
 	"github.com/rekall/backend/internal/infrastructure/database"
 	infraemail "github.com/rekall/backend/internal/infrastructure/email"
 	"github.com/rekall/backend/internal/infrastructure/repositories"
@@ -56,7 +59,6 @@ import (
 	"github.com/rekall/backend/pkg/config"
 	applogger "github.com/rekall/backend/pkg/logger"
 	"github.com/rekall/backend/pkg/logger/catalog"
-	"go.uber.org/zap"
 )
 
 func main() {
@@ -64,6 +66,10 @@ func main() {
 	// Load first — the logger depends on config.Logger, so errors go to stderr.
 	cfg, err := config.Load()
 	if err != nil {
+		_, _ = os.Stderr.WriteString("FATAL [SYS_CONFIG_INVALID] " + err.Error() + "\n")
+		os.Exit(1)
+	}
+	if err := cfg.Validate(); err != nil {
 		_, _ = os.Stderr.WriteString("FATAL [SYS_CONFIG_INVALID] " + err.Error() + "\n")
 		os.Exit(1)
 	}
@@ -134,17 +140,18 @@ func main() {
 	)
 
 	// ── Repositories ─────────────────────────────────────────────────────────
-	callRepo            := repositories.NewCallRepository(db)
-	userRepo            := repositories.NewUserRepository(db)
-	tokenRepo           := repositories.NewTokenRepository(db)
-	orgRepo             := repositories.NewOrganizationRepository(db)
-	memberRepo          := repositories.NewOrgMembershipRepository(db)
-	inviteRepo          := repositories.NewInvitationRepository(db)
-	deptRepo            := repositories.NewDepartmentRepository(db)
-	deptMemberRepo      := repositories.NewDepartmentMembershipRepository(db)
-	meetingRepo         := repositories.NewMeetingRepository(db)
+	callRepo := repositories.NewCallRepository(db)
+	userRepo := repositories.NewUserRepository(db)
+	tokenRepo := repositories.NewTokenRepository(db)
+	orgRepo := repositories.NewOrganizationRepository(db)
+	memberRepo := repositories.NewOrgMembershipRepository(db)
+	inviteRepo := repositories.NewInvitationRepository(db)
+	deptRepo := repositories.NewDepartmentRepository(db)
+	deptMemberRepo := repositories.NewDepartmentMembershipRepository(db)
+	meetingRepo := repositories.NewMeetingRepository(db)
 	meetingParticipRepo := repositories.NewMeetingParticipantRepository(db)
-	meetingMessageRepo  := repositories.NewMeetingMessageRepository(db)
+	meetingMessageRepo := repositories.NewMeetingMessageRepository(db)
+	transcriptRepo := repositories.NewTranscriptRepository(db)
 
 	// ── Infrastructure ────────────────────────────────────────────────────────
 	mailer := infraemail.NewSMTPSender(
@@ -158,7 +165,7 @@ func main() {
 	)
 
 	// ── Services ─────────────────────────────────────────────────────────────
-	callSvc := services.NewCallService(callRepo, log)
+	callSvc := services.NewCallService(callRepo, memberRepo, deptMemberRepo, log)
 	userSvc := services.NewUserService(userRepo, log)
 	authSvc := services.NewAuthService(
 		userRepo,
@@ -183,7 +190,7 @@ func main() {
 		cfg.Auth.InvitationTTL,
 		log,
 	)
-	deptSvc := services.NewDepartmentService(deptRepo, deptMemberRepo, memberRepo, log)
+	deptSvc := services.NewDepartmentService(deptRepo, deptMemberRepo, memberRepo, userRepo, log)
 	meetingSvc := services.NewMeetingService(
 		meetingRepo,
 		meetingParticipRepo,
@@ -209,22 +216,94 @@ func main() {
 		log,
 	)
 
+	// ── Platform admin reconciliation ────────────────────────────────────────
+	// Runs once before the HTTP server is brought up so listed admins are
+	// promoted (and stale admins demoted) atomically with each deploy.
+	adminReconciler := services.NewAdminReconciler(
+		userRepo,
+		cfg.Auth.PlatformAdminEmails,
+		cfg.Auth.PlatformAdminBootstrapPwd,
+		log,
+	)
+	if _, err := adminReconciler.Reconcile(context.Background()); err != nil {
+		log.Warn("platform admin reconciliation failed", zap.Error(err))
+	}
+
+	// ── Transcript persistence ────────────────────────────────────────────────
+	// Built unconditionally — when ASR is disabled, no session rows are ever
+	// inserted and the persister sits idle. Cheap to construct.
+	transcriptPersister := services.NewTranscriptPersister(
+		transcriptRepo, callRepo, meetingRepo, log,
+	)
+	transcriptCleanupJob := services.NewTranscriptCleanupJob(
+		transcriptRepo, transcriptPersister,
+		services.TranscriptCleanupConfig{
+			// Reuse the meeting cleanup cadence — orphaned ASR sessions are an
+			// adjacent failure mode, not a separate one.
+			Interval:  cfg.Meeting.CleanupInterval,
+			BatchSize: 100,
+		},
+		log,
+	)
+
 	// ── WebSocket Hub Manager ─────────────────────────────────────────────────
-	hubManager := wsHub.NewHubManager(meetingMessageRepo, log)
+	hubManager := wsHub.NewHubManager(meetingMessageRepo, transcriptPersister, log)
 	defer hubManager.Shutdown()
 
 	// ── WebSocket ticket store (secure WS auth) ───────────────────────────────
 	wsTicketStore := storage.NewMemoryWSTicketStore(log)
 	defer wsTicketStore.Close()
 
+	// ── ASR (optional — gated by ASR_FEATURE_ENABLED) ───────────────────────
+	var asrIssuer *services.ASRTokenIssuer
+	if cfg.ASR.FeatureEnabled {
+		asrClient, err := infraasr.NewGRPCClient(infraasr.ClientConfig{
+			Addr: cfg.ASR.GRPCAddr,
+			MTLS: infraasr.MTLSConfig{
+				ClientCert: cfg.ASR.GRPCClientCert,
+				ClientKey:  cfg.ASR.GRPCClientKey,
+				ServerCA:   cfg.ASR.GRPCServerCA,
+				ServerName: cfg.ASR.GRPCServerName,
+			},
+			CircuitBreakerFailures: cfg.ASR.CircuitBreakerFailures,
+			CircuitBreakerCooldown: cfg.ASR.CircuitBreakerCooldown,
+		})
+		if err != nil {
+			catalog.SysConfigInvalid.Error(log, zap.Error(err),
+				zap.String("component", "asr_grpc_client"))
+			os.Exit(1)
+		}
+		defer func() { _ = asrClient.Close() }()
+
+		signer, err := infraasr.NewTokenSigner([]byte(cfg.ASR.TokenSecret),
+			cfg.ASR.TokenIssuer, cfg.ASR.TokenAudience)
+		if err != nil {
+			catalog.SysConfigInvalid.Error(log, zap.Error(err),
+				zap.String("component", "asr_token_signer"))
+			os.Exit(1)
+		}
+		asrIssuer = services.NewASRTokenIssuer(
+			asrClient, callRepo, meetingRepo, meetingParticipRepo,
+			transcriptPersister, signer,
+			services.ASRTokenIssuerConfig{
+				WSBaseURL:  cfg.ASR.WSURLBase,
+				DefaultTTL: cfg.ASR.TokenDefaultTTL,
+				MaxTTL:     cfg.ASR.TokenMaxTTL,
+			}, log)
+	}
+
 	// ── Handlers ─────────────────────────────────────────────────────────────
-	healthH  := handlers.NewHealthHandler(db)
-	callH    := handlers.NewCallHandler(callSvc, log)
-	userH    := handlers.NewUserHandler(userSvc, log)
-	authH    := handlers.NewAuthHandler(authSvc, cfg.Auth.RefreshTokenTTL, log)
-	orgH     := handlers.NewOrganizationHandler(orgSvc, log)
-	deptH    := handlers.NewDepartmentHandler(deptSvc, log)
+	healthH := handlers.NewHealthHandler(db)
+	callH := handlers.NewCallHandler(callSvc, log)
+	userH := handlers.NewUserHandler(userSvc, log)
+	authH := handlers.NewAuthHandler(authSvc, cfg.Auth.RefreshTokenTTL, log)
+	orgH := handlers.NewOrganizationHandler(orgSvc, log)
+	deptH := handlers.NewDepartmentHandler(deptSvc, log)
 	meetingH := handlers.NewMeetingHandler(meetingSvc, chatMessageSvc, userSvc, hubManager, wsTicketStore, cfg.Auth.AppBaseURL, log)
+	asrH := handlers.NewASRHandler(asrIssuer, transcriptPersister, log)
+	transcriptH := handlers.NewTranscriptHandler(
+		transcriptRepo, callRepo, meetingRepo, meetingParticipRepo, log,
+	)
 
 	// ── Router ───────────────────────────────────────────────────────────────
 	ginMode := gin.DebugMode
@@ -244,6 +323,8 @@ func main() {
 		OrgH:           orgH,
 		DeptH:          deptH,
 		MeetingH:       meetingH,
+		ASRH:           asrH,
+		TranscriptH:    transcriptH,
 		CORSOrigins:    cfg.CORS.AllowedOrigins,
 		SwaggerEnabled: cfg.Server.SwaggerEnabled,
 	})
@@ -258,6 +339,7 @@ func main() {
 	jobCtx, cancelJobs := context.WithCancel(context.Background())
 	defer cancelJobs()
 	go cleanupJob.Run(jobCtx)
+	go transcriptCleanupJob.Run(jobCtx)
 
 	// ── Server ───────────────────────────────────────────────────────────────
 	srv := httpserver.NewServer(cfg.Server, router, log)

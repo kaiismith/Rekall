@@ -4,10 +4,11 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/rekall/backend/internal/application/utils"
-	apperr "github.com/rekall/backend/pkg/errors"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
+	"github.com/rekall/backend/internal/application/utils"
+	apperr "github.com/rekall/backend/pkg/errors"
 )
 
 // ─── ValidatePassword ──────────────────────────────────────────────────────────

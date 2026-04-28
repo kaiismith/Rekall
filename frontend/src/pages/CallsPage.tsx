@@ -1,4 +1,5 @@
 import { useQuery } from '@tanstack/react-query'
+import { useSearchParams } from 'react-router-dom'
 import Box from '@mui/material/Box'
 import Card from '@mui/material/Card'
 import Table from '@mui/material/Table'
@@ -12,14 +13,23 @@ import Typography from '@mui/material/Typography'
 import TablePagination from '@mui/material/TablePagination'
 import Skeleton from '@mui/material/Skeleton'
 import PhoneMissedOutlinedIcon from '@mui/icons-material/PhoneMissedOutlined'
-import { EmptyState, PageHeader } from '@/components/common/ui'
+import { EmptyState, PageHeader, ScopeBadge, ScopePicker } from '@/components/common/ui'
 import { callService } from '@/services/callService'
 import { usePagination } from '@/hooks/usePagination'
 import { formatDateTime, formatDuration } from '@/utils'
 import { CALL_STATUS_CONFIG } from '@/constants'
 import type { Call } from '@/types/call'
+import type { Scope } from '@/types/scope'
+import { parseScopeFromUrl, scopeToUrlParam, scopesEqual } from '@/utils/scope'
 
-const COLUMNS = ['Title', 'Status', 'Duration', 'Created']
+const COLUMNS = ['Title', 'Scope', 'Status', 'Duration', 'Created']
+
+function callToScope(c: Call): Scope {
+  if (c.scope_type === 'organization' && c.scope_id) {
+    return { type: 'organization', id: c.scope_id }
+  }
+  return { type: 'open' }
+}
 
 function StatusChip({ status }: { status: Call['status'] }) {
   const config = CALL_STATUS_CONFIG[status]
@@ -48,10 +58,31 @@ function TableRowSkeleton() {
 
 export function CallsPage() {
   const { page, perPage, setPage, setPerPage } = usePagination()
+  const [searchParams, setSearchParams] = useSearchParams()
+  const scope = parseScopeFromUrl(searchParams)
+
+  const setScope = (next: Scope | null) => {
+    if (scopesEqual(next, scope)) return
+    setSearchParams((prev) => {
+      const out = new URLSearchParams(prev)
+      if (next === null) out.delete('scope')
+      else out.set('scope', scopeToUrlParam(next))
+      return out
+    })
+  }
+
+  const scopeKey =
+    scope === null
+      ? 'none'
+      : scope.type === 'open'
+        ? 'open'
+        : scope.type === 'organization'
+          ? `org:${scope.id}`
+          : `dept:${scope.orgId}:${scope.id}`
 
   const { data, isLoading, isError, error } = useQuery({
-    queryKey: ['calls', { page, per_page: perPage }],
-    queryFn: () => callService.list({ page, per_page: perPage }),
+    queryKey: ['calls', { page, per_page: perPage, scope: scopeKey }],
+    queryFn: () => callService.list({ page, per_page: perPage }, scope),
   })
 
   const calls = data?.data ?? []
@@ -65,13 +96,18 @@ export function CallsPage() {
       <PageHeader
         title="Calls"
         subtitle="Browse and manage all recorded conversations."
+        actions={<ScopePicker value={scope} onChange={setScope} />}
       />
 
       {showEmpty ? (
         <EmptyState
           icon={<PhoneMissedOutlinedIcon />}
-          title="No calls yet"
-          description="Once calls are ingested through the Rekall pipeline, they will appear here with transcripts and insights."
+          title={scope ? 'No calls match this scope' : 'No calls yet'}
+          description={
+            scope
+              ? 'Try clearing the scope filter to see all calls you can access.'
+              : 'Once calls are ingested through the Rekall pipeline, they will appear here with transcripts and insights.'
+          }
         />
       ) : (
         <Card>
@@ -112,6 +148,9 @@ export function CallsPage() {
                       <Typography variant="body2" fontWeight={500} color="text.primary">
                         {call.title}
                       </Typography>
+                    </TableCell>
+                    <TableCell>
+                      <ScopeBadge scope={callToScope(call)} />
                     </TableCell>
                     <TableCell>
                       <StatusChip status={call.status} />

@@ -65,8 +65,8 @@ type MsgObj struct {
 
 // AccessTokenResponse is returned by POST /auth/refresh.
 type AccessTokenResponse struct {
-	Success bool        `json:"success" example:"true"`
-	Data    TokenObj    `json:"data"`
+	Success bool     `json:"success" example:"true"`
+	Data    TokenObj `json:"data"`
 }
 
 // TokenObj wraps a single access_token string.

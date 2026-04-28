@@ -7,6 +7,10 @@ import "time"
 // CreateOrgRequest is the body for POST /api/v1/organizations.
 type CreateOrgRequest struct {
 	Name string `json:"name" binding:"required" example:"Acme Corp"`
+	// OwnerEmail, when set by a platform admin, names the user who becomes
+	// the org's owner. When omitted, the calling admin themselves becomes the
+	// owner. Unknown emails return 422.
+	OwnerEmail string `json:"owner_email,omitempty" binding:"omitempty,email" example:"alice@example.com"`
 }
 
 // UpdateOrgRequest is the body for PATCH /api/v1/organizations/:id.

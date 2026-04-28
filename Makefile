@@ -1,22 +1,49 @@
-.PHONY: up down logs restart build migrate \
+.PHONY: asr-build-openai asr-run-openai asr-image-bundled asr-image-openai \
+        up down logs restart build build-all build-bake up-asr build-asr migrate \
         backend-test backend-lint backend-build \
-        frontend-test frontend-lint frontend-build
+        frontend-test frontend-lint frontend-build \
+        asr-build asr-test asr-lint asr-load asr-image asr-proto-go
 
 # ─── Docker Compose ───────────────────────────────────────────────────────────
+# `up` builds + starts the basic stack (postgres + backend + frontend + mailpit).
+# Use `up-asr` to also build + start the C++ ASR microservice.
+#
+# `build-all` and `build-bake` build every image in PARALLEL (default compose
+# behaviour serialises image builds across services); use these when iterating
+# on multiple Dockerfiles at once.
 up:
 	docker compose up -d --build
 
+up-asr:
+	docker compose --profile asr up -d --build
+
 down:
-	docker compose down
+	docker compose --profile asr down
 
 logs:
-	docker compose logs -f
+	docker compose --profile asr logs -f
 
 restart:
-	docker compose down && docker compose up -d --build
+	docker compose --profile asr down && docker compose --profile asr up -d --build
 
+# Build only — does NOT start the containers. Sequential.
 build:
 	docker compose build
+
+# Build EVERY service image (basic + asr) in parallel via compose.
+# Faster on multi-core machines than the default serial build.
+build-all:
+	docker compose --profile asr build --parallel
+
+# Same as build-all but uses BuildKit's bake driver — parallel by default,
+# better cache reuse, and can build cross-arch with --set "*.platform=...".
+build-bake:
+	docker buildx bake --file docker-compose.yml
+
+# Convenience: build only the asr image (handy after touching asr/Dockerfile
+# or asr/CMakeLists.txt — avoids rebuilding the Go/JS images).
+build-asr:
+	docker compose --profile asr build asr
 
 # ─── Database ─────────────────────────────────────────────────────────────────
 migrate-up:
@@ -45,7 +72,105 @@ frontend-lint:
 frontend-build:
 	cd frontend && npm run build
 
+# ─── ASR (C++) ────────────────────────────────────────────────────────────────
+# Set ASR_BUILD=1 to include the C++ service in the aggregate `test`/`lint`
+# targets. Without it, CI environments without the C++ toolchain still pass.
+ASR_DIR := asr
+ASR_BUILD_DIR := $(ASR_DIR)/build
+VCPKG_TOOLCHAIN ?= $(VCPKG_ROOT)/scripts/buildsystems/vcpkg.cmake
+
+asr-build:
+	cmake -G Ninja -B $(ASR_BUILD_DIR) -S $(ASR_DIR) \
+	      -DCMAKE_BUILD_TYPE=Release \
+	      $(if $(VCPKG_ROOT),-DCMAKE_TOOLCHAIN_FILE=$(VCPKG_TOOLCHAIN),)
+	cmake --build $(ASR_BUILD_DIR) --target rekall-asr -j
+
+asr-test:
+	cmake -G Ninja -B $(ASR_BUILD_DIR) -S $(ASR_DIR) \
+	      -DCMAKE_BUILD_TYPE=Debug \
+	      -DREKALL_ASR_BUILD_TESTS=ON \
+	      $(if $(VCPKG_ROOT),-DCMAKE_TOOLCHAIN_FILE=$(VCPKG_TOOLCHAIN),)
+	cmake --build $(ASR_BUILD_DIR) -j
+	cd $(ASR_BUILD_DIR) && ctest --output-on-failure
+
+asr-lint:
+	bash $(ASR_DIR)/scripts/format.sh --check
+
+# Quick syntax-only compile check on every .cpp without actually building.
+# Catches missing #include, undeclared identifiers, and the like in seconds —
+# no linker, no codegen, no full build. Requires the asr image to have been
+# built once so the vcpkg installed/ tree exists.
+asr-lint-cc:
+	docker run --rm -v $(PWD)/$(ASR_DIR):/src -w /src \
+	  -e CXX=g++ rekall-asr:latest sh -c \
+	  'find src -name "*.cpp" -print0 | xargs -0 -I{} g++ -std=c++20 -fsyntax-only \
+	   -Iinclude -Ibuild/proto/generated \
+	   -I/var/lib/rekall-asr/include $(EXTRA_CXXFLAGS) {}'
+
+asr-load:
+	cmake -G Ninja -B $(ASR_BUILD_DIR) -S $(ASR_DIR) -DREKALL_ASR_BUILD_LOAD=ON \
+	      $(if $(VCPKG_ROOT),-DCMAKE_TOOLCHAIN_FILE=$(VCPKG_TOOLCHAIN),)
+	cmake --build $(ASR_BUILD_DIR) --target asr_load -j
+	$(ASR_BUILD_DIR)/tests/load/asr_load --concurrency=$(or $(CONCURRENCY),4)
+
+asr-image:
+	docker build -f $(ASR_DIR)/docker/Dockerfile -t rekall-asr:dev $(ASR_DIR)
+
+# ─── Engine mode-switching: cloud-only build path ────────────────────────────
+# Fast onboarding path for new contributors / CPU-only laptops. Skips the
+# whisper.cpp compile + model download (~5–15 min) and produces a slim binary
+# that uploads each segment to OpenAI's transcription endpoint.
+
+ASR_BUILD_DIR_OPENAI := $(ASR_DIR)/build-openai
+
+asr-build-openai:
+	@if [ -z "$$OPENAI_API_KEY" ]; then \
+	  echo "OPENAI_API_KEY must be set in your environment to run with the openai engine."; \
+	  echo "Continuing the build because compile-time doesn't need the key, but"; \
+	  echo "make asr-run-openai will refuse to start without it."; \
+	fi
+	git submodule update --init -- $(ASR_DIR)/third_party/openai-cpp
+	cmake -G Ninja -B $(ASR_BUILD_DIR_OPENAI) -S $(ASR_DIR) \
+	      -DCMAKE_BUILD_TYPE=Release \
+	      -DREKALL_ASR_ENGINE=openai \
+	      $(if $(VCPKG_ROOT),-DCMAKE_TOOLCHAIN_FILE=$(VCPKG_TOOLCHAIN),)
+	cmake --build $(ASR_BUILD_DIR_OPENAI) --target rekall-asr -j
+
+asr-run-openai: asr-build-openai
+	@if [ -z "$$OPENAI_API_KEY" ]; then \
+	  echo "ERROR: OPENAI_API_KEY is required for asr-run-openai"; exit 1; \
+	fi
+	ASR_ENGINE_MODE=openai \
+	  $(ASR_BUILD_DIR_OPENAI)/rekall-asr --config $(ASR_DIR)/config/config.example.yaml
+
+# Tagged Docker images for the two engine flavours. `:latest` keeps the existing
+# (bundled) production meaning — building rekall-asr:openai produces a new tag
+# alongside it without disturbing what `:latest` points at.
+asr-image-bundled:
+	docker build -f $(ASR_DIR)/docker/Dockerfile \
+	  --build-arg REKALL_ASR_ENGINE=both \
+	  -t rekall-asr:latest $(ASR_DIR)
+
+asr-image-openai:
+	docker build -f $(ASR_DIR)/docker/Dockerfile \
+	  --build-arg REKALL_ASR_ENGINE=openai \
+	  -t rekall-asr:openai $(ASR_DIR)
+
+# Generates Go stubs into backend/internal/infrastructure/asr/pb/.
+asr-proto-go:
+	mkdir -p backend/internal/infrastructure/asr/pb
+	protoc -I $(ASR_DIR)/proto \
+	       --go_out=backend/internal/infrastructure/asr/pb --go_opt=paths=source_relative \
+	       --go-grpc_out=backend/internal/infrastructure/asr/pb --go-grpc_opt=paths=source_relative \
+	       $(ASR_DIR)/proto/asr.proto
+
 # ─── All ──────────────────────────────────────────────────────────────────────
 test: backend-test frontend-test
+ifeq ($(ASR_BUILD),1)
+test: asr-test
+endif
 
 lint: backend-lint frontend-lint
+ifeq ($(ASR_BUILD),1)
+lint: asr-lint
+endif

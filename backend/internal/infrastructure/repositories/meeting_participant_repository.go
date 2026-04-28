@@ -6,9 +6,10 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+	"gorm.io/gorm"
+
 	"github.com/rekall/backend/internal/domain/entities"
 	apperr "github.com/rekall/backend/pkg/errors"
-	"gorm.io/gorm"
 )
 
 // MeetingParticipantRepository implements ports.MeetingParticipantRepository using GORM.

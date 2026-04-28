@@ -7,12 +7,13 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+	"go.uber.org/zap"
+
 	"github.com/rekall/backend/internal/domain/entities"
 	"github.com/rekall/backend/internal/domain/ports"
 	apperr "github.com/rekall/backend/pkg/errors"
 	applogger "github.com/rekall/backend/pkg/logger"
 	"github.com/rekall/backend/pkg/logger/catalog"
-	"go.uber.org/zap"
 )
 
 // MeetingService orchestrates business logic for meeting management.
@@ -50,6 +51,9 @@ type CreateMeetingInput struct {
 	Type      string // "open" | "private"
 	ScopeType string // "organization" | "department" | ""
 	ScopeID   *uuid.UUID
+	// TranscriptionEnabled opts the meeting into the live-captions / ASR
+	// feature; defaults to false when the host doesn't request it.
+	TranscriptionEnabled bool
 }
 
 // CanJoinResult describes how a user may enter a meeting.
@@ -102,14 +106,15 @@ func (s *MeetingService) CreateMeeting(ctx context.Context, input CreateMeetingI
 
 	now := time.Now().UTC()
 	m := &entities.Meeting{
-		Code:            code,
-		Title:           input.Title,
-		Type:            input.Type,
-		HostID:          input.HostID,
-		Status:          entities.MeetingStatusWaiting,
-		MaxParticipants: entities.MeetingMaxParticipants,
-		CreatedAt:       now,
-		UpdatedAt:       now,
+		Code:                 code,
+		Title:                input.Title,
+		Type:                 input.Type,
+		HostID:               input.HostID,
+		Status:               entities.MeetingStatusWaiting,
+		MaxParticipants:      entities.MeetingMaxParticipants,
+		TranscriptionEnabled: input.TranscriptionEnabled,
+		CreatedAt:            now,
+		UpdatedAt:            now,
 	}
 	if input.ScopeType != "" {
 		m.ScopeType = &input.ScopeType
@@ -152,6 +157,55 @@ func (s *MeetingService) ListMyMeetings(ctx context.Context, hostID uuid.UUID, s
 // from the API (e.g. "in_progress", "complete"; "created_at_desc", "title_asc").
 func (s *MeetingService) ListMeetingsWithMeta(ctx context.Context, userID uuid.UUID, statusFilter, sort string) ([]*ports.MeetingListItem, error) {
 	filter := ports.ListMeetingsFilter{Sort: sort}
+	if statusFilter != "" {
+		filter.Status = &statusFilter
+	}
+	return s.meetingRepo.ListByUser(ctx, userID, filter)
+}
+
+// ListMeetingsInScope returns meetings attached to the given scope (organization,
+// department, or open items), enriched with duration and participant previews.
+//
+// Membership is enforced here — callers who are not members of the scope receive
+// Forbidden and never see the list. The "open" scope has no membership check
+// (every authenticated user can see their own open-item list); the repository
+// restricts to rows where scope_type IS NULL and the caller is host or participant.
+func (s *MeetingService) ListMeetingsInScope(
+	ctx context.Context,
+	userID uuid.UUID,
+	scope *ports.ScopeFilter,
+	statusFilter, sort string,
+) ([]*ports.MeetingListItem, error) {
+	if scope == nil {
+		return s.ListMeetingsWithMeta(ctx, userID, statusFilter, sort)
+	}
+
+	switch scope.Kind {
+	case ports.ScopeKindOrganization:
+		if err := s.assertScopeMember(ctx, entities.MeetingScopeOrg, scope.ID, userID); err != nil {
+			if apperr.IsNotFound(err) {
+				return nil, apperr.Forbidden("caller is not a member of the organization")
+			}
+			return nil, err
+		}
+	case ports.ScopeKindDepartment:
+		if err := s.assertScopeMember(ctx, entities.MeetingScopeDept, scope.ID, userID); err != nil {
+			if apperr.IsNotFound(err) {
+				return nil, apperr.Forbidden("caller is not a member of the department")
+			}
+			return nil, err
+		}
+	case ports.ScopeKindOpen:
+		// Open items are visible to the caller as host or participant only —
+		// the repository layer already encodes this when scope is nil. We need
+		// a narrower query here: scope_type IS NULL AND (host_id=? OR participant).
+		// Model this by passing the filter to the repo with the Open kind; the
+		// repo applies both constraints.
+	default:
+		return nil, apperr.BadRequest("invalid scope kind")
+	}
+
+	filter := ports.ListMeetingsFilter{Sort: sort, Scope: scope}
 	if statusFilter != "" {
 		filter.Status = &statusFilter
 	}

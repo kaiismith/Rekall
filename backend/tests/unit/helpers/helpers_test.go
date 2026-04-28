@@ -6,13 +6,14 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/mock"
+	"github.com/stretchr/testify/require"
+
 	"github.com/rekall/backend/internal/application/helpers"
 	"github.com/rekall/backend/internal/domain/entities"
 	"github.com/rekall/backend/internal/domain/ports"
 	apperr "github.com/rekall/backend/pkg/errors"
-	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/mock"
-	"github.com/stretchr/testify/require"
 )
 
 // ─── Mocks ───────────────────────────────────────────────────────────────────
@@ -21,22 +22,30 @@ type mockOrgRepo struct{ mock.Mock }
 
 func (m *mockOrgRepo) Create(ctx context.Context, org *entities.Organization) (*entities.Organization, error) {
 	args := m.Called(ctx, org)
-	if args.Get(0) == nil { return nil, args.Error(1) }
+	if args.Get(0) == nil {
+		return nil, args.Error(1)
+	}
 	return args.Get(0).(*entities.Organization), args.Error(1)
 }
 func (m *mockOrgRepo) GetByID(ctx context.Context, id uuid.UUID) (*entities.Organization, error) {
 	args := m.Called(ctx, id)
-	if args.Get(0) == nil { return nil, args.Error(1) }
+	if args.Get(0) == nil {
+		return nil, args.Error(1)
+	}
 	return args.Get(0).(*entities.Organization), args.Error(1)
 }
 func (m *mockOrgRepo) GetBySlug(ctx context.Context, slug string) (*entities.Organization, error) {
 	args := m.Called(ctx, slug)
-	if args.Get(0) == nil { return nil, args.Error(1) }
+	if args.Get(0) == nil {
+		return nil, args.Error(1)
+	}
 	return args.Get(0).(*entities.Organization), args.Error(1)
 }
 func (m *mockOrgRepo) Update(ctx context.Context, org *entities.Organization) (*entities.Organization, error) {
 	args := m.Called(ctx, org)
-	if args.Get(0) == nil { return nil, args.Error(1) }
+	if args.Get(0) == nil {
+		return nil, args.Error(1)
+	}
 	return args.Get(0).(*entities.Organization), args.Error(1)
 }
 func (m *mockOrgRepo) SoftDelete(ctx context.Context, id uuid.UUID) error {
@@ -54,7 +63,9 @@ func (m *mockMemberRepo) Create(ctx context.Context, mem *entities.OrgMembership
 }
 func (m *mockMemberRepo) GetByOrgAndUser(ctx context.Context, orgID, userID uuid.UUID) (*entities.OrgMembership, error) {
 	args := m.Called(ctx, orgID, userID)
-	if args.Get(0) == nil { return nil, args.Error(1) }
+	if args.Get(0) == nil {
+		return nil, args.Error(1)
+	}
 	return args.Get(0).(*entities.OrgMembership), args.Error(1)
 }
 func (m *mockMemberRepo) ListByOrg(ctx context.Context, orgID uuid.UUID) ([]*entities.OrgMembership, error) {
@@ -75,7 +86,9 @@ func (m *mockDeptMemberRepo) Create(ctx context.Context, mem *entities.Departmen
 }
 func (m *mockDeptMemberRepo) GetByDeptAndUser(ctx context.Context, deptID, userID uuid.UUID) (*entities.DepartmentMembership, error) {
 	args := m.Called(ctx, deptID, userID)
-	if args.Get(0) == nil { return nil, args.Error(1) }
+	if args.Get(0) == nil {
+		return nil, args.Error(1)
+	}
 	return args.Get(0).(*entities.DepartmentMembership), args.Error(1)
 }
 func (m *mockDeptMemberRepo) ListByDept(ctx context.Context, deptID uuid.UUID) ([]*entities.DepartmentMembership, error) {
@@ -96,7 +109,9 @@ func (m *mockTokenRepo) CreateRefreshToken(ctx context.Context, t *entities.Refr
 }
 func (m *mockTokenRepo) GetRefreshToken(ctx context.Context, hash string) (*entities.RefreshToken, error) {
 	args := m.Called(ctx, hash)
-	if args.Get(0) == nil { return nil, args.Error(1) }
+	if args.Get(0) == nil {
+		return nil, args.Error(1)
+	}
 	return args.Get(0).(*entities.RefreshToken), args.Error(1)
 }
 func (m *mockTokenRepo) RevokeRefreshToken(ctx context.Context, hash string) error {
@@ -110,7 +125,9 @@ func (m *mockTokenRepo) CreateVerificationToken(ctx context.Context, t *entities
 }
 func (m *mockTokenRepo) GetVerificationToken(ctx context.Context, hash string) (*entities.EmailVerificationToken, error) {
 	args := m.Called(ctx, hash)
-	if args.Get(0) == nil { return nil, args.Error(1) }
+	if args.Get(0) == nil {
+		return nil, args.Error(1)
+	}
 	return args.Get(0).(*entities.EmailVerificationToken), args.Error(1)
 }
 func (m *mockTokenRepo) MarkVerificationTokenUsed(ctx context.Context, hash string) error {
@@ -124,7 +141,9 @@ func (m *mockTokenRepo) CreatePasswordResetToken(ctx context.Context, t *entitie
 }
 func (m *mockTokenRepo) GetPasswordResetToken(ctx context.Context, hash string) (*entities.PasswordResetToken, error) {
 	args := m.Called(ctx, hash)
-	if args.Get(0) == nil { return nil, args.Error(1) }
+	if args.Get(0) == nil {
+		return nil, args.Error(1)
+	}
 	return args.Get(0).(*entities.PasswordResetToken), args.Error(1)
 }
 func (m *mockTokenRepo) MarkPasswordResetTokenUsed(ctx context.Context, hash string) error {
@@ -144,12 +163,16 @@ type mockDeptRepo struct{ mock.Mock }
 
 func (m *mockDeptRepo) Create(ctx context.Context, dept *entities.Department) (*entities.Department, error) {
 	args := m.Called(ctx, dept)
-	if args.Get(0) == nil { return nil, args.Error(1) }
+	if args.Get(0) == nil {
+		return nil, args.Error(1)
+	}
 	return args.Get(0).(*entities.Department), args.Error(1)
 }
 func (m *mockDeptRepo) GetByID(ctx context.Context, id uuid.UUID) (*entities.Department, error) {
 	args := m.Called(ctx, id)
-	if args.Get(0) == nil { return nil, args.Error(1) }
+	if args.Get(0) == nil {
+		return nil, args.Error(1)
+	}
 	return args.Get(0).(*entities.Department), args.Error(1)
 }
 func (m *mockDeptRepo) ListByOrg(ctx context.Context, orgID uuid.UUID) ([]*entities.Department, error) {
@@ -158,7 +181,9 @@ func (m *mockDeptRepo) ListByOrg(ctx context.Context, orgID uuid.UUID) ([]*entit
 }
 func (m *mockDeptRepo) Update(ctx context.Context, dept *entities.Department) (*entities.Department, error) {
 	args := m.Called(ctx, dept)
-	if args.Get(0) == nil { return nil, args.Error(1) }
+	if args.Get(0) == nil {
+		return nil, args.Error(1)
+	}
 	return args.Get(0).(*entities.Department), args.Error(1)
 }
 func (m *mockDeptRepo) SoftDelete(ctx context.Context, id uuid.UUID) error {

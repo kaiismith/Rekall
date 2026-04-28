@@ -1,4 +1,5 @@
 export type CallStatus = 'pending' | 'processing' | 'done' | 'failed'
+export type CallScopeType = 'organization' | 'department'
 
 export interface Call {
   id: string
@@ -9,6 +10,8 @@ export interface Call {
   recording_url?: string
   transcript?: string
   metadata: Record<string, unknown>
+  scope_type?: CallScopeType
+  scope_id?: string
   started_at?: string
   ended_at?: string
   created_at: string

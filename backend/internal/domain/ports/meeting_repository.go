@@ -5,6 +5,7 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+
 	"github.com/rekall/backend/internal/domain/entities"
 )
 
@@ -16,6 +17,9 @@ type ListMeetingsFilter struct {
 	// Sort is one of: created_at_desc (default), created_at_asc,
 	// duration_desc, duration_asc, title_asc, title_desc.
 	Sort string
+	// Scope, when non-nil, restricts the result to meetings matching the given
+	// scope. Nil preserves the caller's default visibility (host + participant).
+	Scope *ScopeFilter
 }
 
 // ParticipantPreview is a lightweight user snapshot used in list responses.

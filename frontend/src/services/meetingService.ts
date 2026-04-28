@@ -7,6 +7,8 @@ import type {
   ChatMessage,
   ListChatMessagesResponse,
 } from '@/types/meeting'
+import type { Scope } from '@/types/scope'
+import { scopeToQueryParams } from '@/utils/scope'
 
 /** Raw chat message shape returned by the backend (snake_case, ISO timestamp). */
 interface RawChatMessage {
@@ -45,11 +47,19 @@ export const meetingService = {
     return response.data
   },
 
-  /** List meetings where the current user is host or participant. */
-  async listMine(params?: ListMeetingsParams): Promise<ApiResponse<Meeting[]>> {
+  /**
+   * List meetings the current user can see. By default scoped to host +
+   * participant; pass `scope` to filter to a specific organization,
+   * department, or open-only slice.
+   */
+  async listMine(params?: ListMeetingsParams, scope?: Scope | null): Promise<ApiResponse<Meeting[]>> {
     const qs = new URLSearchParams()
     if (params?.status) qs.set('filter[status]', params.status)
     if (params?.sort) qs.set('sort', params.sort)
+    const scopeParams = scopeToQueryParams(scope ?? null)
+    for (const k of Object.keys(scopeParams)) {
+      qs.set(k, scopeParams[k]!)
+    }
     const query = qs.toString() ? `?${qs.toString()}` : ''
     const response = await apiClient.get<ApiResponse<Meeting[]>>(`/meetings/mine${query}`)
     return response.data

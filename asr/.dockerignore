@@ -1,0 +1,33 @@
+# Excluded from the docker build context. The submodules' source trees ARE
+# included (the Dockerfile checks them out), but the submodules' own .git
+# directories are not.
+build/
+build-openai/
+out/
+cmake-build-*/
+.cache/
+
+models/
+!models/.gitkeep
+
+third_party/whisper.cpp/build/
+third_party/whisper.cpp/.cache/
+third_party/whisper.cpp/.git
+third_party/openai-cpp/.git
+
+vcpkg_installed/
+.vcpkg-cache/
+
+*.o
+*.obj
+*.a
+*.lib
+*.so
+*.dylib
+*.dll
+*.exe
+
+compile_commands.json
+.idea/
+.vscode/
+*.swp

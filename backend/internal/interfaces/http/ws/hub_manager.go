@@ -5,8 +5,9 @@ import (
 	"sync"
 
 	"github.com/google/uuid"
-	"github.com/rekall/backend/internal/domain/ports"
 	"go.uber.org/zap"
+
+	"github.com/rekall/backend/internal/domain/ports"
 )
 
 // HubManager is a process-wide singleton that owns one Hub per active meeting.
@@ -19,24 +20,32 @@ import (
 // HTTP handler returns, Gin cancels its request context, and the hub exits
 // immediately, leaving the WS open with no goroutine to service it.
 type HubManager struct {
-	mu       sync.RWMutex
-	hubs     map[uuid.UUID]*Hub
-	chatRepo ports.MeetingMessageRepository
-	logger   *zap.Logger
-	ctx      context.Context
-	cancel   context.CancelFunc
+	mu        sync.RWMutex
+	hubs      map[uuid.UUID]*Hub
+	chatRepo  ports.MeetingMessageRepository
+	persister TranscriptPersister
+	logger    *zap.Logger
+	ctx       context.Context
+	cancel    context.CancelFunc
 }
 
 // NewHubManager creates an empty HubManager. chatRepo is forwarded to every
 // hub created via GetOrCreate so the chat handler can persist messages.
-func NewHubManager(chatRepo ports.MeetingMessageRepository, logger *zap.Logger) *HubManager {
+// persister, when non-nil, is also forwarded so the caption handler can
+// record `final` segments to transcript_segments.
+func NewHubManager(
+	chatRepo ports.MeetingMessageRepository,
+	persister TranscriptPersister,
+	logger *zap.Logger,
+) *HubManager {
 	ctx, cancel := context.WithCancel(context.Background())
 	return &HubManager{
-		hubs:     make(map[uuid.UUID]*Hub),
-		chatRepo: chatRepo,
-		logger:   logger,
-		ctx:      ctx,
-		cancel:   cancel,
+		hubs:      make(map[uuid.UUID]*Hub),
+		chatRepo:  chatRepo,
+		persister: persister,
+		logger:    logger,
+		ctx:       ctx,
+		cancel:    cancel,
 	}
 }
 
@@ -72,7 +81,7 @@ func (m *HubManager) GetOrCreate(_ context.Context, meetingID, hostID uuid.UUID,
 		return h
 	}
 
-	h := NewHub(meetingID, hostID, m.chatRepo, func(id uuid.UUID) {
+	h := NewHub(meetingID, hostID, m.chatRepo, m.persister, func(id uuid.UUID) {
 		m.remove(id)
 		if onEnd != nil {
 			onEnd(id)

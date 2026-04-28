@@ -20,6 +20,9 @@ import { ResetPasswordPage } from '@/pages/ResetPasswordPage'
 import { VerifyEmailPage } from '@/pages/VerifyEmailPage'
 import { OrganizationsPage } from '@/pages/OrganizationsPage'
 import { OrgDetailPage } from '@/pages/OrgDetailPage'
+import { DeptDetailPage } from '@/pages/DeptDetailPage'
+import { ScopedMeetingsPage } from '@/pages/ScopedMeetingsPage'
+import { ScopedCallsPage } from '@/pages/ScopedCallsPage'
 import { InviteAcceptPage } from '@/pages/InviteAcceptPage'
 import { MeetingsPage } from '@/pages/MeetingsPage'
 import { NewMeetingPage } from '@/pages/NewMeetingPage'
@@ -69,6 +72,11 @@ function AppRoutes() {
         <Route path={ROUTES.CALLS} element={<CallsPage />} />
         <Route path={ROUTES.ORGANIZATIONS} element={<OrganizationsPage />} />
         <Route path={ROUTES.ORG_DETAIL} element={<OrgDetailPage />} />
+        <Route path={ROUTES.ORG_MEETINGS} element={<ScopedMeetingsPage />} />
+        <Route path={ROUTES.ORG_CALLS} element={<ScopedCallsPage />} />
+        <Route path={ROUTES.ORG_DEPT_DETAIL} element={<DeptDetailPage />} />
+        <Route path={ROUTES.ORG_DEPT_MEETINGS} element={<ScopedMeetingsPage />} />
+        <Route path={ROUTES.ORG_DEPT_CALLS} element={<ScopedCallsPage />} />
         <Route path={ROUTES.MEETINGS} element={<MeetingsPage />} />
         <Route path={ROUTES.PROFILE} element={<ProfilePage />} />
         <Route path={ROUTES.SETTINGS} element={<SettingsPage />} />

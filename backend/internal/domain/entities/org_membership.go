@@ -4,6 +4,7 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+
 	"github.com/rekall/backend/pkg/constants"
 )
 
@@ -28,3 +29,9 @@ func (m *OrgMembership) IsAdmin() bool {
 
 // CanManageMembers reports whether the member can invite, update, or remove other members.
 func (m *OrgMembership) CanManageMembers() bool { return m.IsAdmin() }
+
+// CanManageOrg is an alias for IsAdmin scoped to org-level admin operations
+// (create/rename/delete department, invite users, etc.). Kept as a separate
+// predicate so future divergence between "manage-members" and "manage-org"
+// stays surgical.
+func (m *OrgMembership) CanManageOrg() bool { return m.IsAdmin() }

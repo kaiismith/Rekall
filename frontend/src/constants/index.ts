@@ -17,9 +17,14 @@ export const ROUTES = {
   FORGOT_PASSWORD: '/forgot-password',
   RESET_PASSWORD: '/reset-password',
   VERIFY_EMAIL: '/verify-email',
-  // Organizations
+  // Organizations + scoped surfaces
   ORGANIZATIONS: '/organizations',
   ORG_DETAIL: '/organizations/:id',
+  ORG_MEETINGS: '/organizations/:id/meetings',
+  ORG_CALLS: '/organizations/:id/calls',
+  ORG_DEPT_DETAIL: '/organizations/:orgId/departments/:deptId',
+  ORG_DEPT_MEETINGS: '/organizations/:orgId/departments/:deptId/meetings',
+  ORG_DEPT_CALLS: '/organizations/:orgId/departments/:deptId/calls',
   INVITATION_ACCEPT: '/invitations/accept',
   // Meetings
   MEETINGS: '/meetings',
@@ -53,3 +58,25 @@ export const SIDEBAR_COLLAPSED_WIDTH = 72
 
 /** Minimum meeting-code length accepted by the Join Meeting input. */
 export const MIN_MEETING_CODE_LENGTH = 6
+
+/**
+ * Helpers that resolve scoped route templates with concrete IDs. Components
+ * SHALL go through these instead of building paths inline so the URL shape
+ * lives in one place.
+ */
+export const buildScopedRoute = {
+  org: (id: string) => `/organizations/${id}`,
+  orgMeetings: (id: string) => `/organizations/${id}/meetings`,
+  orgCalls: (id: string) => `/organizations/${id}/calls`,
+  dept: (orgId: string, deptId: string) => `/organizations/${orgId}/departments/${deptId}`,
+  deptMeetings: (orgId: string, deptId: string) =>
+    `/organizations/${orgId}/departments/${deptId}/meetings`,
+  deptCalls: (orgId: string, deptId: string) =>
+    `/organizations/${orgId}/departments/${deptId}/calls`,
+}
+
+/** RFC-4122 UUID — used to validate dynamic route params before issuing API calls. */
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
+export function isUuid(s: string | undefined | null): s is string {
+  return typeof s === 'string' && UUID_RE.test(s)
+}

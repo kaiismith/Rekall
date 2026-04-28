@@ -9,11 +9,12 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/golang-jwt/jwt/v5"
 	"github.com/google/uuid"
-	infraauth "github.com/rekall/backend/internal/infrastructure/auth"
-	"github.com/rekall/backend/internal/interfaces/http/middleware"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"go.uber.org/zap"
+
+	infraauth "github.com/rekall/backend/internal/infrastructure/auth"
+	"github.com/rekall/backend/internal/interfaces/http/middleware"
 )
 
 const (

@@ -4,9 +4,10 @@ import (
 	"net/http"
 
 	"github.com/gin-gonic/gin"
+	"gorm.io/gorm"
+
 	"github.com/rekall/backend/internal/infrastructure/database"
 	"github.com/rekall/backend/internal/interfaces/http/dto"
-	"gorm.io/gorm"
 )
 
 // HealthHandler handles liveness and readiness probes.

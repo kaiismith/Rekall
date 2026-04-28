@@ -10,14 +10,15 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
-	"github.com/rekall/backend/internal/application/services"
-	"github.com/rekall/backend/internal/domain/entities"
-	"github.com/rekall/backend/internal/interfaces/http/handlers"
-	apperr "github.com/rekall/backend/pkg/errors"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
 	"github.com/stretchr/testify/require"
 	"go.uber.org/zap"
+
+	"github.com/rekall/backend/internal/application/services"
+	"github.com/rekall/backend/internal/domain/entities"
+	"github.com/rekall/backend/internal/interfaces/http/handlers"
+	apperr "github.com/rekall/backend/pkg/errors"
 )
 
 // ─── Router factory ───────────────────────────────────────────────────────────
@@ -146,12 +147,16 @@ func TestOrgUpdateHandler_BadBodyType(t *testing.T) {
 func TestOrgGetHandler_ServiceError(t *testing.T) {
 	orgRepo := new(mockOrgRepo)
 	memberRepo := new(mockMemberRepo)
+	userRepo := new(mockUserRepo)
 	callerID := uuid.New()
-	h := handlers.NewOrganizationHandler(newOrgService(orgRepo, memberRepo, new(mockInviteRepo), new(mockUserRepo), new(mockMailer)), zap.NewNop())
+	h := handlers.NewOrganizationHandler(newOrgService(orgRepo, memberRepo, new(mockInviteRepo), userRepo, new(mockMailer)), zap.NewNop())
 	r := newOrgRouter(h, callerID)
 
 	orgID := uuid.New()
 	memberRepo.On("GetByOrgAndUser", mock.Anything, orgID, callerID).Return(nil, apperr.NotFound("OrgMembership", ""))
+	// Caller is a plain member at the platform level — no admin fallthrough.
+	userRepo.On("GetByID", mock.Anything, callerID).
+		Return(&entities.User{ID: callerID, Role: "member"}, nil)
 
 	w := doRequest(r, http.MethodGet, "/organizations/"+orgID.String(), nil)
 	assert.Equal(t, http.StatusForbidden, w.Code)
@@ -200,13 +205,17 @@ func TestOrgGetHandler_InvalidUUID(t *testing.T) {
 func TestOrgGetHandler_NotMember(t *testing.T) {
 	orgRepo := new(mockOrgRepo)
 	memberRepo := new(mockMemberRepo)
+	userRepo := new(mockUserRepo)
 	callerID := uuid.New()
-	h := handlers.NewOrganizationHandler(newOrgService(orgRepo, memberRepo, new(mockInviteRepo), new(mockUserRepo), new(mockMailer)), zap.NewNop())
+	h := handlers.NewOrganizationHandler(newOrgService(orgRepo, memberRepo, new(mockInviteRepo), userRepo, new(mockMailer)), zap.NewNop())
 	r := newOrgRouter(h, callerID)
 
 	org := sampleOrg(uuid.New()) // different owner
 	orgRepo.On("GetByID", mock.Anything, org.ID).Return(org, nil)
 	memberRepo.On("GetByOrgAndUser", mock.Anything, org.ID, callerID).Return(nil, apperr.NotFound("Membership", ""))
+	// Caller isn't a platform admin — fallthrough denied.
+	userRepo.On("GetByID", mock.Anything, callerID).
+		Return(&entities.User{ID: callerID, Role: "member"}, nil)
 
 	w := doRequest(r, http.MethodGet, "/organizations/"+org.ID.String(), nil)
 	assert.Equal(t, http.StatusForbidden, w.Code)
@@ -256,14 +265,17 @@ func TestOrgDeleteHandler_InvalidUUID(t *testing.T) {
 func TestOrgDeleteHandler_NotOwner(t *testing.T) {
 	orgRepo := new(mockOrgRepo)
 	memberRepo := new(mockMemberRepo)
+	userRepo := new(mockUserRepo)
 	callerID := uuid.New()
-	h := handlers.NewOrganizationHandler(newOrgService(orgRepo, memberRepo, new(mockInviteRepo), new(mockUserRepo), new(mockMailer)), zap.NewNop())
+	h := handlers.NewOrganizationHandler(newOrgService(orgRepo, memberRepo, new(mockInviteRepo), userRepo, new(mockMailer)), zap.NewNop())
 	r := newOrgRouter(h, callerID)
 
 	org := sampleOrg(uuid.New())
 	orgRepo.On("GetByID", mock.Anything, org.ID).Return(org, nil)
 	memberRepo.On("GetByOrgAndUser", mock.Anything, org.ID, callerID).Return(
 		&entities.OrgMembership{OrgID: org.ID, UserID: callerID, Role: "member"}, nil)
+	userRepo.On("GetByID", mock.Anything, callerID).
+		Return(&entities.User{ID: callerID, Role: "member"}, nil)
 
 	w := doRequest(r, http.MethodDelete, "/organizations/"+org.ID.String(), nil)
 	assert.Equal(t, http.StatusForbidden, w.Code)
@@ -325,13 +337,16 @@ func TestOrgListMembersHandler_ServiceError(t *testing.T) {
 func TestOrgRemoveMemberHandler_ServiceError(t *testing.T) {
 	orgRepo := new(mockOrgRepo)
 	memberRepo := new(mockMemberRepo)
+	userRepo := new(mockUserRepo)
 	callerID := uuid.New()
-	h := handlers.NewOrganizationHandler(newOrgService(orgRepo, memberRepo, new(mockInviteRepo), new(mockUserRepo), new(mockMailer)), zap.NewNop())
+	h := handlers.NewOrganizationHandler(newOrgService(orgRepo, memberRepo, new(mockInviteRepo), userRepo, new(mockMailer)), zap.NewNop())
 	r := newOrgRouter(h, callerID)
 
 	orgID := uuid.New()
 	targetID := uuid.New()
 	memberRepo.On("GetByOrgAndUser", mock.Anything, orgID, callerID).Return(nil, apperr.NotFound("OrgMembership", ""))
+	userRepo.On("GetByID", mock.Anything, callerID).
+		Return(&entities.User{ID: callerID, Role: "member"}, nil)
 
 	w := doRequest(r, http.MethodDelete, "/organizations/"+orgID.String()+"/members/"+targetID.String(), nil)
 	assert.Equal(t, http.StatusForbidden, w.Code)
@@ -340,13 +355,16 @@ func TestOrgRemoveMemberHandler_ServiceError(t *testing.T) {
 func TestOrgInviteUserHandler_ServiceError(t *testing.T) {
 	orgRepo := new(mockOrgRepo)
 	memberRepo := new(mockMemberRepo)
+	userRepo := new(mockUserRepo)
 	callerID := uuid.New()
-	h := handlers.NewOrganizationHandler(newOrgService(orgRepo, memberRepo, new(mockInviteRepo), new(mockUserRepo), new(mockMailer)), zap.NewNop())
+	h := handlers.NewOrganizationHandler(newOrgService(orgRepo, memberRepo, new(mockInviteRepo), userRepo, new(mockMailer)), zap.NewNop())
 	r := newOrgRouter(h, callerID)
 
 	orgID := uuid.New()
 	// Caller isn't a member — should be forbidden.
 	memberRepo.On("GetByOrgAndUser", mock.Anything, orgID, callerID).Return(nil, apperr.NotFound("OrgMembership", ""))
+	userRepo.On("GetByID", mock.Anything, callerID).
+		Return(&entities.User{ID: callerID, Role: "member"}, nil)
 
 	w := doRequest(r, http.MethodPost, "/organizations/"+orgID.String()+"/invitations",
 		jsonBody(t, map[string]string{"email": "a@b.com", "role": "member"}))
@@ -381,12 +399,15 @@ func TestOrgAcceptInvitationHandler_ServiceError(t *testing.T) {
 func TestOrgUpdateHandler_ServiceError(t *testing.T) {
 	orgRepo := new(mockOrgRepo)
 	memberRepo := new(mockMemberRepo)
+	userRepo := new(mockUserRepo)
 	callerID := uuid.New()
-	h := handlers.NewOrganizationHandler(newOrgService(orgRepo, memberRepo, new(mockInviteRepo), new(mockUserRepo), new(mockMailer)), zap.NewNop())
+	h := handlers.NewOrganizationHandler(newOrgService(orgRepo, memberRepo, new(mockInviteRepo), userRepo, new(mockMailer)), zap.NewNop())
 	r := newOrgRouter(h, callerID)
 
 	orgID := uuid.New()
 	memberRepo.On("GetByOrgAndUser", mock.Anything, orgID, callerID).Return(nil, apperr.NotFound("OrgMembership", ""))
+	userRepo.On("GetByID", mock.Anything, callerID).
+		Return(&entities.User{ID: callerID, Role: "member"}, nil)
 
 	w := doRequest(r, http.MethodPatch, "/organizations/"+orgID.String(), jsonBody(t, map[string]string{"name": "X"}))
 	assert.Equal(t, http.StatusForbidden, w.Code)

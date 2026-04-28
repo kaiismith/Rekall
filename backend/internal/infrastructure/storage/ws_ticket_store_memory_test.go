@@ -9,11 +9,12 @@ import (
 	"time"
 
 	"github.com/google/uuid"
-	"github.com/rekall/backend/internal/domain/ports"
-	"github.com/rekall/backend/internal/infrastructure/storage"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"go.uber.org/zap"
+
+	"github.com/rekall/backend/internal/domain/ports"
+	"github.com/rekall/backend/internal/infrastructure/storage"
 )
 
 func newStore(t *testing.T) *storage.MemoryWSTicketStore {

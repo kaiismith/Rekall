@@ -3,11 +3,18 @@ FROM node:20-alpine AS builder
 
 WORKDIR /app
 
+# Skip husky's prepare script during image builds — there is no .git in the
+# build context and hook installation would fail with a confusing error.
+ENV HUSKY=0
+
 # Install deps first (layer cache).
 # --legacy-peer-deps tolerates the @eslint/js@10 ↔ eslint@9 peer-dep skew in
 # package-lock.json; npm 7+ is strict by default and would otherwise ERESOLVE.
+# --ignore-scripts skips the `prepare` hook (which tries to install husky
+# git hooks via scripts/install-husky.cjs — that script isn't in the build
+# context yet at this point and there's no .git inside the image anyway).
 COPY package.json package-lock.json* ./
-RUN npm ci --legacy-peer-deps
+RUN npm ci --legacy-peer-deps --ignore-scripts
 
 # Build args injected at build time
 ARG VITE_API_BASE_URL=/api/v1

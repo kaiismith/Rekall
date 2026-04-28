@@ -3,6 +3,7 @@ package handlerhelpers
 import (
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
+
 	"github.com/rekall/backend/internal/interfaces/http/middleware"
 	apperr "github.com/rekall/backend/pkg/errors"
 )

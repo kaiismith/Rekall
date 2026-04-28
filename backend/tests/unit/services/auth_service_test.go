@@ -6,15 +6,16 @@ import (
 	"time"
 
 	"github.com/google/uuid"
-	"github.com/rekall/backend/internal/application/services"
-	"github.com/rekall/backend/internal/domain/entities"
-	"github.com/rekall/backend/internal/domain/ports"
-	apperr "github.com/rekall/backend/pkg/errors"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
 	"github.com/stretchr/testify/require"
 	"go.uber.org/zap"
 	"golang.org/x/crypto/bcrypt"
+
+	"github.com/rekall/backend/internal/application/services"
+	"github.com/rekall/backend/internal/domain/entities"
+	"github.com/rekall/backend/internal/domain/ports"
+	apperr "github.com/rekall/backend/pkg/errors"
 )
 
 // ─── Mocks ────────────────────────────────────────────────────────────────────
@@ -61,6 +62,13 @@ func (m *mockUserRepo) SetEmailVerified(ctx context.Context, id uuid.UUID, v boo
 }
 func (m *mockUserRepo) UpdatePassword(ctx context.Context, id uuid.UUID, hash string) error {
 	return m.Called(ctx, id, hash).Error(0)
+}
+func (m *mockUserRepo) SetRoleByEmail(ctx context.Context, email, role string) error {
+	return m.Called(ctx, email, role).Error(0)
+}
+func (m *mockUserRepo) DemoteAdminsExcept(ctx context.Context, keep []string) (int, error) {
+	args := m.Called(ctx, keep)
+	return args.Int(0), args.Error(1)
 }
 
 // ── TokenRepository mock ──────────────────────────────────────────────────────

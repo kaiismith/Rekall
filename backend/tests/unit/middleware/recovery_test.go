@@ -7,10 +7,11 @@ import (
 	"testing"
 
 	"github.com/gin-gonic/gin"
-	"github.com/rekall/backend/internal/interfaces/http/middleware"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"go.uber.org/zap"
+
+	"github.com/rekall/backend/internal/interfaces/http/middleware"
 )
 
 // ─── Recovery ─────────────────────────────────────────────────────────────────

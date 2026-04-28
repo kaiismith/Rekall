@@ -11,10 +11,11 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/gorilla/websocket"
-	wsHub "github.com/rekall/backend/internal/interfaces/http/ws"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"go.uber.org/zap"
+
+	wsHub "github.com/rekall/backend/internal/interfaces/http/ws"
 )
 
 // upgradeForTest creates a test WebSocket server and returns a client connection.
@@ -38,7 +39,7 @@ func makeClientPair(t *testing.T, userID uuid.UUID) (*wsHub.Hub, *websocket.Conn
 	t.Helper()
 
 	meetingID := uuid.New()
-	hub := wsHub.NewHub(meetingID, userID, nil, nil, zap.NewNop())
+	hub := wsHub.NewHub(meetingID, userID, nil, nil, nil, zap.NewNop())
 	ctx, cancel := context.WithCancel(context.Background())
 	go hub.Run(ctx)
 
@@ -204,7 +205,7 @@ func TestHub_KnockFlow_ApproveAdmitsUser(t *testing.T) {
 }
 
 func TestHubManager_GetOrCreate_ReturnsSameHub(t *testing.T) {
-	manager := wsHub.NewHubManager(nil, zap.NewNop())
+	manager := wsHub.NewHubManager(nil, nil, zap.NewNop())
 	meetingID := uuid.New()
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
@@ -324,7 +325,7 @@ func TestHub_LastParticipantLeaves_TriggersOnEnd(t *testing.T) {
 	userID := uuid.New()
 	onEndCalled := make(chan uuid.UUID, 1)
 
-	hub := wsHub.NewHub(meetingID, userID, nil, func(id uuid.UUID) {
+	hub := wsHub.NewHub(meetingID, userID, nil, nil, func(id uuid.UUID) {
 		onEndCalled <- id
 	}, zap.NewNop())
 	ctx, cancel := context.WithCancel(context.Background())
@@ -449,7 +450,7 @@ func TestHub_ParticipantLeaves_BroadcastsParticipantLeft(t *testing.T) {
 	onEndCalled := make(chan struct{}, 1)
 	meetingID := uuid.New()
 	hostID := uuid.New()
-	hub := wsHub.NewHub(meetingID, hostID, nil, func(uuid.UUID) { onEndCalled <- struct{}{} }, zap.NewNop())
+	hub := wsHub.NewHub(meetingID, hostID, nil, nil, func(uuid.UUID) { onEndCalled <- struct{}{} }, zap.NewNop())
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 	go hub.Run(ctx)
@@ -543,7 +544,7 @@ func TestHub_WebRTC_NilOrUnknownTo_SilentlyDropped(t *testing.T) {
 }
 
 func TestHubManager_RemovesHubAfterLastParticipantLeaves(t *testing.T) {
-	manager := wsHub.NewHubManager(nil, zap.NewNop())
+	manager := wsHub.NewHubManager(nil, nil, zap.NewNop())
 	meetingID := uuid.New()
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()

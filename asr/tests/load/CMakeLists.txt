@@ -1,0 +1,2 @@
+add_executable(asr_load concurrent_sessions.cpp)
+target_link_libraries(asr_load PRIVATE rekall_asr_core)
