@@ -4,10 +4,11 @@ import (
 	"net/http"
 
 	"github.com/gin-gonic/gin"
+	"go.uber.org/zap"
+
 	"github.com/rekall/backend/internal/interfaces/http/dto"
 	applogger "github.com/rekall/backend/pkg/logger"
 	"github.com/rekall/backend/pkg/logger/catalog"
-	"go.uber.org/zap"
 )
 
 // Recovery returns a Gin middleware that catches panics, logs them via the

@@ -7,10 +7,11 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
-	"github.com/rekall/backend/internal/interfaces/http/middleware"
-	"github.com/rekall/backend/pkg/constants"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
+	"github.com/rekall/backend/internal/interfaces/http/middleware"
+	"github.com/rekall/backend/pkg/constants"
 )
 
 // ─── RequestID ────────────────────────────────────────────────────────────────

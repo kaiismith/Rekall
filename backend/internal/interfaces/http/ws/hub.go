@@ -2,11 +2,15 @@ package ws
 
 import (
 	"context"
+	"errors"
 	"time"
 
 	"github.com/google/uuid"
-	"github.com/rekall/backend/internal/domain/ports"
 	"go.uber.org/zap"
+
+	"github.com/rekall/backend/internal/application/services"
+	"github.com/rekall/backend/internal/domain/entities"
+	"github.com/rekall/backend/internal/domain/ports"
 )
 
 const (
@@ -16,6 +20,11 @@ const (
 
 	// closeCodeDenied is sent to a knocked client when their knock is denied.
 	closeCodeDenied = 4003
+
+	// transcriptCloseTimeout caps the off-path goroutine that closes an
+	// orphaned ASR session on WS disconnect. Short enough that goroutines
+	// don't pile up if the DB is slow; long enough for a normal write.
+	transcriptCloseTimeout = 5 * time.Second
 )
 
 // handlerFn is the signature for message type handlers registered in the hub.
@@ -85,6 +94,11 @@ type Hub struct {
 	// handler silently drops inbound messages.
 	chatRepo ports.MeetingMessageRepository
 
+	// persister records ASR `final` segments in transcript_segments. Nil-safe:
+	// when unset, captions still relay but are not stored. Off-the-critical-path:
+	// a persistence failure must NEVER break the broadcast loop.
+	persister TranscriptPersister
+
 	// channels
 	register   chan registerRequest
 	unregister chan *Client
@@ -106,9 +120,11 @@ type registerRequest struct {
 
 // NewHub creates a Hub for the given meeting. chatRepo may be nil — handlers
 // that depend on it (handleChatMessage) will no-op when it is unset.
+// persister may be nil — captions then relay without being persisted.
 func NewHub(
 	meetingID, hostID uuid.UUID,
 	chatRepo ports.MeetingMessageRepository,
+	persister TranscriptPersister,
 	onEnd func(uuid.UUID),
 	logger *zap.Logger,
 ) *Hub {
@@ -121,6 +137,7 @@ func NewHub(
 		mediaState: make(map[string]*ParticipantState),
 		identities: make(map[string]identity),
 		chatRepo:   chatRepo,
+		persister:  persister,
 		register:   make(chan registerRequest, 8),
 		unregister: make(chan *Client, 8),
 		inbound:    make(chan inboundEnvelope, 64),
@@ -134,6 +151,7 @@ func NewHub(
 		MsgTypeEmojiReaction: handleEmojiReaction,
 		MsgTypeHandRaise:     handleHandRaise,
 		MsgTypeChatMessage:   handleChatMessage,
+		MsgTypeCaptionChunk:  handleCaptionChunk,
 	}
 	return h
 }
@@ -304,6 +322,39 @@ func (h *Hub) handleUnregister(c *Client) {
 
 		h.broadcastAll(OutboundMessage{Type: MsgTypeParticipantLeft, UserID: &uid})
 		h.logger.Info("participant left", zap.String("user_id", uidStr))
+
+		// Best-effort: if this client owned an active ASR session and there
+		// was no graceful HTTP End call, close it now so the cleanup job is
+		// the safety net rather than the primary path. Off the run loop:
+		// a slow DB must not stall the hub.
+		if h.persister != nil && c.activeASRSessionID != nil {
+			sessionID := *c.activeASRSessionID
+			callerID := c.UserID
+			persister := h.persister
+			logger := h.logger
+			go func() {
+				ctx, cancel := context.WithTimeout(context.Background(), transcriptCloseTimeout)
+				defer cancel()
+				if err := persister.CloseSession(ctx, services.CloseSessionInput{
+					SessionID:    sessionID,
+					CallerUserID: callerID,
+					Status:       entities.TranscriptSessionStatusEnded,
+				}); err != nil {
+					// "Not found" here is benign — the session predates persistence
+					// or OpenSession failed at issue time. Nothing to close.
+					if errors.Is(err, services.ErrTranscriptSessionNotFound) {
+						logger.Debug("transcript session close on disconnect skipped: no row",
+							zap.String("session_id", sessionID.String()),
+						)
+						return
+					}
+					logger.Warn("transcript session close on disconnect failed",
+						zap.String("session_id", sessionID.String()),
+						zap.Error(err),
+					)
+				}
+			}()
+		}
 
 		// No participants left — meeting is over.
 		if len(h.clients) == 0 {

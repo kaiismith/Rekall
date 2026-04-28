@@ -108,6 +108,12 @@ describe('MeetingCard', () => {
     expect(screen.getByText('BJ')).toBeInTheDocument()
   })
 
+  it('renders the Open scope badge for an open meeting', () => {
+    renderCard(baseMeeting())
+    // ScopeBadge is a MUI Chip with `aria-label` matching its visible label.
+    expect(screen.getByLabelText('Open')).toBeInTheDocument()
+  })
+
   it('shows "—" when meeting is ended with started_at set but no duration_seconds', () => {
     renderCard(baseMeeting({ status: 'ended', started_at: '2025-03-01T10:00:00Z', duration_seconds: undefined }))
     // Line 96: started_at exists, not live, duration_seconds is undefined → falls through to "—"

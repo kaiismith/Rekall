@@ -8,12 +8,13 @@ import (
 
 	"github.com/DATA-DOG/go-sqlmock"
 	"github.com/google/uuid"
-	"github.com/rekall/backend/internal/domain/entities"
-	"github.com/rekall/backend/internal/infrastructure/repositories"
-	apperr "github.com/rekall/backend/pkg/errors"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"gorm.io/gorm"
+
+	"github.com/rekall/backend/internal/domain/entities"
+	"github.com/rekall/backend/internal/infrastructure/repositories"
+	apperr "github.com/rekall/backend/pkg/errors"
 )
 
 // ─── OrganizationRepository ──────────────────────────────────────────────────

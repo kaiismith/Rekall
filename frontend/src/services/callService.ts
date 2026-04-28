@@ -1,12 +1,19 @@
 import { apiClient } from './api'
 import type { ApiResponse, PaginatedResponse } from '@/types/common'
 import type { Call, CreateCallPayload, ListCallsParams, UpdateCallPayload } from '@/types/call'
+import type { Scope } from '@/types/scope'
 import { buildQueryString } from '@/utils'
+import { scopeToQueryParams } from '@/utils/scope'
 
 export const callService = {
-  /** Fetch a paginated list of calls. */
-  async list(params: ListCallsParams = {}): Promise<PaginatedResponse<Call>> {
-    const qs = buildQueryString(params as Record<string, unknown>)
+  /**
+   * Fetch a paginated list of calls. Pass `scope` to restrict to an
+   * organization, department, or open slice; defaults to the caller's full
+   * visibility.
+   */
+  async list(params: ListCallsParams = {}, scope?: Scope | null): Promise<PaginatedResponse<Call>> {
+    const merged: Record<string, unknown> = { ...params, ...scopeToQueryParams(scope ?? null) }
+    const qs = buildQueryString(merged)
     const response = await apiClient.get<PaginatedResponse<Call>>(`/calls${qs}`)
     return response.data
   },

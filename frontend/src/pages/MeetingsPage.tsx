@@ -16,7 +16,7 @@ import { useMeetingsList } from '@/hooks/useMeetingsList'
 import { MeetingCard } from '@/components/meetings/MeetingCard'
 import { FilterPanel } from '@/components/meetings/FilterPanel'
 import { SortMenu } from '@/components/meetings/SortMenu'
-import { EmptyState, GradientButton, PageHeader } from '@/components/common/ui'
+import { EmptyState, GradientButton, PageHeader, ScopePicker } from '@/components/common/ui'
 
 const iconBtnSx = {
   bgcolor: 'rgba(255,255,255,0.03)',
@@ -29,7 +29,7 @@ const iconBtnSx = {
 
 export function MeetingsPage() {
   const navigate = useNavigate()
-  const { meetings, isLoading, status, sort, setStatus, setSort, activeFilterCount } =
+  const { meetings, isLoading, status, sort, scope, setStatus, setSort, setScope, activeFilterCount } =
     useMeetingsList()
 
   const [filterAnchor, setFilterAnchor] = useState<HTMLElement | null>(null)
@@ -37,6 +37,8 @@ export function MeetingsPage() {
 
   const actions = (
     <>
+      <ScopePicker value={scope} onChange={setScope} />
+
       <Tooltip title="Filter">
         <Badge badgeContent={activeFilterCount} color="primary" overlap="circular">
           <IconButton
@@ -104,14 +106,18 @@ export function MeetingsPage() {
       ) : meetings.length === 0 ? (
         <EmptyState
           icon={<VideoCallOutlinedIcon />}
-          title={status ? 'No meetings match this filter' : 'No meetings yet'}
+          title={
+            status || scope
+              ? 'No meetings match this filter'
+              : 'No meetings yet'
+          }
           description={
-            status
-              ? 'Try clearing the active filter or adjusting your sort order.'
+            status || scope
+              ? 'Try clearing the active filters or adjusting your sort order.'
               : 'Start a meeting to capture conversations, transcripts, and highlights.'
           }
           action={
-            !status && (
+            !status && !scope && (
               <GradientButton
                 fullWidth={false}
                 startIcon={<AddIcon />}

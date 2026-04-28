@@ -7,9 +7,10 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
-	httputils "github.com/rekall/backend/internal/interfaces/http/utils"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
+	httputils "github.com/rekall/backend/internal/interfaces/http/utils"
 )
 
 func init() { gin.SetMode(gin.TestMode) }

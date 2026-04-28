@@ -9,6 +9,9 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+	"go.uber.org/zap"
+	"golang.org/x/crypto/bcrypt"
+
 	"github.com/rekall/backend/internal/application/helpers"
 	apputils "github.com/rekall/backend/internal/application/utils"
 	"github.com/rekall/backend/internal/domain/entities"
@@ -18,8 +21,6 @@ import (
 	apperr "github.com/rekall/backend/pkg/errors"
 	applogger "github.com/rekall/backend/pkg/logger"
 	"github.com/rekall/backend/pkg/logger/catalog"
-	"go.uber.org/zap"
-	"golang.org/x/crypto/bcrypt"
 )
 
 const bcryptCost = 12
@@ -29,11 +30,11 @@ var emailRegexp = regexp.MustCompile(`^[^\s@]+@[^\s@]+\.[^\s@]+$`)
 // AuthService orchestrates all account-lifecycle operations:
 // registration, email verification, login, token refresh, logout, and password reset.
 type AuthService struct {
-	userRepo  ports.UserRepository
-	tokenRepo ports.TokenRepository
-	mailer    ports.EmailSender
-	jwtSecret string
-	jwtIssuer string
+	userRepo   ports.UserRepository
+	tokenRepo  ports.TokenRepository
+	mailer     ports.EmailSender
+	jwtSecret  string
+	jwtIssuer  string
 	appBaseURL string
 	accessTTL  time.Duration
 	refreshTTL time.Duration
@@ -385,4 +386,3 @@ func (s *AuthService) ChangePassword(
 func (s *AuthService) GetUser(ctx context.Context, id uuid.UUID) (*entities.User, error) {
 	return s.userRepo.GetByID(ctx, id)
 }
-

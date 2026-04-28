@@ -10,14 +10,15 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
-	"github.com/rekall/backend/internal/application/services"
-	"github.com/rekall/backend/internal/domain/entities"
-	"github.com/rekall/backend/internal/interfaces/http/handlers"
-	apperr "github.com/rekall/backend/pkg/errors"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
 	"github.com/stretchr/testify/require"
 	"go.uber.org/zap"
+
+	"github.com/rekall/backend/internal/application/services"
+	"github.com/rekall/backend/internal/domain/entities"
+	"github.com/rekall/backend/internal/interfaces/http/handlers"
+	apperr "github.com/rekall/backend/pkg/errors"
 )
 
 // ─── Router factory ───────────────────────────────────────────────────────────
@@ -38,7 +39,8 @@ func newDeptRouter(h *handlers.DepartmentHandler, callerID uuid.UUID) *gin.Engin
 }
 
 func newDeptService(deptRepo *mockDeptRepo, deptMemberRepo *mockDeptMemberRepo, memberRepo *mockMemberRepo) *services.DepartmentService {
-	return services.NewDepartmentService(deptRepo, deptMemberRepo, memberRepo, zap.NewNop())
+	// userRepo passed as nil — handler tests don't exercise the platform-admin path.
+	return services.NewDepartmentService(deptRepo, deptMemberRepo, memberRepo, nil, zap.NewNop())
 }
 
 func sampleDept(orgID, createdBy uuid.UUID) *entities.Department {

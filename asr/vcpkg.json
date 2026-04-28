@@ -1,0 +1,25 @@
+{
+  "$schema": "https://raw.githubusercontent.com/microsoft/vcpkg-tool/main/docs/vcpkg.schema.json",
+  "name": "rekall-asr",
+  "version-string": "0.1.0",
+  "description": "Rekall ASR service — real-time speech-to-text via whisper.cpp",
+  "dependencies": [
+    "abseil",
+    "boost-asio",
+    "boost-beast",
+    "boost-system",
+    "curl",
+    "grpc",
+    "gtest",
+    "jwt-cpp",
+    "nlohmann-json",
+    {
+      "name": "prometheus-cpp",
+      "features": ["pull"]
+    },
+    "protobuf",
+    "spdlog",
+    "yaml-cpp"
+  ],
+  "builtin-baseline": "10b7a178346f3f0abef60cecd5130e295afd8da4"
+}

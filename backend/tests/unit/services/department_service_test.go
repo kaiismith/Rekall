@@ -6,13 +6,14 @@ import (
 	"time"
 
 	"github.com/google/uuid"
-	"github.com/rekall/backend/internal/application/services"
-	"github.com/rekall/backend/internal/domain/entities"
-	apperr "github.com/rekall/backend/pkg/errors"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
 	"github.com/stretchr/testify/require"
 	"go.uber.org/zap"
+
+	"github.com/rekall/backend/internal/application/services"
+	"github.com/rekall/backend/internal/domain/entities"
+	apperr "github.com/rekall/backend/pkg/errors"
 )
 
 // ─── Mocks ────────────────────────────────────────────────────────────────────
@@ -74,7 +75,9 @@ func (m *mockDeptMemberRepo) Delete(ctx context.Context, deptID, userID uuid.UUI
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
 func newDeptService(deptRepo *mockDeptRepo, deptMemberRepo *mockDeptMemberRepo, memberRepo *mockMemberRepo) *services.DepartmentService {
-	return services.NewDepartmentService(deptRepo, deptMemberRepo, memberRepo, zap.NewNop())
+	// userRepo passed as nil for the legacy tests — they exercise per-org RBAC
+	// only. Platform-admin fallthrough is covered by department_service_authz_test.go.
+	return services.NewDepartmentService(deptRepo, deptMemberRepo, memberRepo, nil, zap.NewNop())
 }
 
 func orgMembership(orgID, userID uuid.UUID, role string) *entities.OrgMembership {
@@ -272,7 +275,10 @@ func TestListDepartments_NotMember(t *testing.T) {
 
 // ─── UpdateDepartment ─────────────────────────────────────────────────────────
 
-func TestUpdateDepartment_DeptHeadAllowed(t *testing.T) {
+// UpdateDepartment is now an org-head power; dept heads CANNOT rename their
+// own department (RBAC spec Req 19.2). The legacy "head allowed" assertion
+// is inverted to lock in the new contract.
+func TestUpdateDepartment_DeptHeadForbidden(t *testing.T) {
 	deptRepo := new(mockDeptRepo)
 	deptMemberRepo := new(mockDeptMemberRepo)
 	memberRepo := new(mockMemberRepo)
@@ -281,18 +287,19 @@ func TestUpdateDepartment_DeptHeadAllowed(t *testing.T) {
 
 	orgID, headID := uuid.New(), uuid.New()
 	dept := department(orgID)
-	updated := *dept
-	updated.Name = "Platform Engineering"
 
 	deptRepo.On("GetByID", ctx, dept.ID).Return(dept, nil)
+	// Caller is a plain org member who happens to be the dept head — the new
+	// rule treats that as insufficient for renaming.
 	memberRepo.On("GetByOrgAndUser", ctx, orgID, headID).Return(orgMembership(orgID, headID, "member"), nil)
-	deptMemberRepo.On("GetByDeptAndUser", ctx, dept.ID, headID).Return(deptMembership(dept.ID, headID, "head"), nil)
-	deptRepo.On("Update", ctx, mock.AnythingOfType("*entities.Department")).Return(&updated, nil)
 
-	result, err := svc.UpdateDepartment(ctx, dept.ID, headID, "Platform Engineering", "")
+	_, err := svc.UpdateDepartment(ctx, dept.ID, headID, "Platform Engineering", "")
 
-	require.NoError(t, err)
-	assert.Equal(t, "Platform Engineering", result.Name)
+	require.Error(t, err)
+	appErr, ok := apperr.AsAppError(err)
+	require.True(t, ok)
+	assert.Equal(t, 403, appErr.Status)
+	deptRepo.AssertNotCalled(t, "Update", mock.Anything, mock.Anything)
 }
 
 func TestUpdateDepartment_AdminAllowed(t *testing.T) {

@@ -4,6 +4,11 @@ FROM golang:1.25-alpine AS builder
 
 WORKDIR /app
 
+# Defensive: the Go image build does not run `npm install`, so husky's prepare
+# script is never invoked here. This env var documents intent and protects
+# against a future change that pulls in a Node toolchain layer.
+ENV HUSKY=0
+
 # Install build dependencies
 RUN apk add --no-cache git ca-certificates tzdata
 

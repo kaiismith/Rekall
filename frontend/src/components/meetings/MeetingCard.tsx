@@ -2,7 +2,9 @@ import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { Box, Stack, Typography } from '@mui/material'
 import type { Meeting, ParticipantPreview } from '@/types/meeting'
+import type { Scope } from '@/types/scope'
 import { formatMeetingDuration, computeElapsed, stringToColor } from '@/utils'
+import { ScopeBadge } from '@/components/common/ui'
 
 // ─── Audio bar decorative graphic ────────────────────────────────────────────
 
@@ -98,6 +100,26 @@ function Duration({ meeting }: { meeting: Meeting }) {
 
 // ─── MeetingCard ──────────────────────────────────────────────────────────────
 
+/**
+ * Coerce a Meeting's wire-level scope fields into the Scope discriminated
+ * union the badge consumes. Department scopes need an `orgId`; the meeting
+ * row carries `scope_id` (= dept id) but not the parent org id, so the badge
+ * resolves the org via the orgs/depts stores keyed on the org id we don't
+ * have here. For dept badges we fall back to "Open" when org context is
+ * missing — the alternative is rendering an unresolvable label which would
+ * read worse. The scoped list pages always have org context, so this only
+ * affects the flat list edge case where a dept-scoped meeting is shown.
+ */
+function meetingToScope(m: Meeting): Scope {
+  if (m.scope_type === 'organization' && m.scope_id) {
+    return { type: 'organization', id: m.scope_id }
+  }
+  // Department-scoped meetings on the flat list: backend currently only sends
+  // scope_id (the dept id) without the parent org id, so we render them as
+  // generic "Open" until a future backend enhancement carries the org_id.
+  return { type: 'open' }
+}
+
 interface Props {
   meeting: Meeting
 }
@@ -174,8 +196,8 @@ export function MeetingCard({ meeting }: Props) {
         {meeting.title || `Meeting ${meeting.code}`}
       </Typography>
 
-      {/* Type badge + date */}
-      <Stack direction="row" spacing={1.5} alignItems="center" mb={1.5}>
+      {/* Type badge + scope badge + date */}
+      <Stack direction="row" spacing={1.5} alignItems="center" mb={1.5} flexWrap="wrap">
         <Box
           sx={{
             px: 1,
@@ -190,6 +212,7 @@ export function MeetingCard({ meeting }: Props) {
         >
           {meeting.type.toUpperCase()}
         </Box>
+        <ScopeBadge scope={meetingToScope(meeting)} />
         <Typography variant="caption" color="text.secondary" fontSize={12}>
           {formattedDate}
         </Typography>

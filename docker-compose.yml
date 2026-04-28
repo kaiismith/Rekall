@@ -46,6 +46,9 @@ services:
       JWT_SECRET: ${JWT_SECRET:-change-me-in-production}
       JWT_ISSUER: ${JWT_ISSUER:-rekall}
       APP_BASE_URL: ${APP_BASE_URL:-http://localhost:5173}
+      # Platform admin (boot-time reconciliation)
+      PLATFORM_ADMIN_EMAILS: ${PLATFORM_ADMIN_EMAILS:-}
+      PLATFORM_ADMIN_BOOTSTRAP_PASSWORD: ${PLATFORM_ADMIN_BOOTSTRAP_PASSWORD:-}
       # SMTP → Mailpit (local dev)
       SMTP_HOST: mailpit
       SMTP_PORT: 1025
@@ -53,6 +56,14 @@ services:
       SMTP_PASSWORD: ""
       SMTP_FROM: ${SMTP_FROM:-noreply@rekall.local}
       SMTP_TLS: "false"
+      # ASR (live-captions) — feature-flagged off by default. Set
+      # ASR_FEATURE_ENABLED=true and bring up the `asr` profile to enable.
+      ASR_FEATURE_ENABLED: ${ASR_FEATURE_ENABLED:-false}
+      ASR_GRPC_ADDR: ${ASR_GRPC_ADDR:-asr:9090}
+      ASR_TOKEN_SECRET: ${ASR_TOKEN_SECRET:-}
+      ASR_WS_URL_BASE: ${ASR_WS_URL_BASE:-ws://localhost:8081}
+      ASR_TOKEN_DEFAULT_TTL: ${ASR_TOKEN_DEFAULT_TTL:-3m}
+      ASR_TOKEN_MAX_TTL: ${ASR_TOKEN_MAX_TTL:-5m}
     ports:
       - "${SERVER_PORT:-8080}:8080"
     healthcheck:
@@ -85,6 +96,76 @@ services:
       - backend
     ports:
       - "3000:80"
+
+  # ─── ASR (C++ / whisper.cpp) ───────────────────────────────────────────────
+  # Optional. Build with:  docker compose build asr
+  # Run with:              docker compose --profile asr up -d
+  # The backend reads ASR_FEATURE_ENABLED=false by default; enable it only
+  # when the asr container is up and the model files are mounted.
+  asr:
+    profiles: ["asr"]
+    build:
+      context: ./asr
+      dockerfile: docker/Dockerfile
+      args:
+        # Build-time engine selection — "both" (default), "local", or "openai".
+        # Use "openai" together with REKALL_ASR_IMAGE_TAG=openai to produce a
+        # slim cloud-only image that skips the whisper.cpp compile.
+        REKALL_ASR_ENGINE: ${REKALL_ASR_ENGINE:-both}
+    image: rekall-asr:${REKALL_ASR_IMAGE_TAG:-latest}
+    container_name: rekall_asr
+    restart: unless-stopped
+    environment:
+      ASR_TOKEN_SECRET: ${ASR_TOKEN_SECRET:?ASR_TOKEN_SECRET is required}
+      # Run-time engine. Must match (or be a subset of) REKALL_ASR_ENGINE above.
+      ASR_ENGINE_MODE: ${ASR_ENGINE_MODE:-openai}
+      OPENAI_API_KEY: ${OPENAI_API_KEY:-}
+      ASR_ALLOW_OPENAI_IN_PRODUCTION: ${ASR_ALLOW_OPENAI_IN_PRODUCTION:-false}
+      ASR_ENGINE_OPENAI_BASE_URL: ${ASR_ENGINE_OPENAI_BASE_URL:-}
+      ASR_ENGINE_OPENAI_MODEL: ${ASR_ENGINE_OPENAI_MODEL:-whisper-1}
+      ASR_ENGINE_OPENAI_LANGUAGE: ${ASR_ENGINE_OPENAI_LANGUAGE:-en}
+      ASR_ENGINE_OPENAI_RESPONSE_FORMAT: ${ASR_ENGINE_OPENAI_RESPONSE_FORMAT:-verbose_json}
+      ASR_ENGINE_OPENAI_REQUEST_TIMEOUT_SECONDS: ${ASR_ENGINE_OPENAI_REQUEST_TIMEOUT_SECONDS:-30}
+      ASR_ENGINE_OPENAI_MAX_SEGMENT_SECONDS: ${ASR_ENGINE_OPENAI_MAX_SEGMENT_SECONDS:-60}
+      ASR_ENGINE_OPENAI_MIN_SEGMENT_SECONDS: ${ASR_ENGINE_OPENAI_MIN_SEGMENT_SECONDS:-1}
+      ASR_ENGINE_OPENAI_RETRIES: ${ASR_ENGINE_OPENAI_RETRIES:-2}
+      ASR_ENGINE_OPENAI_RETRY_BACKOFF_MS: ${ASR_ENGINE_OPENAI_RETRY_BACKOFF_MS:-500}
+      ASR_WS_LISTEN: "0.0.0.0:8081"
+      ASR_GRPC_LISTEN: "0.0.0.0:9090"
+      ASR_METRICS_LISTEN: "0.0.0.0:9091"
+      ASR_GRPC_BIND_ALL: "true"
+      # Local-dev: backend reaches asr:9090 across the docker bridge, so the
+      # gRPC port can't bind to loopback. Skip mTLS enforcement here. Do NOT
+      # set this in production — provision real certs via the tls.* keys.
+      ASR_ALLOW_INSECURE_GRPC: "true"
+      ASR_WS_ALLOWED_ORIGINS: ${ASR_WS_ALLOWED_ORIGINS:-http://localhost:5173,http://localhost:3000}
+      ASR_ALLOW_INSECURE_WS: "true"
+      ASR_LOG_LEVEL: ${ASR_LOG_LEVEL:-info}
+      ASR_LOG_FORMAT: json
+      # Model fallback (used when YAML loader can't populate models.entries).
+      # The container ships ggml-tiny.en.bin under the mounted models volume.
+      ASR_MODEL_DEFAULT_ID: ${ASR_MODEL_DEFAULT_ID:-tiny.en}
+      ASR_MODEL_DEFAULT_PATH: ${ASR_MODEL_DEFAULT_PATH:-/var/lib/rekall-asr/models/ggml-tiny.en.bin}
+      ASR_MODEL_DEFAULT_LANGUAGE: ${ASR_MODEL_DEFAULT_LANGUAGE:-en}
+      ASR_MODEL_DEFAULT_N_THREADS: ${ASR_MODEL_DEFAULT_N_THREADS:-2}
+      ASR_MODEL_DEFAULT_BEAM_SIZE: ${ASR_MODEL_DEFAULT_BEAM_SIZE:-3}
+      ASR_MODEL_DEFAULT_BEST_OF: ${ASR_MODEL_DEFAULT_BEST_OF:-3}
+      ASR_MODELS_DEFAULT: ${ASR_MODELS_DEFAULT:-tiny.en}
+      # Lower latency knobs — emit partials more often, finalize sooner, and
+      # cut the rolling audio window so each utterance ships through whisper
+      # quickly. Tune up if CPU pressure becomes an issue.
+      ASR_SESSION_PARTIAL_EMIT_INTERVAL_MS: ${ASR_SESSION_PARTIAL_EMIT_INTERVAL_MS:-150}
+      ASR_SESSION_FINAL_EMIT_MAX_LATENCY_MS: ${ASR_SESSION_FINAL_EMIT_MAX_LATENCY_MS:-600}
+      ASR_SESSION_AUDIO_WINDOW_SECONDS: ${ASR_SESSION_AUDIO_WINDOW_SECONDS:-4}
+    volumes:
+      - ./asr/models:/var/lib/rekall-asr/models:ro
+      # Mount the live config from the host so edits take effect on `up`
+      # without rebuilding the image. The Dockerfile bakes a copy at the
+      # same path; this overlay wins because Docker mounts after the COPY.
+      - ./asr/config/config.yaml:/etc/rekall-asr/config.yaml:ro
+    ports:
+      - "8081:8081"   # WebSocket data plane
+      - "9091:9091"   # Prometheus metrics
 
 volumes:
   postgres_data:

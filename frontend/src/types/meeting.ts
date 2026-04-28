@@ -27,6 +27,9 @@ export interface Meeting {
   host_id: string
   status: MeetingStatus
   max_participants: number
+  /** Per-meeting toggle for the live-captions / ASR feature. Set by the host
+   *  at creation. When false the captions UI is hidden. */
+  transcription_enabled: boolean
   join_url: string
   started_at?: string
   ended_at?: string
@@ -45,6 +48,8 @@ export interface CreateMeetingPayload {
   type: MeetingType
   scope_type?: MeetingScopeType
   scope_id?: string
+  /** Opt the meeting into live captions / transcription. Defaults to false. */
+  transcription_enabled?: boolean
 }
 
 export interface MeetingParticipant {
@@ -82,6 +87,7 @@ export type WsMsgType =
   | 'hand_raise'
   | 'room_state'
   | 'chat_message'
+  | 'caption_chunk'
 
 export interface WsMessage {
   type: WsMsgType
@@ -97,17 +103,55 @@ export interface WsMessage {
   video?: boolean
   raised?: boolean
   emoji?: string
-  from_id?: string          // emoji_reaction sender
-  target_id?: string        // force_mute target (client → server)
+  from_id?: string // emoji_reaction sender
+  target_id?: string // force_mute target (client → server)
   participants?: RoomStateParticipant[]
   // chat_message
-  id?: string               // server-assigned message id (echo)
-  client_id?: string        // client-generated optimistic id (echo)
-  body?: string             // message body
-  sent_at?: string          // ISO8601 server timestamp
+  id?: string // server-assigned message id (echo)
+  client_id?: string // client-generated optimistic id (echo)
+  body?: string // message body
+  sent_at?: string // ISO8601 server timestamp
   // Identity fields attached to participant.joined / chat broadcasts
   full_name?: string
   initials?: string
+  // caption_chunk
+  caption_kind?: 'partial' | 'final'
+  caption_text?: string
+  caption_segment_id?: string
+  caption_ts?: number
+  // caption_chunk persistence-shape fields (transcript-persistence Req 5.2):
+  // populated only on `final` events for which we want the backend hub to
+  // also write transcript_segments. Older messages without these fields
+  // continue to be relayed without being persisted.
+  session_id?: string
+  segment_index?: number
+  start_ms?: number
+  end_ms?: number
+  language?: string
+  confidence?: number
+  words?: { w: string; start_ms: number; end_ms: number; p: number }[]
+}
+
+/** A single caption entry in the merged meeting transcript feed. */
+export interface CaptionEntry {
+  /** Unique per entry, FE-generated. NOT derived from the ASR segment_id —
+   *  Whisper resets segment ids per audio window, so the same number is
+   *  reused across utterances and would collide. */
+  key: string
+  userId: string
+  /** "partial" while the speaker is mid-utterance; "final" once Whisper
+   *  commits or after a silence-detection timeout closes it. */
+  kind: 'partial' | 'final'
+  text: string
+  /** Wall-clock ms since epoch when the FIRST chunk for this entry arrived
+   *  — i.e. when the speaker started this utterance. Stays put as the
+   *  partial is updated so the displayed timestamp doesn't keep ticking. */
+  timestamp: number
+  /** Wall-clock ms of the most recent update. Used by the silence-gap
+   *  check: if a new partial arrives more than ~2s after the last update
+   *  for the same user, we finalize the old entry and start a new one
+   *  with a fresh timestamp. Not displayed. */
+  lastUpdate: number
 }
 
 export interface KnockEntry {
@@ -119,13 +163,7 @@ export interface KnockEntry {
 export type MeetingRoomState =
   // Pre-meeting: camera/mic preview screen — user picks devices and confirms
   // before the WebSocket is opened.
-  | 'device_check'
-  | 'connecting'
-  | 'waiting_room'
-  | 'in_meeting'
-  | 'denied'
-  | 'ended'
-  | 'error'
+  'device_check' | 'connecting' | 'waiting_room' | 'in_meeting' | 'denied' | 'ended' | 'error'
 
 // ─── In-room control types ────────────────────────────────────────────────────
 
@@ -137,7 +175,7 @@ export interface MediaState {
 
 /** A single floating emoji reaction in the reaction queue. */
 export interface EmojiReaction {
-  id: string        // local UUID for React key
+  id: string // local UUID for React key
   userId: string
   emoji: string
   timestamp: number

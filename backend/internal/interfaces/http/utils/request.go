@@ -5,6 +5,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
+
 	apperr "github.com/rekall/backend/pkg/errors"
 )
 

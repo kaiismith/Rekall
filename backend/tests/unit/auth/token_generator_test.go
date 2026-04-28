@@ -4,9 +4,10 @@ import (
 	"encoding/hex"
 	"testing"
 
-	infraauth "github.com/rekall/backend/internal/infrastructure/auth"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
+	infraauth "github.com/rekall/backend/internal/infrastructure/auth"
 )
 
 // ─── GenerateRawToken ─────────────────────────────────────────────────────────

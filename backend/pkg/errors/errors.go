@@ -9,11 +9,16 @@ import (
 // AppError is the canonical error type for the Rekall API.
 // It carries an HTTP status, a machine-readable code, a human-readable
 // message, and optional structured details (e.g. validation field errors).
+//
+// RetryAfterSeconds, when non-zero, is rendered by the HTTP helper as a
+// `Retry-After` response header. Use it for 503/429 responses where the
+// client should back off for a known duration.
 type AppError struct {
-	Status  int         `json:"-"`
-	Code    string      `json:"code"`
-	Message string      `json:"message"`
-	Details interface{} `json:"details,omitempty"`
+	Status            int         `json:"-"`
+	Code              string      `json:"code"`
+	Message           string      `json:"message"`
+	Details           interface{} `json:"details,omitempty"`
+	RetryAfterSeconds int         `json:"-"`
 }
 
 func (e *AppError) Error() string {
@@ -116,6 +121,36 @@ func Internal(message string) *AppError {
 		Status:  http.StatusInternalServerError,
 		Code:    "INTERNAL_ERROR",
 		Message: message,
+	}
+}
+
+// ConflictCode creates a 409 AppError with a caller-supplied machine code.
+func ConflictCode(code, message string) *AppError {
+	return &AppError{
+		Status:  http.StatusConflict,
+		Code:    code,
+		Message: message,
+	}
+}
+
+// ForbiddenCode creates a 403 AppError with a caller-supplied machine code.
+func ForbiddenCode(code, message string) *AppError {
+	return &AppError{
+		Status:  http.StatusForbidden,
+		Code:    code,
+		Message: message,
+	}
+}
+
+// ServiceUnavailable creates a 503 AppError with a caller-supplied machine
+// code. RetryAfterSeconds is propagated as a Retry-After header by the HTTP
+// helper; 0 omits the header.
+func ServiceUnavailable(code, message string, retryAfterSeconds int) *AppError {
+	return &AppError{
+		Status:            http.StatusServiceUnavailable,
+		Code:              code,
+		Message:           message,
+		RetryAfterSeconds: retryAfterSeconds,
 	}
 }
 

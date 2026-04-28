@@ -7,6 +7,8 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+	"go.uber.org/zap"
+
 	"github.com/rekall/backend/internal/application/helpers"
 	apputils "github.com/rekall/backend/internal/application/utils"
 	"github.com/rekall/backend/internal/domain/entities"
@@ -16,7 +18,6 @@ import (
 	apperr "github.com/rekall/backend/pkg/errors"
 	applogger "github.com/rekall/backend/pkg/logger"
 	"github.com/rekall/backend/pkg/logger/catalog"
-	"go.uber.org/zap"
 )
 
 // OrganizationService orchestrates organization lifecycle operations:
@@ -27,7 +28,7 @@ type OrganizationService struct {
 	inviteRepo ports.InvitationRepository
 	userRepo   ports.UserRepository
 	mailer     ports.EmailSender
-	appBaseURL  string
+	appBaseURL string
 	inviteTTL  time.Duration
 	logger     *zap.Logger
 }
@@ -55,14 +56,34 @@ func NewOrganizationService(
 	}
 }
 
-// CreateOrganization creates a new org and adds the caller as its owner.
-func (s *OrganizationService) CreateOrganization(ctx context.Context, ownerID uuid.UUID, name string) (*entities.Organization, error) {
+// CreateOrganization creates a new org and adds the designated owner as a
+// member with role="owner". When ownerEmail is the empty string, the caller
+// (callerID) becomes the owner — admin self-service path. When ownerEmail is
+// supplied (platform admin creating on behalf of another user), the org's
+// OwnerID is resolved from that email instead. Unknown emails return 422.
+func (s *OrganizationService) CreateOrganization(
+	ctx context.Context,
+	callerID uuid.UUID,
+	name, ownerEmail string,
+) (*entities.Organization, error) {
 	name = strings.TrimSpace(name)
 	if name == "" {
 		return nil, apperr.Unprocessable("organization name is required", nil)
 	}
 	if len(name) > 100 {
 		return nil, apperr.Unprocessable("organization name must be 100 characters or fewer", nil)
+	}
+
+	ownerID := callerID
+	if ownerEmail != "" {
+		owner, err := s.userRepo.GetByEmail(ctx, strings.ToLower(strings.TrimSpace(ownerEmail)))
+		if err != nil {
+			if apperr.IsNotFound(err) {
+				return nil, apperr.Unprocessable("owner_email: no user with that email", nil)
+			}
+			return nil, apperr.Internal("failed to resolve owner_email")
+		}
+		ownerID = owner.ID
 	}
 
 	slug := apputils.GenerateSlug(name)
@@ -87,7 +108,7 @@ func (s *OrganizationService) CreateOrganization(ctx context.Context, ownerID uu
 		return nil, apperr.Internal("failed to create organization")
 	}
 
-	// Add the creator as owner-level member.
+	// Add the designated owner as owner-level member.
 	membership := &entities.OrgMembership{
 		ID:       uuid.New(),
 		OrgID:    created.ID,
@@ -107,30 +128,72 @@ func (s *OrganizationService) CreateOrganization(ctx context.Context, ownerID uu
 	catalog.OrgCreated.Info(s.logger,
 		zap.String("org_id", created.ID.String()),
 		zap.String("owner_id", ownerID.String()),
+		zap.String("created_by", callerID.String()),
 	)
 	return created, nil
 }
 
-// GetOrganization returns the org if the requesting user is a member.
+// GetOrganization returns the org if the requesting user is a member —
+// platform admins also see any org.
 func (s *OrganizationService) GetOrganization(ctx context.Context, orgID, requesterID uuid.UUID) (*entities.Organization, error) {
-	if _, err := helpers.RequireOrgMembership(ctx, s.memberRepo, orgID, requesterID); err != nil {
+	caller, orgMem, err := s.loadCallerCtx(ctx, orgID, requesterID)
+	if err != nil {
 		return nil, err
+	}
+	if orgMem == nil && !helpers.IsPlatformAdmin(caller) {
+		return nil, apperr.Forbidden("you are not a member of this organization")
 	}
 	return s.orgRepo.GetByID(ctx, orgID)
 }
 
-// UpdateOrganization changes the org name (and re-derives the slug). Only admins/owners may call this.
+// loadCallerCtx fetches the caller's OrgMembership for the given org and —
+// only when the membership alone wouldn't satisfy a manage-org check — also
+// fetches the caller's User row for the platform-admin fallthrough.
+//
+// The lazy user fetch keeps the call shape backward-compatible with tests
+// that don't mock userRepo.GetByID for the common org-admin/owner path.
+func (s *OrganizationService) loadCallerCtx(
+	ctx context.Context,
+	orgID, callerID uuid.UUID,
+) (*entities.User, *entities.OrgMembership, error) {
+	var orgMem *entities.OrgMembership
+	m, err := s.memberRepo.GetByOrgAndUser(ctx, orgID, callerID)
+	if err == nil {
+		orgMem = m
+	} else if !apperr.IsNotFound(err) {
+		return nil, nil, apperr.Internal("failed to load organization membership")
+	}
+
+	// Skip the user fetch when the membership is already strong enough — every
+	// predicate returns true for owner/admin without needing the User row.
+	if orgMem != nil && orgMem.IsAdmin() {
+		return nil, orgMem, nil
+	}
+
+	var caller *entities.User
+	if s.userRepo != nil {
+		u, err := s.userRepo.GetByID(ctx, callerID)
+		if err == nil {
+			caller = u
+		} else if !apperr.IsNotFound(err) {
+			return nil, nil, apperr.Internal("failed to load caller user")
+		}
+	}
+	return caller, orgMem, nil
+}
+
+// UpdateOrganization changes the org name. Org admin/owner OR platform admin.
 func (s *OrganizationService) UpdateOrganization(ctx context.Context, orgID, requesterID uuid.UUID, name string) (*entities.Organization, error) {
 	name = strings.TrimSpace(name)
 	if name == "" {
 		return nil, apperr.Unprocessable("organization name is required", nil)
 	}
 
-	m, err := helpers.RequireOrgMembership(ctx, s.memberRepo, orgID, requesterID)
+	caller, orgMem, err := s.loadCallerCtx(ctx, orgID, requesterID)
 	if err != nil {
 		return nil, err
 	}
-	if !m.IsAdmin() {
+	if !helpers.CanManageOrg(caller, orgMem) {
 		return nil, apperr.Forbidden("only admins and owners can update organization settings")
 	}
 
@@ -154,13 +217,14 @@ func (s *OrganizationService) UpdateOrganization(ctx context.Context, orgID, req
 	return updated, nil
 }
 
-// DeleteOrganization soft-deletes an org. Only the owner may call this.
+// DeleteOrganization soft-deletes an org. The org's owner may call this; a
+// platform admin may also delete any org for ops intervention.
 func (s *OrganizationService) DeleteOrganization(ctx context.Context, orgID, requesterID uuid.UUID) error {
-	m, err := helpers.RequireOrgMembership(ctx, s.memberRepo, orgID, requesterID)
+	caller, orgMem, err := s.loadCallerCtx(ctx, orgID, requesterID)
 	if err != nil {
 		return err
 	}
-	if !m.IsOwner() {
+	if !(helpers.IsPlatformAdmin(caller) || (orgMem != nil && orgMem.IsOwner())) {
 		return apperr.Forbidden("only the owner can delete an organization")
 	}
 
@@ -188,22 +252,23 @@ func (s *OrganizationService) ListMembers(ctx context.Context, orgID, requesterI
 	return s.memberRepo.ListByOrg(ctx, orgID)
 }
 
-// UpdateMemberRole changes a member's role. Owners may set any role; admins may only set "member".
+// UpdateMemberRole changes a member's role. Owners may set any role; admins
+// may only set "member". Platform admin acts as owner for this purpose.
 func (s *OrganizationService) UpdateMemberRole(ctx context.Context, orgID, requesterID, targetUserID uuid.UUID, role string) error {
 	role = strings.ToLower(strings.TrimSpace(role))
 	if role != "admin" && role != "member" {
 		return apperr.Unprocessable("role must be 'admin' or 'member'", nil)
 	}
 
-	requester, err := helpers.RequireOrgMembership(ctx, s.memberRepo, orgID, requesterID)
+	caller, orgMem, err := s.loadCallerCtx(ctx, orgID, requesterID)
 	if err != nil {
 		return err
 	}
-	if !requester.CanManageMembers() {
+	if !helpers.CanManageOrg(caller, orgMem) {
 		return apperr.Forbidden("only admins and owners can update member roles")
 	}
-	// Only an owner can promote someone to admin.
-	if role == "admin" && !requester.IsOwner() {
+	// Promotion to admin is reserved for owners (and platform admins).
+	if role == "admin" && !(helpers.IsPlatformAdmin(caller) || (orgMem != nil && orgMem.IsOwner())) {
 		return apperr.Forbidden("only the owner can grant admin role")
 	}
 
@@ -232,16 +297,21 @@ func (s *OrganizationService) UpdateMemberRole(ctx context.Context, orgID, reque
 	return nil
 }
 
-// RemoveMember removes a user from an org. Admins/owners can remove members; users can remove themselves.
+// RemoveMember removes a user from an org. Admins/owners (and platform
+// admins) can remove members; users can always remove themselves.
 func (s *OrganizationService) RemoveMember(ctx context.Context, orgID, requesterID, targetUserID uuid.UUID) error {
-	requester, err := helpers.RequireOrgMembership(ctx, s.memberRepo, orgID, requesterID)
+	caller, orgMem, err := s.loadCallerCtx(ctx, orgID, requesterID)
 	if err != nil {
 		return err
 	}
 
 	isSelf := requesterID == targetUserID
-	if !isSelf && !requester.CanManageMembers() {
-		return apperr.Forbidden("only admins and owners can remove other members")
+	if !isSelf {
+		if !helpers.CanManageOrg(caller, orgMem) {
+			return apperr.Forbidden("only admins and owners can remove other members")
+		}
+	} else if orgMem == nil && !helpers.IsPlatformAdmin(caller) {
+		return apperr.Forbidden("you are not a member of this organization")
 	}
 
 	target, err := s.memberRepo.GetByOrgAndUser(ctx, orgID, targetUserID)
@@ -278,11 +348,11 @@ func (s *OrganizationService) InviteUser(ctx context.Context, orgID, requesterID
 		role = "member"
 	}
 
-	requester, err := helpers.RequireOrgMembership(ctx, s.memberRepo, orgID, requesterID)
+	caller, orgMem, err := s.loadCallerCtx(ctx, orgID, requesterID)
 	if err != nil {
 		return err
 	}
-	if !requester.CanManageMembers() {
+	if !helpers.CanManageOrg(caller, orgMem) {
 		return apperr.Forbidden("only admins and owners can invite users")
 	}
 
@@ -291,9 +361,13 @@ func (s *OrganizationService) InviteUser(ctx context.Context, orgID, requesterID
 		return err
 	}
 
-	inviter, err := s.userRepo.GetByID(ctx, requesterID)
-	if err != nil {
-		return apperr.Internal("failed to retrieve inviter")
+	// `caller` may be nil if userRepo is unwired — fall back to a fresh fetch.
+	inviter := caller
+	if inviter == nil {
+		inviter, err = s.userRepo.GetByID(ctx, requesterID)
+		if err != nil {
+			return apperr.Internal("failed to retrieve inviter")
+		}
 	}
 
 	raw, err := infraauth.GenerateRawToken()
@@ -385,4 +459,3 @@ func (s *OrganizationService) AcceptInvitation(ctx context.Context, userID uuid.
 	)
 	return org, nil
 }
-

@@ -1,0 +1,87 @@
+# Rekall ASR — reference configuration. Copy to /etc/rekall-asr/config.yaml
+# (or anywhere reachable) and pass via --config <path>.
+#
+# Every key may be overridden by an env var of the same name uppercased,
+# `.` → `_`, prefixed `ASR_`. e.g.  worker_pool.size  ⇄  ASR_WORKER_POOL_SIZE.
+
+server:
+  ws_listen:           "0.0.0.0:8081"
+  grpc_listen:         "127.0.0.1:9090"        # loopback by default; see ASR_GRPC_BIND_ALL
+  metrics_listen:      "0.0.0.0:9091"
+  allow_insecure_ws:   false                   # dev only
+  ws_allowed_origins:                          # CSV via env var
+    - "https://rekall.techvify.dev"
+
+auth:
+  token_secret_env:    "ASR_TOKEN_SECRET"      # name of the env var holding the secret
+  token_audience:      "rekall-asr"
+  token_issuer:        "rekall-backend"
+  token_default_ttl_seconds: 180
+  token_min_ttl_seconds:      60
+  token_max_ttl_seconds:     300
+  jti_cache_ttl_seconds:     600
+
+tls:
+  ws_cert:        "/etc/rekall-asr/tls/ws.crt"
+  ws_key:         "/etc/rekall-asr/tls/ws.key"
+  grpc_cert:      "/etc/rekall-asr/tls/grpc-server.crt"
+  grpc_key:       "/etc/rekall-asr/tls/grpc-server.key"
+  grpc_client_ca: "/etc/rekall-asr/tls/clients-ca.crt"
+
+worker_pool:
+  size: 8                                       # 1..64; aim for size * n_threads <= cores
+
+admission:
+  inbound_audio_buffer_frames: 256              # ≈25 s at 100 ms frames
+  outbound_event_buffer:        64
+  backpressure_kill_ms:       5000
+  outbound_drop_ms:            200
+
+session:
+  idle_timeout_seconds:        30
+  hard_timeout_seconds:      1800
+  graceful_drain_seconds:      30
+  partial_emit_interval_ms:   250
+  final_emit_max_latency_ms: 1500
+  audio_window_seconds:         8
+
+models:
+  default: "tiny.en"
+  entries:
+    - id:          "tiny.en"
+      path:        "/var/lib/rekall-asr/models/ggml-tiny.en.bin"
+      language:    "en"
+      n_threads:   2
+      beam_size:   3
+      best_of:     3
+      temperature: 0.0
+
+logging:
+  level:  "info"        # debug | info | warn | error
+  format: "json"        # json | text
+
+telemetry:
+  otel_endpoint: ""     # empty disables OTLP exporter
+
+# Transcription engine selection. The default `local` runs whisper.cpp
+# in-process. Switch to `openai` for a slim cloud-routed build (great for
+# CPU-only laptops where whisper.cpp is too slow to validate the flow).
+#
+# OPENAI MODE IS A DEV / STAGING ACCELERANT. In SERVER_ENV=production the
+# service refuses to start with mode=openai unless you also set
+# ASR_ALLOW_OPENAI_IN_PRODUCTION=true (audit signal: ASR_DATA_LEAVES_HOST).
+engine:
+  mode: "openai"                         # local | openai (default openai)
+  openai:
+    api_key_env:    "OPENAI_API_KEY"     # name of env var holding the secret
+    base_url:       ""                   # "" → https://api.openai.com/v1/
+    organization:   ""
+    model:          "whisper-1"
+    language:       "en"                 # BCP-47; "" → auto
+    temperature:    0.0
+    response_format: "verbose_json"      # "json" | "verbose_json" | "text"
+    request_timeout_seconds: 30
+    max_segment_seconds:     60          # hard cap before forced flush
+    min_segment_seconds:      1          # skip-segment threshold
+    retries:                  2
+    retry_backoff_ms:       500

@@ -4,9 +4,10 @@ import (
 	"time"
 
 	"github.com/gin-gonic/gin"
+	"go.uber.org/zap"
+
 	applogger "github.com/rekall/backend/pkg/logger"
 	"github.com/rekall/backend/pkg/logger/catalog"
-	"go.uber.org/zap"
 )
 
 // Logger returns a Gin middleware that emits a structured access-log entry after
@@ -45,7 +46,7 @@ func Logger(log *zap.Logger) gin.HandlerFunc {
 		fields := []zap.Field{
 			zap.String("request_id", c.GetString("request_id")),
 			zap.String("method", c.Request.Method),
-			zap.String("route", c.FullPath()),   // e.g. /api/v1/calls/:id
+			zap.String("route", c.FullPath()), // e.g. /api/v1/calls/:id
 			zap.String("path", path),
 			zap.String("query", query),
 			zap.Int("status", status),

@@ -13,6 +13,8 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
 	"github.com/gorilla/websocket"
+	"go.uber.org/zap"
+
 	"github.com/rekall/backend/internal/application/services"
 	"github.com/rekall/backend/internal/domain/entities"
 	"github.com/rekall/backend/internal/domain/ports"
@@ -21,7 +23,6 @@ import (
 	"github.com/rekall/backend/internal/interfaces/http/middleware"
 	wsHub "github.com/rekall/backend/internal/interfaces/http/ws"
 	apperr "github.com/rekall/backend/pkg/errors"
-	"go.uber.org/zap"
 )
 
 const wsTicketTTL = 60 * time.Second
@@ -102,11 +103,12 @@ func (h *MeetingHandler) Create(c *gin.Context) {
 	}
 
 	input := services.CreateMeetingInput{
-		HostID:    hostID,
-		Title:     req.Title,
-		Type:      req.Type,
-		ScopeType: req.ScopeType,
-		ScopeID:   req.ScopeID,
+		HostID:               hostID,
+		Title:                req.Title,
+		Type:                 req.Type,
+		ScopeType:            req.ScopeType,
+		ScopeID:              req.ScopeID,
+		TranscriptionEnabled: req.TranscriptionEnabled,
 	}
 
 	meeting, err := h.service.CreateMeeting(c.Request.Context(), input)
@@ -145,10 +147,14 @@ func (h *MeetingHandler) GetByCode(c *gin.Context) {
 // @Tags         Meetings
 // @Produce      json
 // @Security     BearerAuth
-// @Param        filter[status]  query     string  false  "Filter by status"  Enums(in_progress,complete,processing,failed)
-// @Param        sort            query     string  false  "Sort order"        Enums(created_at_desc,created_at_asc,duration_desc,duration_asc,title_asc,title_desc)  default(created_at_desc)
+// @Param        filter[status]      query     string  false  "Filter by status"  Enums(in_progress,complete,processing,failed)
+// @Param        filter[scope_type]  query     string  false  "Filter by scope"   Enums(organization,department,open)
+// @Param        filter[scope_id]    query     string  false  "UUID of the org or dept; required when scope_type is organization or department"
+// @Param        sort                query     string  false  "Sort order"        Enums(created_at_desc,created_at_asc,duration_desc,duration_asc,title_asc,title_desc)  default(created_at_desc)
 // @Success      200  {object}  dto.MeetingListResponse  "List of meetings"
+// @Failure      400  {object}  dto.ErrorResponse        "Malformed scope parameters"
 // @Failure      401  {object}  dto.ErrorResponse        "Missing or invalid token"
+// @Failure      403  {object}  dto.ErrorResponse        "Caller is not a member of the requested scope"
 // @Failure      500  {object}  dto.ErrorResponse        "Internal server error"
 // @Router       /api/v1/meetings/mine [get]
 func (h *MeetingHandler) ListMine(c *gin.Context) {
@@ -166,7 +172,13 @@ func (h *MeetingHandler) ListMine(c *gin.Context) {
 	statusFilter := c.Query("filter[status]")
 	sort := c.DefaultQuery("sort", "created_at_desc")
 
-	items, err := h.service.ListMeetingsWithMeta(c.Request.Context(), userID, statusFilter, sort)
+	scope, err := dto.ParseScopeFilter(c)
+	if err != nil {
+		handlerhelpers.RespondError(c, h.logger, err)
+		return
+	}
+
+	items, err := h.service.ListMeetingsInScope(c.Request.Context(), userID, scope, statusFilter, sort)
 	if err != nil {
 		handlerhelpers.RespondError(c, h.logger, err)
 		return

@@ -6,13 +6,14 @@ import (
 	"time"
 
 	"github.com/gin-gonic/gin"
+	"go.uber.org/zap"
+
 	"github.com/rekall/backend/internal/application/services"
-	handlerhelpers "github.com/rekall/backend/internal/interfaces/http/helpers"
 	"github.com/rekall/backend/internal/interfaces/http/dto"
+	handlerhelpers "github.com/rekall/backend/internal/interfaces/http/helpers"
 	httputils "github.com/rekall/backend/internal/interfaces/http/utils"
 	"github.com/rekall/backend/pkg/constants"
 	apperr "github.com/rekall/backend/pkg/errors"
-	"go.uber.org/zap"
 )
 
 // AuthHandler handles all authentication and account lifecycle endpoints.
@@ -316,7 +317,7 @@ func (h *AuthHandler) UpdateMe(c *gin.Context) {
 // @Produce      json
 // @Security     BearerAuth
 // @Param        body  body      dto.ChangePasswordRequest  true  "Current and new password"
-// @Success      200   {object}  dto.OkResponse             "Password updated; other sessions signed out"
+// @Success      200   {object}  dto.MessageResponse        "Password updated; other sessions signed out"
 // @Failure      400   {object}  dto.ErrorResponse          "Current password is incorrect (INVALID_CURRENT_PASSWORD)"
 // @Failure      401   {object}  dto.ErrorResponse          "Missing or invalid token"
 // @Failure      422   {object}  dto.ErrorResponse          "Validation error — new password policy not met"

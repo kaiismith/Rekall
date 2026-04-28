@@ -4,11 +4,12 @@ import (
 	"context"
 	"time"
 
+	"go.uber.org/zap"
+
 	"github.com/rekall/backend/internal/domain/entities"
 	"github.com/rekall/backend/internal/domain/ports"
 	applogger "github.com/rekall/backend/pkg/logger"
 	"github.com/rekall/backend/pkg/logger/catalog"
-	"go.uber.org/zap"
 )
 
 // MeetingCleanupConfig controls thresholds for the background cleanup job.

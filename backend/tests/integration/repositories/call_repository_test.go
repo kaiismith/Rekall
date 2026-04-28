@@ -12,14 +12,15 @@ import (
 	"os"
 	"testing"
 
-	"github.com/rekall/backend/internal/application/services"
-	"github.com/rekall/backend/internal/infrastructure/repositories"
 	"github.com/google/uuid"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"go.uber.org/zap"
 	"gorm.io/driver/postgres"
 	"gorm.io/gorm"
+
+	"github.com/rekall/backend/internal/application/services"
+	"github.com/rekall/backend/internal/infrastructure/repositories"
 )
 
 func testDB(t *testing.T) *gorm.DB {
@@ -51,7 +52,7 @@ func TestCallRepository_CreateAndGet(t *testing.T) {
 	t.Cleanup(func() { _ = userRepo.SoftDelete(ctx, user.ID) })
 
 	// Create call via service.
-	callSvc := services.NewCallService(callRepo, zap.NewNop())
+	callSvc := services.NewCallService(callRepo, nil, nil, zap.NewNop())
 	call, err := callSvc.CreateCall(ctx, services.CreateCallInput{
 		UserID: user.ID,
 		Title:  "Integration Test Call",
@@ -79,7 +80,7 @@ func TestCallRepository_SoftDelete(t *testing.T) {
 	require.NoError(t, err)
 	t.Cleanup(func() { _ = userRepo.SoftDelete(ctx, user.ID) })
 
-	callSvc := services.NewCallService(callRepo, zap.NewNop())
+	callSvc := services.NewCallService(callRepo, nil, nil, zap.NewNop())
 	call, err := callSvc.CreateCall(ctx, services.CreateCallInput{UserID: user.ID, Title: "To Delete"})
 	require.NoError(t, err)
 

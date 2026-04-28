@@ -1,0 +1,16 @@
+# This file used to be a placeholder reminder. The real submodule entry now
+# lives at the repo root in `.gitmodules` — see that file for the active
+# definition. Keeping this stub so old links/PRs don't 404; it can be deleted
+# once nothing references it.
+#
+# To initialise the whisper.cpp submodule from a fresh clone:
+#   git submodule update --init --recursive
+#
+# To pin or move to a specific tag (e.g. v1.7.6):
+#   git -C asr/third_party/whisper.cpp fetch --tags origin
+#   git -C asr/third_party/whisper.cpp checkout v1.7.6
+#   git add asr/third_party/whisper.cpp
+#   git commit -m "asr: pin whisper.cpp to v1.7.6"
+#
+# DO NOT use `git submodule add -b v1.7.6 ...` — `-b` only accepts branches,
+# and v1.7.6 is a tag.
