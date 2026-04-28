@@ -1,31 +1,44 @@
 package handlers
 
 import (
+	"errors"
 	"net/http"
 	"time"
 
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
+	"go.uber.org/zap"
+
 	"github.com/rekall/backend/internal/application/services"
+	"github.com/rekall/backend/internal/domain/entities"
 	"github.com/rekall/backend/internal/interfaces/http/dto"
 	handlerhelpers "github.com/rekall/backend/internal/interfaces/http/helpers"
 	"github.com/rekall/backend/internal/interfaces/http/middleware"
 	apperr "github.com/rekall/backend/pkg/errors"
-	"go.uber.org/zap"
 )
 
 // ASRHandler exposes the call-scoped ASR endpoints. The issuer pointer may be
 // nil — in that case the handler returns ASR_NOT_CONFIGURED for every call.
 // This lets the wider repo build and serve without the C++ binary deployed.
+//
+// persister, when non-nil, enables the per-segment HTTP write path
+// (POST /calls/:id/asr-session/:sid/segments). Solo Calls have no meeting WS
+// hub, so the browser POSTs each `final` event directly through this handler.
 type ASRHandler struct {
-	issuer *services.ASRTokenIssuer
-	logger *zap.Logger
+	issuer    *services.ASRTokenIssuer
+	persister *services.TranscriptPersister
+	logger    *zap.Logger
 }
 
 // NewASRHandler returns a handler. Pass nil for `issuer` to disable the
-// feature without removing the routes.
-func NewASRHandler(issuer *services.ASRTokenIssuer, logger *zap.Logger) *ASRHandler {
-	return &ASRHandler{issuer: issuer, logger: logger}
+// feature without removing the routes. persister may also be nil — the
+// per-segment endpoint then returns 503 ASR_NOT_CONFIGURED.
+func NewASRHandler(
+	issuer *services.ASRTokenIssuer,
+	persister *services.TranscriptPersister,
+	logger *zap.Logger,
+) *ASRHandler {
+	return &ASRHandler{issuer: issuer, persister: persister, logger: logger}
 }
 
 // Request handles POST /api/v1/calls/:id/asr-session.
@@ -292,4 +305,101 @@ func (h *ASRHandler) End(c *gin.Context) {
 			FinalCount:      out.FinalCount,
 		},
 	})
+}
+
+// PostCallSegment handles POST /api/v1/calls/:id/asr-session/:session_id/segments.
+//
+// Solo Calls have no meeting WS hub, so the browser POSTs each `final` event
+// directly here. The handler delegates validation + ownership checks to the
+// TranscriptPersister; this layer only translates HTTP <-> service calls.
+//
+// @Summary      Persist a final transcript segment for a solo call
+// @Description  Records one ASR `final` TranscriptEvent in transcript_segments. Idempotent on (session_id, segment_index) — a duplicate POST updates the row in place. Caller must own the call AND own the ASR session.
+// @Tags         ASR
+// @Accept       json
+// @Produce      json
+// @Security     BearerAuth
+// @Param        id          path  string                       true  "Call UUID"
+// @Param        session_id  path  string                       true  "ASR session UUID"
+// @Param        body        body  dto.TranscriptSegmentRequest true  "Segment payload"
+// @Success      204         "Segment persisted"
+// @Failure      400         {object} dto.ErrorResponse "Invalid id, session_id, or body"
+// @Failure      401         {object} dto.ErrorResponse "Unauthorized"
+// @Failure      403         {object} dto.ErrorResponse "Caller does not own the call OR session"
+// @Failure      404         {object} dto.ErrorResponse "Call or session not found"
+// @Failure      409         {object} dto.ErrorResponse "Session not active"
+// @Failure      503         {object} dto.ErrorResponse "Persistence not configured"
+// @Router       /api/v1/calls/{id}/asr-session/{session_id}/segments [post]
+func (h *ASRHandler) PostCallSegment(c *gin.Context) {
+	if h.persister == nil {
+		handlerhelpers.RespondError(c, h.logger,
+			apperr.ServiceUnavailable("ASR_NOT_CONFIGURED",
+				"transcript persistence is not enabled in this environment", 0))
+		return
+	}
+
+	claims := middleware.ClaimsFromContext(c)
+	if claims == nil {
+		handlerhelpers.RespondError(c, h.logger, apperr.Unauthorized("authentication required"))
+		return
+	}
+	callerID, err := claims.SubjectAsUUID()
+	if err != nil {
+		handlerhelpers.RespondError(c, h.logger, apperr.Unauthorized("invalid token subject"))
+		return
+	}
+
+	if _, err := uuid.Parse(c.Param("id")); err != nil {
+		handlerhelpers.RespondError(c, h.logger, apperr.BadRequest("invalid call id"))
+		return
+	}
+	sessionID, err := uuid.Parse(c.Param("session_id"))
+	if err != nil {
+		handlerhelpers.RespondError(c, h.logger, apperr.BadRequest("invalid session_id"))
+		return
+	}
+
+	var body dto.TranscriptSegmentRequest
+	if bindErr := c.ShouldBindJSON(&body); bindErr != nil {
+		handlerhelpers.RespondError(c, h.logger, apperr.BadRequest(bindErr.Error()))
+		return
+	}
+
+	words := make([]entities.WordTiming, 0, len(body.Words))
+	for _, w := range body.Words {
+		words = append(words, entities.WordTiming{
+			Word:        w.Word,
+			StartMs:     w.StartMs,
+			EndMs:       w.EndMs,
+			Probability: w.Probability,
+		})
+	}
+
+	err = h.persister.RecordFinal(c.Request.Context(), services.RecordFinalInput{
+		SessionID:    sessionID,
+		CallerUserID: callerID,
+		SegmentIndex: body.SegmentIndex,
+		Text:         body.Text,
+		Language:     body.Language,
+		Confidence:   body.Confidence,
+		StartMs:      body.StartMs,
+		EndMs:        body.EndMs,
+		Words:        words,
+	})
+	switch {
+	case err == nil:
+		c.Status(http.StatusNoContent)
+	case errors.Is(err, services.ErrTranscriptInvalidSegment):
+		handlerhelpers.RespondError(c, h.logger, apperr.BadRequest("invalid segment payload"))
+	case errors.Is(err, services.ErrTranscriptSessionNotFound):
+		handlerhelpers.RespondError(c, h.logger, apperr.NotFound("TranscriptSession", sessionID.String()))
+	case errors.Is(err, services.ErrTranscriptSessionNotOwned):
+		handlerhelpers.RespondError(c, h.logger,
+			apperr.ForbiddenCode("ASR_ACCESS_DENIED", "caller does not own this asr session"))
+	case errors.Is(err, services.ErrTranscriptSessionClosed):
+		handlerhelpers.RespondError(c, h.logger,
+			apperr.ConflictCode("ASR_SESSION_CLOSED", "asr session is no longer active"))
+	default:
+		handlerhelpers.RespondError(c, h.logger, apperr.Internal("failed to persist segment"))
+	}
 }

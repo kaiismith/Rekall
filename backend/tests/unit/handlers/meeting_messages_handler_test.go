@@ -9,15 +9,16 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/mock"
+	"github.com/stretchr/testify/require"
+	"go.uber.org/zap"
+
 	"github.com/rekall/backend/internal/application/services"
 	"github.com/rekall/backend/internal/domain/entities"
 	"github.com/rekall/backend/internal/interfaces/http/handlers"
 	wsHub "github.com/rekall/backend/internal/interfaces/http/ws"
 	apperr "github.com/rekall/backend/pkg/errors"
-	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/mock"
-	"github.com/stretchr/testify/require"
-	"go.uber.org/zap"
 )
 
 // ─── Mock MeetingMessageRepository ───────────────────────────────────────────
@@ -47,7 +48,7 @@ func newMeetingHandlerWithChat(
 	svc *services.MeetingService,
 	chat *services.ChatMessageService,
 ) *handlers.MeetingHandler {
-	manager := wsHub.NewHubManager(nil, zap.NewNop())
+	manager := wsHub.NewHubManager(nil, nil, zap.NewNop())
 	return handlers.NewMeetingHandler(svc, chat, nil, manager, nil, "http://rekall.test", zap.NewNop())
 }
 

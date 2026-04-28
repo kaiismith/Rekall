@@ -4,12 +4,13 @@ import (
 	"net/http"
 
 	"github.com/gin-gonic/gin"
+	"go.uber.org/zap"
+
 	"github.com/rekall/backend/internal/application/services"
-	handlerhelpers "github.com/rekall/backend/internal/interfaces/http/helpers"
 	"github.com/rekall/backend/internal/interfaces/http/dto"
+	handlerhelpers "github.com/rekall/backend/internal/interfaces/http/helpers"
 	httputils "github.com/rekall/backend/internal/interfaces/http/utils"
 	apperr "github.com/rekall/backend/pkg/errors"
-	"go.uber.org/zap"
 )
 
 // OrganizationHandler handles HTTP requests for organization, membership, and invitation endpoints.
@@ -433,4 +434,3 @@ func (h *OrganizationHandler) AcceptInvitation(c *gin.Context) {
 
 	c.JSON(http.StatusOK, dto.OK(httputils.ToOrgResponse(org)))
 }
-

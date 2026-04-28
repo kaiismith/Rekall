@@ -5,9 +5,10 @@ import (
 	"strings"
 	"time"
 
+	"go.uber.org/zap"
+
 	"github.com/rekall/backend/internal/domain/entities"
 	"github.com/rekall/backend/pkg/logger/catalog"
-	"go.uber.org/zap"
 )
 
 // chatInsertTimeout bounds how long the hub goroutine may wait on the DB

@@ -7,9 +7,10 @@ import (
 	"net"
 	"net/smtp"
 
+	"go.uber.org/zap"
+
 	"github.com/rekall/backend/internal/domain/ports"
 	applogger "github.com/rekall/backend/pkg/logger"
-	"go.uber.org/zap"
 )
 
 // SMTPSender delivers transactional emails via SMTP.

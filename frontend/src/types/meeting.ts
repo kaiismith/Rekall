@@ -119,6 +119,17 @@ export interface WsMessage {
   caption_text?: string
   caption_segment_id?: string
   caption_ts?: number
+  // caption_chunk persistence-shape fields (transcript-persistence Req 5.2):
+  // populated only on `final` events for which we want the backend hub to
+  // also write transcript_segments. Older messages without these fields
+  // continue to be relayed without being persisted.
+  session_id?: string
+  segment_index?: number
+  start_ms?: number
+  end_ms?: number
+  language?: string
+  confidence?: number
+  words?: { w: string; start_ms: number; end_ms: number; p: number }[]
 }
 
 /** A single caption entry in the merged meeting transcript feed. */

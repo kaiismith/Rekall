@@ -4,10 +4,11 @@ import (
 	"net/http"
 
 	"github.com/gin-gonic/gin"
+	"go.uber.org/zap"
+
 	"github.com/rekall/backend/internal/interfaces/http/dto"
 	apperr "github.com/rekall/backend/pkg/errors"
 	"github.com/rekall/backend/pkg/logger/catalog"
-	"go.uber.org/zap"
 )
 
 // RespondError writes an appropriate JSON error response for err.

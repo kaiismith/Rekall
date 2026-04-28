@@ -6,8 +6,9 @@ import (
 	"net/http"
 
 	"github.com/gin-gonic/gin"
-	"github.com/rekall/backend/pkg/config"
 	"go.uber.org/zap"
+
+	"github.com/rekall/backend/pkg/config"
 )
 
 // Server wraps net/http.Server and handles graceful shutdown.

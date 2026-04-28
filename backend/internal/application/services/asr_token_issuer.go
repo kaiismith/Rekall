@@ -4,17 +4,59 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"sync"
 	"time"
 
 	"github.com/google/uuid"
+	"go.uber.org/zap"
+
 	"github.com/rekall/backend/internal/domain/entities"
 	"github.com/rekall/backend/internal/domain/ports"
 	"github.com/rekall/backend/internal/infrastructure/asr"
 	apperr "github.com/rekall/backend/pkg/errors"
 	applogger "github.com/rekall/backend/pkg/logger"
 	"github.com/rekall/backend/pkg/logger/catalog"
-	"go.uber.org/zap"
 )
+
+// asrHealthTTL is how long a Health() snapshot is reused before re-polling.
+// 60 s strikes a balance: short enough to catch a model rollover quickly, long
+// enough that bursty session-open traffic doesn't hammer the gRPC server.
+const asrHealthTTL = 60 * time.Second
+
+// healthCache memoises ASRClient.Health() for asrHealthTTL so the issuer
+// doesn't poll the ASR service on every session-open. A stale snapshot is
+// preferred to a hard failure: if the refresh errors we keep using whatever
+// we have so the issuer can still finish; the engine snapshot is just
+// best-effort metadata, not an auth boundary.
+type healthCache struct {
+	mu         sync.Mutex
+	snapshot   *ports.ASRHealth
+	fetchedAt  time.Time
+	asrClient  ports.ASRClient
+	defaultTTL time.Duration
+}
+
+func newHealthCache(asrClient ports.ASRClient) *healthCache {
+	return &healthCache{asrClient: asrClient, defaultTTL: asrHealthTTL}
+}
+
+// get returns a cached snapshot, refreshing it if older than defaultTTL.
+// On refresh failure the previous snapshot (possibly nil) is returned with
+// no error — callers must tolerate a nil result.
+func (c *healthCache) get(ctx context.Context) *ports.ASRHealth {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	if c.snapshot != nil && time.Since(c.fetchedAt) < c.defaultTTL {
+		return c.snapshot
+	}
+	h, err := c.asrClient.Health(ctx)
+	if err != nil || h == nil {
+		return c.snapshot // stale-but-non-nil if we have one, else nil
+	}
+	c.snapshot = h
+	c.fetchedAt = time.Now()
+	return c.snapshot
+}
 
 // ASRTokenIssuerConfig captures the runtime knobs the issuer needs.
 type ASRTokenIssuerConfig struct {
@@ -41,6 +83,8 @@ type ASRTokenIssuer struct {
 	callRepo        ports.CallRepository
 	meetingRepo     ports.MeetingRepository
 	participantRepo ports.MeetingParticipantRepository
+	persister       *TranscriptPersister // optional: when nil, sessions are not persisted
+	health          *healthCache
 	signer          *asr.TokenSigner
 	cfg             ASRTokenIssuerConfig
 	logger          *zap.Logger
@@ -49,11 +93,17 @@ type ASRTokenIssuer struct {
 // NewASRTokenIssuer wires the issuer. callRepo is required for the call flow;
 // meetingRepo/participantRepo may be nil when only the call flow is in use
 // (the meeting endpoint then returns 503 ASR_NOT_CONFIGURED).
+//
+// persister may be nil; when set, every successful session open is recorded
+// in transcript_sessions and every End rebuilds calls.transcript from the
+// persisted segments. A persister failure does NOT fail the token issuance —
+// captions UX must continue working even when persistence is degraded.
 func NewASRTokenIssuer(
 	asrClient ports.ASRClient,
 	callRepo ports.CallRepository,
 	meetingRepo ports.MeetingRepository,
 	participantRepo ports.MeetingParticipantRepository,
+	persister *TranscriptPersister,
 	signer *asr.TokenSigner,
 	cfg ASRTokenIssuerConfig,
 	logger *zap.Logger,
@@ -63,10 +113,43 @@ func NewASRTokenIssuer(
 		callRepo:        callRepo,
 		meetingRepo:     meetingRepo,
 		participantRepo: participantRepo,
+		persister:       persister,
+		health:          newHealthCache(asrClient),
 		signer:          signer,
 		cfg:             cfg,
 		logger:          applogger.WithComponent(logger, "asr_token_issuer"),
 	}
+}
+
+// engineSnapshotFor returns the (mode, target, model) triple to record on a
+// new transcript_sessions row. If Health() is unavailable, fall back to the
+// model_id we already know plus "unknown" engine markers — the row is still
+// useful, just less precise.
+func (s *ASRTokenIssuer) engineSnapshotFor(ctx context.Context, modelID string) EngineSnapshot {
+	h := s.health.get(ctx)
+	mode := entities.TranscriptEngineModeLocal
+	target := ""
+	if h != nil {
+		if h.EngineMode != "" {
+			mode = h.EngineMode
+		}
+		target = h.EngineTarget
+	}
+	// Diagnostic: shows the raw Health() result so an `engine_mode='local'`
+	// row in the DB despite an OpenAI-mode ASR can be traced to either a
+	// nil Health (gRPC failure) or empty EngineMode (C++ field not populated).
+	if h == nil {
+		s.logger.Info("DIAG engineSnapshotFor: Health returned nil",
+			zap.String("fallback_mode", mode))
+	} else {
+		s.logger.Info("DIAG engineSnapshotFor: Health snapshot",
+			zap.String("h.engine_mode", h.EngineMode),
+			zap.String("h.engine_target", h.EngineTarget),
+			zap.String("h.status", h.Status),
+			zap.String("h.version", h.Version),
+			zap.Uint32("h.workers", h.WorkerPoolSize))
+	}
+	return EngineSnapshot{Mode: mode, Target: target, ModelID: modelID}
 }
 
 // RequestInput is the application-layer input for Request().
@@ -156,6 +239,31 @@ func (s *ASRTokenIssuer) Request(ctx context.Context, in RequestInput) (*ASRSess
 		zap.Time("expires_at", out.ExpiresAt),
 	)
 
+	// Best-effort persistence open: a failure does NOT fail token issuance.
+	if s.persister != nil {
+		callID := in.CallID
+		var langPtr *string
+		if in.Language != "" {
+			lang := in.Language
+			langPtr = &lang
+		}
+		if err := s.persister.OpenSession(ctx, OpenSessionInput{
+			SessionID:         out.SessionID,
+			SpeakerUserID:     in.CallerID,
+			CallID:            &callID,
+			Engine:            s.engineSnapshotFor(ctx, out.ModelID),
+			LanguageRequested: langPtr,
+			SampleRate:        out.SampleRate,
+			FrameFormat:       out.FrameFormat,
+			ExpiresAt:         out.ExpiresAt,
+		}); err != nil {
+			s.logger.Warn("transcript session open failed; persistence degraded for this call",
+				zap.Error(err),
+				zap.String("session_id", out.SessionID.String()),
+			)
+		}
+	}
+
 	return &ASRSessionPayload{
 		SessionID:    out.SessionID.String(),
 		SessionToken: token,
@@ -196,6 +304,35 @@ func (s *ASRTokenIssuer) End(ctx context.Context, callerID, callID, sessionID uu
 		zap.String("session_id", sessionID.String()),
 		zap.Uint32("final_count", out.FinalCount),
 	)
+
+	// Best-effort persistence close: stitch the persisted segments into the
+	// legacy calls.transcript so existing read paths keep working. The gRPC
+	// EndSession's FinalTranscript is intentionally NOT used — the segment
+	// table is the source of truth.
+	if s.persister != nil {
+		callID := callID
+		if err := s.persister.CloseSession(ctx, CloseSessionInput{
+			SessionID:    sessionID,
+			CallerUserID: callerID,
+			Status:       entities.TranscriptSessionStatusEnded,
+			StitchInto:   &callID,
+		}); err != nil {
+			// Benign: the session never had a transcript_sessions row (session
+			// predates persistence rollout, or OpenSession failed at issue
+			// time). Log at Debug — there's nothing to "close" so this is a
+			// no-op, not a failure.
+			if errors.Is(err, ErrTranscriptSessionNotFound) {
+				s.logger.Debug("transcript session close skipped: no row to close",
+					zap.String("session_id", sessionID.String()),
+				)
+			} else {
+				s.logger.Warn("transcript session close failed",
+					zap.Error(err),
+					zap.String("session_id", sessionID.String()),
+				)
+			}
+		}
+	}
 	return out, nil
 }
 
@@ -307,6 +444,32 @@ func (s *ASRTokenIssuer) RequestForMeeting(ctx context.Context, in MeetingReques
 		zap.String("token_prefix", prefix),
 		zap.Time("expires_at", out.ExpiresAt),
 	)
+
+	// Best-effort persistence open: meeting session bound to meeting.id.
+	if s.persister != nil {
+		meetingID := meeting.ID
+		var langPtr *string
+		if in.Language != "" {
+			lang := in.Language
+			langPtr = &lang
+		}
+		if err := s.persister.OpenSession(ctx, OpenSessionInput{
+			SessionID:         out.SessionID,
+			SpeakerUserID:     in.CallerID,
+			MeetingID:         &meetingID,
+			Engine:            s.engineSnapshotFor(ctx, out.ModelID),
+			LanguageRequested: langPtr,
+			SampleRate:        out.SampleRate,
+			FrameFormat:       out.FrameFormat,
+			ExpiresAt:         out.ExpiresAt,
+		}); err != nil {
+			s.logger.Warn("transcript session open failed; persistence degraded for this meeting",
+				zap.Error(err),
+				zap.String("session_id", out.SessionID.String()),
+			)
+		}
+	}
+
 	return &ASRSessionPayload{
 		SessionID:    out.SessionID.String(),
 		SessionToken: token,
@@ -355,6 +518,29 @@ func (s *ASRTokenIssuer) EndForMeeting(ctx context.Context, callerID uuid.UUID, 
 		zap.String("meeting_code", meetingCode),
 		zap.Uint32("final_count", out.FinalCount),
 	)
+
+	// Best-effort persistence close. Meeting transcripts have no analogous
+	// denormalised cache to refresh, so StitchInto is left nil.
+	if s.persister != nil {
+		if err := s.persister.CloseSession(ctx, CloseSessionInput{
+			SessionID:    sessionID,
+			CallerUserID: callerID,
+			Status:       entities.TranscriptSessionStatusEnded,
+		}); err != nil {
+			// Benign: see the matching branch in End(). A pre-persistence
+			// session has no row to close — log at Debug and move on.
+			if errors.Is(err, ErrTranscriptSessionNotFound) {
+				s.logger.Debug("transcript session close skipped: no row to close",
+					zap.String("session_id", sessionID.String()),
+				)
+			} else {
+				s.logger.Warn("transcript session close failed",
+					zap.Error(err),
+					zap.String("session_id", sessionID.String()),
+				)
+			}
+		}
+	}
 	return out, nil
 }
 

@@ -6,6 +6,8 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/gorilla/websocket"
+
+	"github.com/rekall/backend/internal/domain/entities"
 )
 
 const (
@@ -77,9 +79,9 @@ const (
 // InboundMessage is a generic envelope for messages received from a client.
 type InboundMessage struct {
 	Type     string          `json:"type"`
-	To       *uuid.UUID      `json:"to,omitempty"`        // peer target for WebRTC relay
-	KnockID  string          `json:"knock_id,omitempty"`  // knock.respond
-	Approved *bool           `json:"approved,omitempty"`  // knock.respond
+	To       *uuid.UUID      `json:"to,omitempty"`       // peer target for WebRTC relay
+	KnockID  string          `json:"knock_id,omitempty"` // knock.respond
+	Approved *bool           `json:"approved,omitempty"` // knock.respond
 	Payload  json.RawMessage `json:"payload,omitempty"`
 	// In-room controls
 	TargetID *uuid.UUID `json:"target_id,omitempty"` // force_mute
@@ -91,10 +93,21 @@ type InboundMessage struct {
 	Body     string `json:"body,omitempty"`      // chat_message
 	ClientID string `json:"client_id,omitempty"` // chat_message (echoed back)
 	// Live captions
-	CaptionKind      string `json:"caption_kind,omitempty"`       // "partial" | "final"
+	CaptionKind      string `json:"caption_kind,omitempty"` // "partial" | "final"
 	CaptionText      string `json:"caption_text,omitempty"`
 	CaptionSegmentID string `json:"caption_segment_id,omitempty"` // stable per speaker+utterance
 	CaptionTimestamp int64  `json:"caption_ts,omitempty"`         // ms since epoch (sender clock)
+	// Persistence-shape fields (Requirement 5.2 of transcript-persistence).
+	// Populated by clients that want their `final` segments stored. Older
+	// clients that only set CaptionKind/CaptionText/CaptionSegmentID continue
+	// to be relayed; their segments simply aren't persisted.
+	ASRSessionID *uuid.UUID            `json:"session_id,omitempty"`
+	SegmentIndex *int32                `json:"segment_index,omitempty"`
+	StartMs      *int32                `json:"start_ms,omitempty"`
+	EndMs        *int32                `json:"end_ms,omitempty"`
+	Language     *string               `json:"language,omitempty"`
+	Confidence   *float32              `json:"confidence,omitempty"`
+	Words        []entities.WordTiming `json:"words,omitempty"`
 }
 
 // RoomStateParticipant is a snapshot of one participant's ephemeral state.
@@ -109,11 +122,11 @@ type RoomStateParticipant struct {
 
 // OutboundMessage is a generic envelope sent to a client.
 type OutboundMessage struct {
-	Type     string      `json:"type"`
-	From     *uuid.UUID  `json:"from,omitempty"`
-	KnockID  string      `json:"knock_id,omitempty"`
-	Approved *bool       `json:"approved,omitempty"`
-	UserID   *uuid.UUID  `json:"user_id,omitempty"`
+	Type     string     `json:"type"`
+	From     *uuid.UUID `json:"from,omitempty"`
+	KnockID  string     `json:"knock_id,omitempty"`
+	Approved *bool      `json:"approved,omitempty"`
+	UserID   *uuid.UUID `json:"user_id,omitempty"`
 	// Display info for participant.joined / chat broadcasts — populated from
 	// the Client struct at join time. Omitempty so other message types stay
 	// unchanged.
@@ -164,6 +177,13 @@ type Client struct {
 	// for server-side rate limiting. Owned exclusively by the hub run goroutine
 	// (handleChatMessage) — no mutex needed.
 	chatSendTimestamps []time.Time
+
+	// activeASRSessionID is the session_id of the most recent caption_chunk
+	// this client sent, or nil if none. Captured by handleCaptionChunk so the
+	// disconnect path can immediately close the transcript_sessions row when
+	// the WS drops without a graceful HTTP `End` call (e.g. tab refresh,
+	// network blip). Owned exclusively by the hub run goroutine — no mutex.
+	activeASRSessionID *uuid.UUID
 }
 
 // ChatRateLimit constants. Server-side enforcement is deliberately lenient so
@@ -239,9 +259,9 @@ func (c *Client) readPump() {
 	}()
 
 	c.conn.SetReadLimit(maxMessageSize)
-	c.conn.SetReadDeadline(time.Now().Add(pongWait))
+	_ = c.conn.SetReadDeadline(time.Now().Add(pongWait))
 	c.conn.SetPongHandler(func(string) error {
-		c.conn.SetReadDeadline(time.Now().Add(pongWait))
+		_ = c.conn.SetReadDeadline(time.Now().Add(pongWait))
 		return nil
 	})
 
@@ -280,7 +300,7 @@ func (c *Client) writePump() {
 		select {
 		case sig := <-c.closing:
 			// Drain any buffered text messages so they arrive before the close frame.
-			c.conn.SetWriteDeadline(time.Now().Add(writeWait))
+			_ = c.conn.SetWriteDeadline(time.Now().Add(writeWait))
 		drain:
 			for {
 				select {
@@ -298,7 +318,7 @@ func (c *Client) writePump() {
 			return
 
 		case msg, ok := <-c.send:
-			c.conn.SetWriteDeadline(time.Now().Add(writeWait))
+			_ = c.conn.SetWriteDeadline(time.Now().Add(writeWait))
 			if !ok {
 				c.conn.WriteMessage(websocket.CloseMessage, []byte{}) //nolint:errcheck
 				return
@@ -308,7 +328,7 @@ func (c *Client) writePump() {
 			}
 
 		case <-ticker.C:
-			c.conn.SetWriteDeadline(time.Now().Add(writeWait))
+			_ = c.conn.SetWriteDeadline(time.Now().Add(writeWait))
 			if err := c.conn.WriteMessage(websocket.PingMessage, nil); err != nil {
 				return
 			}

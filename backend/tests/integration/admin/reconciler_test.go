@@ -19,6 +19,13 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
+	"go.uber.org/zap"
+	"golang.org/x/crypto/bcrypt"
+	"gorm.io/driver/postgres"
+	"gorm.io/gorm"
+
 	"github.com/rekall/backend/internal/application/services"
 	"github.com/rekall/backend/internal/domain/entities"
 	infraauth "github.com/rekall/backend/internal/infrastructure/auth"
@@ -26,12 +33,6 @@ import (
 	"github.com/rekall/backend/internal/interfaces/http/handlers"
 	"github.com/rekall/backend/internal/interfaces/http/middleware"
 	"github.com/rekall/backend/pkg/constants"
-	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/require"
-	"go.uber.org/zap"
-	"golang.org/x/crypto/bcrypt"
-	"gorm.io/driver/postgres"
-	"gorm.io/gorm"
 )
 
 const testJWTIssuer = "rekall-test"

@@ -4,10 +4,11 @@ import (
 	"strings"
 
 	"github.com/gin-gonic/gin"
+	"go.uber.org/zap"
+
 	infraauth "github.com/rekall/backend/internal/infrastructure/auth"
 	apperr "github.com/rekall/backend/pkg/errors"
 	"github.com/rekall/backend/pkg/logger/catalog"
-	"go.uber.org/zap"
 )
 
 // contextAuthUserKey is the Gin context key used to store the parsed JWT claims.

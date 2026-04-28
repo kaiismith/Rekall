@@ -9,10 +9,11 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/gorilla/websocket"
-	wsHub "github.com/rekall/backend/internal/interfaces/http/ws"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"go.uber.org/zap"
+
+	wsHub "github.com/rekall/backend/internal/interfaces/http/ws"
 )
 
 // ─── Send buffer full ────────────────────────────────────────────────────────
@@ -40,7 +41,7 @@ func TestClient_Send_BufferFull(t *testing.T) {
 	require.NoError(t, err)
 	defer clientConn.Close()
 
-	hub := wsHub.NewHub(uuid.New(), uuid.New(), nil, nil, zap.NewNop())
+	hub := wsHub.NewHub(uuid.New(), uuid.New(), nil, nil, nil, zap.NewNop())
 	c := wsHub.NewClient(hub, clientConn, uuid.New(), "", "")
 
 	// Fill the send buffer (sendBufferSize = 256).

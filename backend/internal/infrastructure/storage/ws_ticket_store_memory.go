@@ -9,8 +9,9 @@ import (
 	"time"
 
 	"github.com/google/uuid"
-	"github.com/rekall/backend/internal/domain/ports"
 	"go.uber.org/zap"
+
+	"github.com/rekall/backend/internal/domain/ports"
 )
 
 const (

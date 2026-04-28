@@ -8,7 +8,6 @@ import (
 	"time"
 
 	"github.com/google/uuid"
-	"github.com/rekall/backend/internal/domain/ports"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/credentials"
@@ -17,6 +16,8 @@ import (
 	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/status"
 	emptypb "google.golang.org/protobuf/types/known/emptypb"
+
+	"github.com/rekall/backend/internal/domain/ports"
 
 	pb "github.com/rekall/backend/internal/infrastructure/asr/pb"
 )
@@ -251,7 +252,8 @@ func dialCreds(m MTLSConfig) (credentials.TransportCredentials, error) {
 }
 
 // — keep TLS helpers in their own file so the test build does not need crypto/x509
-//   indirection. See tls.go.
+//
+//	indirection. See tls.go.
 //
 // The os.ReadFile-only helpers below are exposed for tests to substitute.
 var _ = os.ReadFile

@@ -8,10 +8,11 @@ import (
 
 	"github.com/DATA-DOG/go-sqlmock"
 	"github.com/google/uuid"
-	"github.com/rekall/backend/internal/domain/entities"
-	"github.com/rekall/backend/internal/infrastructure/repositories"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
+	"github.com/rekall/backend/internal/domain/entities"
+	"github.com/rekall/backend/internal/infrastructure/repositories"
 )
 
 func chatMessageRows(ids ...uuid.UUID) *sqlmock.Rows {

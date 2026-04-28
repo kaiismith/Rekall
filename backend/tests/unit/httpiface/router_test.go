@@ -10,16 +10,18 @@ import (
 
 	"github.com/DATA-DOG/go-sqlmock"
 	"github.com/gin-gonic/gin"
-	"github.com/rekall/backend/internal/application/services"
-	httpiface "github.com/rekall/backend/internal/interfaces/http"
-	"github.com/rekall/backend/internal/interfaces/http/handlers"
-	wsHub "github.com/rekall/backend/internal/interfaces/http/ws"
-	"github.com/rekall/backend/pkg/config"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"go.uber.org/zap"
 	"gorm.io/driver/postgres"
 	"gorm.io/gorm"
+
+	"github.com/rekall/backend/internal/application/services"
+	"github.com/rekall/backend/internal/infrastructure/storage"
+	httpiface "github.com/rekall/backend/internal/interfaces/http"
+	"github.com/rekall/backend/internal/interfaces/http/handlers"
+	wsHub "github.com/rekall/backend/internal/interfaces/http/ws"
+	"github.com/rekall/backend/pkg/config"
 )
 
 func init() { gin.SetMode(gin.TestMode) }
@@ -184,8 +186,13 @@ func TestNewRouter_MeetingHWired_RegistersMeetingRoutes(t *testing.T) {
 	deps := newTestDeps(t)
 	log := zap.NewNop()
 	meetingSvc := services.NewMeetingService(nil, nil, nil, nil, "http://rekall.test", log)
-	manager := wsHub.NewHubManager(nil, log)
-	deps.MeetingH = handlers.NewMeetingHandler(meetingSvc, nil, nil, manager, nil, "http://rekall.test", log)
+	manager := wsHub.NewHubManager(nil, nil, log)
+	// Real in-memory ticket store: without one the Connect handler short-
+	// circuits to 500 (`TICKET_STORE_NOT_CONFIGURED`) before the missing-
+	// ticket branch can return 401, defeating the purpose of this test.
+	ticketStore := storage.NewMemoryWSTicketStore(log)
+	t.Cleanup(func() { ticketStore.Close() })
+	deps.MeetingH = handlers.NewMeetingHandler(meetingSvc, nil, nil, manager, ticketStore, "http://rekall.test", log)
 
 	r := httpiface.NewRouter(deps)
 

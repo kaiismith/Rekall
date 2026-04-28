@@ -1,39 +1,165 @@
 #!/usr/bin/env sh
-# Rekall — frontend pre-commit hook
-# Runs lint-staged + project-wide tsc --noEmit on staged frontend changes.
-# Bypass with `git commit --no-verify` or `HUSKY=0 git commit`. CI re-runs
-# the same checks, so a bypass cannot land on main.
+# Rekall — pre-commit hook (frontend + Go).
+#
+# Runs lint-staged + tsc --noEmit on staged frontend changes, then
+# gofmt/goimports auto-fix + go vet + golangci-lint + go build on staged
+# Go changes.
+#
+# Bypass:
+#   git commit --no-verify           - skip the entire hook
+#   HUSKY=0 git commit ...           - same, via env var
+#   REKALL_PRE_COMMIT_SKIP_FRONTEND=1 git commit ...  - skip ONLY the frontend block
+#   REKALL_PRE_COMMIT_SKIP_GO=1      git commit ...  - skip ONLY the Go block
+#
+# CI re-runs the same checks, so a bypass cannot land on main.
 
 REPO_ROOT="$(git rev-parse --show-toplevel)"
 
-# Bail out cleanly if frontend/ is not present (sparse checkout, bare clone).
-if [ ! -d "$REPO_ROOT/frontend" ]; then
-  echo "frontend/ not present, skipping pre-commit checks"
+# ─── Frontend block ──────────────────────────────────────────────────────────
+
+if [ "${REKALL_PRE_COMMIT_SKIP_FRONTEND-}" != "1" ] && [ -d "$REPO_ROOT/frontend" ]; then
+  cd "$REPO_ROOT/frontend" || exit 1
+
+  # lint-staged: prettier --write + eslint --fix on staged files,
+  # auto-restage on success, stash-restore on failure.
+  # --no-install so a missing binary fails fast rather than triggering an install.
+  npx --no-install lint-staged
+  LINT_STAGED_EXIT=$?
+  if [ $LINT_STAGED_EXIT -ne 0 ]; then
+    exit $LINT_STAGED_EXIT
+  fi
+
+  # Whole-project type-check, but only when at least one staged file is
+  # a .ts/.tsx (a removed export breaks unstaged importers, so per-file scope
+  # would miss errors).
+  if git diff --cached --name-only --diff-filter=ACMR \
+       | grep -E '^frontend/.*\.(ts|tsx)$' >/dev/null 2>&1; then
+    npm run -s typecheck
+    TSC_EXIT=$?
+    if [ $TSC_EXIT -ne 0 ]; then
+      exit $TSC_EXIT
+    fi
+  fi
+
+  cd "$REPO_ROOT" || exit 1
+fi
+
+# ─── Go block ────────────────────────────────────────────────────────────────
+
+if [ "${REKALL_PRE_COMMIT_SKIP_GO-}" = "1" ]; then
   exit 0
 fi
 
-cd "$REPO_ROOT/frontend" || exit 1
+# Cheap exit: list staged Go files (excluding generated dirs / files) and
+# bail out if there are none.
+STAGED_GO=$(git diff --cached --name-only --diff-filter=ACMR \
+              | grep -E '^backend/.*\.go$' \
+              | grep -vE '^backend/docs/|\.pb\.go$' \
+              || true)
 
-# Step 1 — lint-staged: prettier --write + eslint --fix on staged files,
-# auto-restage on success, stash-restore on failure.
-# --no-install so a missing binary fails fast rather than triggering an install.
-npx --no-install lint-staged
-LINT_STAGED_EXIT=$?
-
-if [ $LINT_STAGED_EXIT -ne 0 ]; then
-  exit $LINT_STAGED_EXIT
+if [ -z "$STAGED_GO" ]; then
+  exit 0
 fi
 
-# Step 2 — whole-project type-check, but only when at least one staged file is
-# a .ts/.tsx (a removed export breaks unstaged importers, so per-file scope
-# would miss errors).
-if git diff --cached --name-only --diff-filter=ACMR \
-     | grep -E '^frontend/.*\.(ts|tsx)$' >/dev/null 2>&1; then
-  npm run -s typecheck
-  TSC_EXIT=$?
-  if [ $TSC_EXIT -ne 0 ]; then
-    exit $TSC_EXIT
+# Toolchain preflight. Each missing tool prints a one-liner with the install
+# command. Fail-loud; we deliberately do NOT auto-install.
+missing=0
+for tool in gofmt goimports golangci-lint; do
+  if ! command -v "$tool" >/dev/null 2>&1; then
+    case "$tool" in
+      gofmt)
+        echo "pre-commit: gofmt not found on \$PATH"
+        echo "    install: install Go from https://go.dev/dl/"
+        ;;
+      goimports)
+        echo "pre-commit: goimports not found on \$PATH"
+        echo "    install: go install golang.org/x/tools/cmd/goimports@latest"
+        ;;
+      golangci-lint)
+        echo "pre-commit: golangci-lint not found on \$PATH"
+        echo "    install: go install github.com/golangci/golangci-lint/cmd/golangci-lint@v1.61.0"
+        ;;
+    esac
+    missing=1
   fi
+done
+if [ $missing -eq 1 ]; then
+  exit 1
+fi
+
+echo "pre-commit: gofmt + goimports on staged Go files…"
+
+# Auto-format pass: gofmt + goimports on each staged Go file. If a tool
+# rewrites the file, re-stage it so the commit captures the formatted version.
+# Counters live in a temp file because the `while read` loop runs in a
+# subshell when fed by a pipe.
+counters=$(mktemp)
+echo "0 0" > "$counters"
+
+echo "$STAGED_GO" | while IFS= read -r f; do
+  [ -z "$f" ] && continue
+  full="$REPO_ROOT/$f"
+  if [ ! -f "$full" ]; then
+    continue   # file deleted in this commit — nothing to format
+  fi
+
+  before=$(wc -c < "$full")
+  if ! gofmt -w -- "$full"; then
+    echo "pre-commit: gofmt failed on $f" >&2
+    exit 1
+  fi
+  mid=$(wc -c < "$full")
+  if ! goimports -w -local github.com/rekall/backend -- "$full"; then
+    echo "pre-commit: goimports failed on $f" >&2
+    exit 1
+  fi
+  after=$(wc -c < "$full")
+
+  read gofmt_n goimports_n < "$counters"
+  if [ "$before" != "$mid"   ]; then gofmt_n=$((gofmt_n + 1));         fi
+  if [ "$mid"    != "$after" ]; then goimports_n=$((goimports_n + 1)); fi
+  echo "$gofmt_n $goimports_n" > "$counters"
+
+  if [ "$before" != "$after" ]; then
+    git add -- "$f" || exit 1
+  fi
+done
+LOOP_EXIT=$?
+if [ $LOOP_EXIT -ne 0 ]; then
+  rm -f "$counters"
+  exit $LOOP_EXIT
+fi
+
+read GOFMT_FIXED GOIMPORTS_FIXED < "$counters"
+rm -f "$counters"
+
+if [ "$GOFMT_FIXED" -gt 0 ] || [ "$GOIMPORTS_FIXED" -gt 0 ]; then
+  echo "pre-commit: gofmt fixed $GOFMT_FIXED file(s), goimports fixed $GOIMPORTS_FIXED file(s)"
+fi
+
+# Vet / lint / build — fail-fast, three independent processes for granular
+# error attribution. cwd = backend/ so go.mod is the working module root.
+cd "$REPO_ROOT/backend" || exit 1
+
+echo "pre-commit: go vet ./..."
+go vet ./...
+VET_EXIT=$?
+if [ $VET_EXIT -ne 0 ]; then
+  exit $VET_EXIT
+fi
+
+echo "pre-commit: golangci-lint run ./... (verbose; first run is uncached)"
+golangci-lint run -v ./...
+LINT_EXIT=$?
+if [ $LINT_EXIT -ne 0 ]; then
+  exit $LINT_EXIT
+fi
+
+echo "pre-commit: go build ./..."
+go build ./...
+BUILD_EXIT=$?
+if [ $BUILD_EXIT -ne 0 ]; then
+  exit $BUILD_EXIT
 fi
 
 exit 0

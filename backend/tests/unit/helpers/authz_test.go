@@ -3,10 +3,11 @@ package helpers_test
 import (
 	"testing"
 
+	"github.com/stretchr/testify/assert"
+
 	"github.com/rekall/backend/internal/application/helpers"
 	"github.com/rekall/backend/internal/domain/entities"
 	"github.com/rekall/backend/pkg/constants"
-	"github.com/stretchr/testify/assert"
 )
 
 func adminUser() *entities.User  { return &entities.User{Role: "admin"} }

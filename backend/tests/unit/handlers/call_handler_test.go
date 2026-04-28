@@ -10,15 +10,16 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/mock"
+	"github.com/stretchr/testify/require"
+	"go.uber.org/zap"
+
 	"github.com/rekall/backend/internal/application/services"
 	"github.com/rekall/backend/internal/domain/entities"
 	"github.com/rekall/backend/internal/domain/ports"
 	"github.com/rekall/backend/internal/interfaces/http/handlers"
 	apperr "github.com/rekall/backend/pkg/errors"
-	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/mock"
-	"github.com/stretchr/testify/require"
-	"go.uber.org/zap"
 )
 
 // ─── Router factory ───────────────────────────────────────────────────────────

@@ -14,7 +14,6 @@ linters:
     - unused
     - misspell
     - goimports
-    - godot
     - exhaustive
     - noctx
     - bodyclose
@@ -30,19 +29,20 @@ linters-settings:
       - name: var-naming
       - name: indent-error-flow
       - name: error-strings
-  godot:
-    scope: declarations
-    capital: true
   exhaustive:
     default-signifies-exhaustive: true
 
 issues:
+  exclude-dirs:
+    - internal/infrastructure/asr/pb
+    - vendor
   exclude-rules:
-    # Test files may use unexported identifiers.
+    # Test files: relaxed rules (mocks may be unused per-file, deadlines on
+    # ephemeral conns don't need error checks, dialer responses in WS tests
+    # are short-lived).
     - path: "_test.go"
       linters:
         - revive
-    # Generated files.
-    - path: "vendor/"
-      linters:
-        - all
+        - errcheck
+        - unused
+        - bodyclose

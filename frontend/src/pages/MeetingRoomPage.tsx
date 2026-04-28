@@ -128,10 +128,11 @@ export function MeetingRoomPage() {
     dismissChatSendError,
     captions,
     sendCaptionChunk,
+    sendCaptionFinal,
   } = useMeeting({
     code: code ?? '',
     onEnd: () => {
-      console.log('%c[meeting] page: onEnd → /meetings', 'color:#f59e0b;font-weight:600')
+      console.warn('%c[meeting] page: onEnd → /meetings', 'color:#f59e0b;font-weight:600')
       navigate('/meetings')
     },
   })
@@ -144,14 +145,25 @@ export function MeetingRoomPage() {
   // on will see your text attributed to you, and vice versa.
   const [captionsOn, setCaptionsOn] = useState(false)
 
-  const asr = useASR(
-    code ?? null,
-    'meeting',
-    {
-      onPartial: (text, segId) => sendCaptionChunk('partial', text, segId),
-      onFinal:   (text, segId) => sendCaptionChunk('final',   text, segId),
+  // sessionId is set by useASR once the server issues a token. Held in a ref
+  // so the inline callbacks below don't capture a stale value across renders.
+  const asrSessionIdRef = useRef<string | null>(null)
+
+  const asr = useASR(code ?? null, 'meeting', {
+    onPartial: (text, segId) => sendCaptionChunk('partial', text, segId),
+    onFinalSegment: (event) => {
+      const sid = asrSessionIdRef.current
+      if (sid) {
+        // Full-payload path: backend hub broadcasts AND persists.
+        sendCaptionFinal(event, sid)
+      } else {
+        // Defensive fallback: relay only (no persistence). Should not
+        // normally hit because the session_id is set before any final.
+        sendCaptionChunk('final', event.text, String(event.segment_id))
+      }
     },
-  )
+  })
+  asrSessionIdRef.current = asr.sessionId
 
   // Stable handle to the latest asr API so the intent-driven effect below
   // doesn't re-fire on every render (asr is a fresh object identity each
@@ -167,9 +179,7 @@ export function MeetingRoomPage() {
   // of sessions per second. The fix is to react ONLY to the inputs the user
   // controls.
   useEffect(() => {
-    const shouldStream = captionsOn
-                      && roomState === 'in_meeting'
-                      && !isMuted
+    const shouldStream = captionsOn && roomState === 'in_meeting' && !isMuted
     if (shouldStream) {
       void asrRef.current.start()
     } else {
@@ -180,7 +190,7 @@ export function MeetingRoomPage() {
   // Log every roomState transition so we can see in devtools exactly where
   // the page lands. Easy to grep on `[meeting]`.
   useEffect(() => {
-    console.log('%c[meeting] page: roomState =', 'color:#a78bfa;font-weight:600', roomState)
+    console.warn('%c[meeting] page: roomState =', 'color:#a78bfa;font-weight:600', roomState)
   }, [roomState])
 
   // Attach the local PREVIEW stream (mirrors the active outbound video track:
@@ -205,7 +215,14 @@ export function MeetingRoomPage() {
   // loading spinner instead while the initial getByCode is in flight.
   if (roomState === 'device_check' && !meeting) {
     return (
-      <Box display="flex" flexDirection="column" alignItems="center" justifyContent="center" height="100vh" gap={2}>
+      <Box
+        display="flex"
+        flexDirection="column"
+        alignItems="center"
+        justifyContent="center"
+        height="100vh"
+        gap={2}
+      >
         <CircularProgress />
       </Box>
     )
@@ -246,7 +263,14 @@ export function MeetingRoomPage() {
 
   if (roomState === 'connecting') {
     return (
-      <Box display="flex" flexDirection="column" alignItems="center" justifyContent="center" height="100vh" gap={2}>
+      <Box
+        display="flex"
+        flexDirection="column"
+        alignItems="center"
+        justifyContent="center"
+        height="100vh"
+        gap={2}
+      >
         <CircularProgress />
         <Typography color="text.secondary">Connecting…</Typography>
       </Box>
@@ -255,7 +279,14 @@ export function MeetingRoomPage() {
 
   if (roomState === 'waiting_room') {
     return (
-      <Box display="flex" flexDirection="column" alignItems="center" justifyContent="center" height="100vh" gap={3}>
+      <Box
+        display="flex"
+        flexDirection="column"
+        alignItems="center"
+        justifyContent="center"
+        height="100vh"
+        gap={3}
+      >
         <Typography variant="h5">Waiting for admission</Typography>
         <Typography color="text.secondary">A participant will admit you shortly.</Typography>
         <CircularProgress size={28} />
@@ -265,19 +296,39 @@ export function MeetingRoomPage() {
 
   if (roomState === 'denied') {
     return (
-      <Box display="flex" flexDirection="column" alignItems="center" justifyContent="center" height="100vh" gap={2}>
-        <Typography variant="h5" color="error">Access Denied</Typography>
+      <Box
+        display="flex"
+        flexDirection="column"
+        alignItems="center"
+        justifyContent="center"
+        height="100vh"
+        gap={2}
+      >
+        <Typography variant="h5" color="error">
+          Access Denied
+        </Typography>
         <Typography color="text.secondary">Your request to join was declined.</Typography>
-        <Button variant="outlined" onClick={() => navigate('/meetings')}>Back to Meetings</Button>
+        <Button variant="outlined" onClick={() => navigate('/meetings')}>
+          Back to Meetings
+        </Button>
       </Box>
     )
   }
 
   if (roomState === 'ended' || roomState === 'error') {
     return (
-      <Box display="flex" flexDirection="column" alignItems="center" justifyContent="center" height="100vh" gap={2}>
+      <Box
+        display="flex"
+        flexDirection="column"
+        alignItems="center"
+        justifyContent="center"
+        height="100vh"
+        gap={2}
+      >
         <Typography variant="h5">Meeting Ended</Typography>
-        <Button variant="outlined" onClick={() => navigate('/meetings')}>Back to Meetings</Button>
+        <Button variant="outlined" onClick={() => navigate('/meetings')}>
+          Back to Meetings
+        </Button>
       </Box>
     )
   }
@@ -288,12 +339,31 @@ export function MeetingRoomPage() {
   const peerIds = Object.keys(peers)
 
   return (
-    <Box sx={{ display: 'flex', flexDirection: 'column', height: '100vh', bgcolor: 'background.default' }}>
-
+    <Box
+      sx={{
+        display: 'flex',
+        flexDirection: 'column',
+        height: '100vh',
+        bgcolor: 'background.default',
+      }}
+    >
       {/* ── Top bar ─────────────────────────────────────────────────────────── */}
-      <Box sx={{ px: 3, py: 1.5, borderBottom: '1px solid', borderColor: 'divider', display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexShrink: 0 }}>
+      <Box
+        sx={{
+          px: 3,
+          py: 1.5,
+          borderBottom: '1px solid',
+          borderColor: 'divider',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'space-between',
+          flexShrink: 0,
+        }}
+      >
         <Stack direction="row" spacing={1} alignItems="center">
-          <Typography variant="h6" fontWeight={600}>{meeting?.title || 'Meeting'}</Typography>
+          <Typography variant="h6" fontWeight={600}>
+            {meeting?.title || 'Meeting'}
+          </Typography>
           <Chip label={meeting?.code} size="small" sx={{ fontFamily: tokens.fonts.mono }} />
           <Chip label={meeting?.type} size="small" variant="outlined" />
           <Chip label={`${peerIds.length + 1} participants`} size="small" variant="outlined" />
@@ -309,11 +379,23 @@ export function MeetingRoomPage() {
 
         <Stack direction="row" spacing={1}>
           {isHost ? (
-            <Button variant="contained" color="error" startIcon={<CallEndIcon />} onClick={endMeeting} size="small">
+            <Button
+              variant="contained"
+              color="error"
+              startIcon={<CallEndIcon />}
+              onClick={endMeeting}
+              size="small"
+            >
               End Meeting
             </Button>
           ) : (
-            <Button variant="outlined" color="error" startIcon={<CallEndIcon />} onClick={leave} size="small">
+            <Button
+              variant="outlined"
+              color="error"
+              startIcon={<CallEndIcon />}
+              onClick={leave}
+              size="small"
+            >
               Leave
             </Button>
           )}
@@ -329,7 +411,6 @@ export function MeetingRoomPage() {
 
       {/* ── Main area: grid + knock sidebar ─────────────────────────────────── */}
       <Box sx={{ display: 'flex', flex: 1, overflow: 'hidden' }}>
-
         {/* ── Video grid ───────────────────────────────────────────────────── */}
         <Box
           ref={videoGridRef}
@@ -401,7 +482,6 @@ export function MeetingRoomPage() {
               </VideoTile>
             )
           })}
-
         </Box>
 
         {/* ── Chat panel ──────────────────────────────────────────────────── */}
@@ -427,7 +507,16 @@ export function MeetingRoomPage() {
 
         {/* ── Knock sidebar ────────────────────────────────────────────────── */}
         {knocks.length > 0 && (
-          <Box sx={{ width: 280, borderLeft: '1px solid', borderColor: 'divider', p: 2, overflowY: 'auto', flexShrink: 0 }}>
+          <Box
+            sx={{
+              width: 280,
+              borderLeft: '1px solid',
+              borderColor: 'divider',
+              p: 2,
+              overflowY: 'auto',
+              flexShrink: 0,
+            }}
+          >
             <Typography variant="subtitle2" fontWeight={600} mb={1}>
               Waiting to Join ({knocks.length})
             </Typography>
@@ -444,12 +533,24 @@ export function MeetingRoomPage() {
                     </Typography>
                   </Stack>
                   <Stack direction="row" spacing={0.5} mt={1}>
-                    <Button size="small" variant="contained" color="success" startIcon={<CheckIcon />} fullWidth
-                      onClick={() => respondToKnock(knock.knock_id, true)}>
+                    <Button
+                      size="small"
+                      variant="contained"
+                      color="success"
+                      startIcon={<CheckIcon />}
+                      fullWidth
+                      onClick={() => respondToKnock(knock.knock_id, true)}
+                    >
                       Admit
                     </Button>
-                    <Button size="small" variant="outlined" color="error" startIcon={<CloseIcon />} fullWidth
-                      onClick={() => respondToKnock(knock.knock_id, false)}>
+                    <Button
+                      size="small"
+                      variant="outlined"
+                      color="error"
+                      startIcon={<CloseIcon />}
+                      fullWidth
+                      onClick={() => respondToKnock(knock.knock_id, false)}
+                    >
                       Deny
                     </Button>
                   </Stack>
@@ -465,7 +566,16 @@ export function MeetingRoomPage() {
             maintained even when the panel is closed, so reopening shows
             recent history immediately. */}
         {captionsOn && roomState === 'in_meeting' && (
-          <Box sx={{ width: 340, borderLeft: '1px solid', borderColor: 'divider', p: 2, flexShrink: 0, display: 'flex' }}>
+          <Box
+            sx={{
+              width: 340,
+              borderLeft: '1px solid',
+              borderColor: 'divider',
+              p: 2,
+              flexShrink: 0,
+              display: 'flex',
+            }}
+          >
             <MeetingCaptionsPanel
               captions={captions}
               directory={participantDirectory}
@@ -478,21 +588,27 @@ export function MeetingRoomPage() {
       </Box>
 
       {/* ── Control bar ─────────────────────────────────────────────────────── */}
-      <Box sx={{
-        borderTop: '1px solid',
-        borderColor: 'divider',
-        px: 3,
-        py: 1.5,
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'center',
-        gap: 1.5,
-        flexShrink: 0,
-        bgcolor: 'background.paper',
-      }}>
+      <Box
+        sx={{
+          borderTop: '1px solid',
+          borderColor: 'divider',
+          px: 3,
+          py: 1.5,
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          gap: 1.5,
+          flexShrink: 0,
+          bgcolor: 'background.paper',
+        }}
+      >
         <MicButton isMuted={isMuted} audioLevel={audioLevel} onToggle={toggleMute} />
         <CameraButton isCameraOff={isCameraOff} onToggle={toggleCamera} />
-        <ShareButton isScreenSharing={isScreenSharing} onShare={shareScreen} onStop={stopScreenShare} />
+        <ShareButton
+          isScreenSharing={isScreenSharing}
+          onShare={shareScreen}
+          onStop={stopScreenShare}
+        />
         <HandButton isHandRaised={isHandRaised} onToggle={toggleHand} />
         <EmojiButton onSend={sendEmojiReaction} />
         <BackgroundButton
@@ -507,10 +623,7 @@ export function MeetingRoomPage() {
           isOpen={isChatPanelOpen}
           onToggle={isChatPanelOpen ? closeChatPanel : openChatPanel}
         />
-        <CaptionsButton
-          enabled={captionsOn}
-          onToggle={() => setCaptionsOn((on) => !on)}
-        />
+        <CaptionsButton enabled={captionsOn} onToggle={() => setCaptionsOn((on) => !on)} />
         <Tooltip title="Device settings">
           <IconButton
             size="small"
@@ -558,7 +671,7 @@ interface VideoTileProps {
   isHandRaised: boolean
   reactions: EmojiReaction[]
   isLocal?: boolean
-  hostAction?: () => void   // mute-other button shown to host
+  hostAction?: () => void // mute-other button shown to host
   children?: React.ReactNode
 }
 
@@ -575,9 +688,7 @@ function VideoTile({
   children,
 }: VideoTileProps) {
   // Border width scales 2–4 px with audio level for local tile; binary for remote.
-  const borderWidth = isLocal
-    ? `${2 + audioLevel * 2}px`
-    : '2px'
+  const borderWidth = isLocal ? `${2 + audioLevel * 2}px` : '2px'
 
   return (
     <Paper
@@ -604,12 +715,25 @@ function VideoTile({
       )}
 
       {/* Mute icon — bottom left */}
-      <Box sx={{ position: 'absolute', bottom: 8, left: 8, display: 'flex', alignItems: 'center', gap: 0.5 }}>
-        {isMuted
-          ? <MicOffIcon fontSize="small" sx={{ color: 'error.light' }} />
-          : (isSpeaking && <MicIcon fontSize="small" color="primary" />)
-        }
-        <Typography variant="caption" sx={{ bgcolor: 'rgba(0,0,0,0.55)', px: 0.5, borderRadius: 0.5 }}>
+      <Box
+        sx={{
+          position: 'absolute',
+          bottom: 8,
+          left: 8,
+          display: 'flex',
+          alignItems: 'center',
+          gap: 0.5,
+        }}
+      >
+        {isMuted ? (
+          <MicOffIcon fontSize="small" sx={{ color: 'error.light' }} />
+        ) : (
+          isSpeaking && <MicIcon fontSize="small" color="primary" />
+        )}
+        <Typography
+          variant="caption"
+          sx={{ bgcolor: 'rgba(0,0,0,0.55)', px: 0.5, borderRadius: 0.5 }}
+        >
           {label}
         </Typography>
       </Box>
@@ -617,7 +741,9 @@ function VideoTile({
       {/* Hand raise — top right */}
       {isHandRaised && (
         <Box sx={{ position: 'absolute', top: 8, right: 8 }}>
-          <Typography fontSize="1.2rem" lineHeight={1}>✋</Typography>
+          <Typography fontSize="1.2rem" lineHeight={1}>
+            ✋
+          </Typography>
         </Box>
       )}
 
@@ -768,7 +894,12 @@ function DeviceCheckScreen({
           {meetingCode && (
             <Typography
               variant="caption"
-              sx={{ color: 'text.secondary', fontFamily: tokens.fonts.mono, mt: 0.5, display: 'block' }}
+              sx={{
+                color: 'text.secondary',
+                fontFamily: tokens.fonts.mono,
+                mt: 0.5,
+                display: 'block',
+              }}
             >
               {meetingCode}
             </Typography>
@@ -928,7 +1059,11 @@ function DeviceCheckScreen({
           </Box>
         )}
 
-        <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1.5} sx={{ width: '100%', maxWidth: 360 }}>
+        <Stack
+          direction={{ xs: 'column', sm: 'row' }}
+          spacing={1.5}
+          sx={{ width: '100%', maxWidth: 360 }}
+        >
           <Button
             variant="outlined"
             fullWidth
@@ -956,7 +1091,11 @@ function DeviceCheckScreen({
           </Button>
         </Stack>
 
-        <Typography variant="caption" color="text.secondary" sx={{ textAlign: 'center', maxWidth: 380 }}>
+        <Typography
+          variant="caption"
+          color="text.secondary"
+          sx={{ textAlign: 'center', maxWidth: 380 }}
+        >
           Your camera and microphone start off. Toggle them on above to test before joining.
         </Typography>
       </Stack>

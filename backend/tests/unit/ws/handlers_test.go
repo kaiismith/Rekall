@@ -9,10 +9,11 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/gorilla/websocket"
-	wsHub "github.com/rekall/backend/internal/interfaces/http/ws"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"go.uber.org/zap"
+
+	wsHub "github.com/rekall/backend/internal/interfaces/http/ws"
 )
 
 // ─── media_state ──────────────────────────────────────────────────────────────
@@ -96,7 +97,7 @@ func TestHub_ForceMute_NonHostIgnored(t *testing.T) {
 	hostID := uuid.New()
 	clientID := uuid.New()
 	meetingID := uuid.New()
-	hub := wsHub.NewHub(meetingID, hostID, nil, nil, zap.NewNop())
+	hub := wsHub.NewHub(meetingID, hostID, nil, nil, nil, zap.NewNop())
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 	go hub.Run(ctx)
@@ -326,4 +327,3 @@ func TestHub_KnockTimeout_TriggeredByInternalMessage(t *testing.T) {
 	time.Sleep(50 * time.Millisecond)
 	assert.Equal(t, 1, hub.ActiveCount()) // only the participant remains
 }
-

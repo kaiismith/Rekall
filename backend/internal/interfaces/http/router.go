@@ -2,12 +2,13 @@ package http
 
 import (
 	"github.com/gin-gonic/gin"
+	swaggerFiles "github.com/swaggo/files"
+	ginSwagger "github.com/swaggo/gin-swagger"
+	"go.uber.org/zap"
+
 	"github.com/rekall/backend/internal/interfaces/http/handlers"
 	"github.com/rekall/backend/internal/interfaces/http/middleware"
 	"github.com/rekall/backend/pkg/constants"
-	ginSwagger "github.com/swaggo/gin-swagger"
-	swaggerFiles "github.com/swaggo/files"
-	"go.uber.org/zap"
 
 	_ "github.com/rekall/backend/docs" // swagger docs registration
 )
@@ -25,6 +26,7 @@ type RouterDeps struct {
 	DeptH          *handlers.DepartmentHandler
 	MeetingH       *handlers.MeetingHandler
 	ASRH           *handlers.ASRHandler
+	TranscriptH    *handlers.TranscriptHandler
 	CORSOrigins    []string
 	SwaggerEnabled bool
 }
@@ -83,6 +85,10 @@ func NewRouter(deps RouterDeps) *gin.Engine {
 			if deps.ASRH != nil {
 				calls.POST("/:id/asr-session", deps.ASRH.Request)
 				calls.POST("/:id/asr-session/end", deps.ASRH.End)
+				calls.POST("/:id/asr-session/:session_id/segments", deps.ASRH.PostCallSegment)
+			}
+			if deps.TranscriptH != nil {
+				calls.GET("/:id/transcript", deps.TranscriptH.GetCallTranscript)
 			}
 		}
 
@@ -140,6 +146,9 @@ func NewRouter(deps RouterDeps) *gin.Engine {
 				if deps.ASRH != nil {
 					meetings.POST("/:code/asr-session", deps.ASRH.RequestForMeeting)
 					meetings.POST("/:code/asr-session/end", deps.ASRH.EndForMeeting)
+				}
+				if deps.TranscriptH != nil {
+					meetings.GET("/:code/transcript", deps.TranscriptH.GetMeetingTranscript)
 				}
 			}
 			// WebSocket — no JWT middleware; authenticates via the ticket.

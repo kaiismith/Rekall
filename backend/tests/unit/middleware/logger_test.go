@@ -7,9 +7,10 @@ import (
 	"testing"
 
 	"github.com/gin-gonic/gin"
-	"github.com/rekall/backend/internal/interfaces/http/middleware"
 	"github.com/stretchr/testify/assert"
 	"go.uber.org/zap"
+
+	"github.com/rekall/backend/internal/interfaces/http/middleware"
 )
 
 // ─── Logger middleware (access log) ───────────────────────────────────────────

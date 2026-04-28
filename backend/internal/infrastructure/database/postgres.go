@@ -5,10 +5,11 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/rekall/backend/pkg/config"
 	"gorm.io/driver/postgres"
 	"gorm.io/gorm"
 	"gorm.io/gorm/logger"
+
+	"github.com/rekall/backend/pkg/config"
 )
 
 // New opens a GORM database connection backed by PostgreSQL and configures
@@ -22,7 +23,7 @@ func New(cfg config.DatabaseConfig, isDevelopment bool) (*gorm.DB, error) {
 
 	db, err := gorm.Open(postgres.Open(cfg.DSN()), &gorm.Config{
 		Logger:                                   logger.Default.LogMode(logLevel),
-		PrepareStmt:                              true,  // cache prepared statements
+		PrepareStmt:                              true, // cache prepared statements
 		DisableForeignKeyConstraintWhenMigrating: false,
 	})
 	if err != nil {

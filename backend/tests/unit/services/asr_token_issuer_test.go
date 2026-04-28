@@ -8,12 +8,13 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+	"go.uber.org/zap"
+
 	"github.com/rekall/backend/internal/application/services"
 	"github.com/rekall/backend/internal/domain/entities"
 	"github.com/rekall/backend/internal/domain/ports"
 	"github.com/rekall/backend/internal/infrastructure/asr"
 	apperr "github.com/rekall/backend/pkg/errors"
-	"go.uber.org/zap"
 )
 
 const testSecret = "0123456789abcdef0123456789abcdef0123456789ab"
@@ -21,10 +22,10 @@ const testSecret = "0123456789abcdef0123456789abcdef0123456789ab"
 // ── Stubs ────────────────────────────────────────────────────────────────────
 
 type stubASR struct {
-	startResp *ports.StartSessionOutput
-	startErr  error
-	endResp   *ports.EndSessionOutput
-	endErr    error
+	startResp  *ports.StartSessionOutput
+	startErr   error
+	endResp    *ports.EndSessionOutput
+	endErr     error
 	startCalls int
 	endCalls   int
 }
@@ -41,8 +42,8 @@ func (s *stubASR) Health(context.Context) (*ports.ASRHealth, error) { return nil
 func (s *stubASR) Close() error                                     { return nil }
 
 type stubCallRepo struct {
-	call    *entities.Call
-	getErr  error
+	call   *entities.Call
+	getErr error
 }
 
 func (s *stubCallRepo) GetByID(_ context.Context, _ uuid.UUID) (*entities.Call, error) {
@@ -50,9 +51,13 @@ func (s *stubCallRepo) GetByID(_ context.Context, _ uuid.UUID) (*entities.Call, 
 }
 
 // Unused interface methods — implement enough to satisfy ports.CallRepository.
-func (s *stubCallRepo) Create(_ context.Context, _ *entities.Call) (*entities.Call, error) { return nil, nil }
-func (s *stubCallRepo) Update(_ context.Context, _ *entities.Call) (*entities.Call, error) { return nil, nil }
-func (s *stubCallRepo) SoftDelete(_ context.Context, _ uuid.UUID) error                    { return nil }
+func (s *stubCallRepo) Create(_ context.Context, _ *entities.Call) (*entities.Call, error) {
+	return nil, nil
+}
+func (s *stubCallRepo) Update(_ context.Context, _ *entities.Call) (*entities.Call, error) {
+	return nil, nil
+}
+func (s *stubCallRepo) SoftDelete(_ context.Context, _ uuid.UUID) error { return nil }
 func (s *stubCallRepo) List(_ context.Context, _ ports.ListCallsFilter, _, _ int) ([]*entities.Call, int, error) {
 	return nil, 0, nil
 }
@@ -65,9 +70,10 @@ func newIssuer(t *testing.T, repo ports.CallRepository, client ports.ASRClient) 
 	if err != nil {
 		t.Fatalf("signer init: %v", err)
 	}
-	// meetingRepo + participantRepo are nil — these tests cover only the call
-	// flow; the meeting flow is exercised by separate handler tests.
-	return services.NewASRTokenIssuer(client, repo, nil, nil, signer,
+	// meetingRepo + participantRepo + persister are nil — these tests cover
+	// only the call flow; the meeting flow is exercised by separate handler
+	// tests, and persistence wiring is covered by transcript_persister_test.go.
+	return services.NewASRTokenIssuer(client, repo, nil, nil, nil, signer,
 		services.ASRTokenIssuerConfig{
 			WSBaseURL:  "ws://test",
 			DefaultTTL: 3 * time.Minute,

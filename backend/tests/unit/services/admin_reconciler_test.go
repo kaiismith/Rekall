@@ -5,13 +5,14 @@ import (
 	"testing"
 
 	"github.com/google/uuid"
-	"github.com/rekall/backend/internal/application/services"
-	"github.com/rekall/backend/internal/domain/entities"
-	apperr "github.com/rekall/backend/pkg/errors"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
 	"github.com/stretchr/testify/require"
 	"go.uber.org/zap"
+
+	"github.com/rekall/backend/internal/application/services"
+	"github.com/rekall/backend/internal/domain/entities"
+	apperr "github.com/rekall/backend/pkg/errors"
 )
 
 // ─── Reconcile: bootstrap path ───────────────────────────────────────────────

@@ -1,4 +1,4 @@
-.PHONY: build run test test-integration lint fmt tidy docs docs-check migrate-up migrate-down clean
+.PHONY: build run test test-integration test-hook lint fmt tidy docs docs-check migrate-up migrate-down clean
 
 BINARY       := bin/rekall-server
 MAIN         := ./cmd/server
@@ -46,6 +46,11 @@ test-coverage:
 	go test -coverprofile=coverage.out ./...
 	go tool cover -html=coverage.out -o coverage.html
 	@echo "Coverage report: coverage.html"
+
+# Integration test for the Go pre-commit hook (Linux/macOS only).
+# Skips cleanly when gofmt/goimports/golangci-lint are not on $PATH.
+test-hook:
+	bash tests/integration/pre-commit-hook.sh
 
 # ─── Lint & Format ────────────────────────────────────────────────────────────
 lint:

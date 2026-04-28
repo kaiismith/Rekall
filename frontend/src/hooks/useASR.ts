@@ -32,6 +32,13 @@ export interface UseASRResult {
    * working as before, just without the badge / placeholder UI.
    */
   engineMode: EngineMode | undefined
+  /**
+   * The active ASR session_id once the server has issued a token. Exposed
+   * so callers can wire `onFinalSegment` to a per-segment POST without
+   * threading the session through their own state. `null` while idle /
+   * before the first `request()` returns.
+   */
+  sessionId: string | null
   start: () => Promise<void>
   stop: () => Promise<void>
 }
@@ -47,6 +54,15 @@ export interface UseASRResult {
 export interface ASRStreamCallbacks {
   onPartial?: (text: string, segmentId: string) => void
   onFinal?: (text: string, segmentId: string) => void
+  /**
+   * Fired exactly once per `final` event, with the FULL ASR payload (text +
+   * timing + per-word + language + confidence). Used by the persistence
+   * flows: the meeting page wires this to the WS hub's caption_chunk
+   * relay (which both broadcasts and persists), the solo-call page wires
+   * it to a direct POST to /asr-session/:sid/segments. Never fires for
+   * `partial` events — partials are not persisted.
+   */
+  onFinalSegment?: (event: ASRFinalEvent) => void
 }
 
 const RECONNECT_BACKOFFS_MS = [500, 1000, 2000, 4000, 8000]
@@ -80,6 +96,7 @@ export function useASR(
   const [finals, setFinals] = useState<ASRFinalEvent[]>([])
   const [error, setError] = useState<{ code: string; message: string } | null>(null)
   const [engineMode, setEngineMode] = useState<EngineMode | undefined>(undefined)
+  const [sessionId, setSessionId] = useState<string | null>(null)
 
   const wsRef = useRef<WebSocket | null>(null)
   const audioCtxRef = useRef<AudioContext | null>(null)
@@ -136,6 +153,7 @@ export function useASR(
           ? await asrService.requestForMeeting(id, {})
           : await asrService.request(id, {})
       sessionRef.current = session
+      setSessionId(session.session_id)
       logSafe('session issued', {
         kind,
         session_id: session.session_id,
@@ -235,6 +253,9 @@ export function useASR(
           setPartial('')
           setFinals((cur) => [...cur, parsed])
           callbacksRef.current?.onFinal?.(parsed.text, String(parsed.segment_id))
+          // Full-payload variant for the persistence flows (Task 10 of the
+          // transcript-persistence spec). Fires synchronously, exactly once.
+          callbacksRef.current?.onFinalSegment?.(parsed)
           break
         case 'error':
           console.warn('[asr] ⟵ error', parsed.code, parsed.message)
@@ -330,6 +351,7 @@ export function useASR(
       }
     }
     sessionRef.current = null
+    setSessionId(null)
   }, [id, kind, teardown])
 
   // ── Cleanup on unmount ─────────────────────────────────────────────────────
@@ -340,7 +362,7 @@ export function useASR(
     }
   }, [teardown])
 
-  return { state, partial, finals, error, engineMode, start, stop }
+  return { state, partial, finals, error, engineMode, sessionId, start, stop }
 }
 
 function normaliseError(e: unknown): { code: string; message: string } {

@@ -4,6 +4,7 @@ import MicIcon from '@mui/icons-material/Mic'
 import StopIcon from '@mui/icons-material/Stop'
 
 import { useASR, type ASRSessionKind } from '@/hooks/useASR'
+import { transcriptService } from '@/services/transcriptService'
 
 interface LiveCaptionsProps {
   /** Call UUID or meeting code, depending on `kind`. */
@@ -24,7 +25,24 @@ export function LiveCaptions({ callId, kind = 'call' }: LiveCaptionsProps) {
   // The hook surfaces `engineMode` for telemetry / debug consoles, but the
   // user-facing UI deliberately does NOT render it — we don't want users
   // perceiving a choice that doesn't belong to them.
-  const { state, partial, finals, error, engineMode, start, stop } = useASR(callId, kind)
+  // Solo Calls (kind === 'call') persist each `final` directly via HTTP.
+  // Meetings persist via the WS hub, which is wired in MeetingRoomPage's
+  // own useASR call — this component is only used in the solo-call view.
+  const { state, partial, finals, error, engineMode, sessionId, start, stop } = useASR(
+    callId,
+    kind,
+    {
+      onFinalSegment:
+        kind === 'call'
+          ? (event) => {
+              if (sessionId) {
+                // Fire-and-forget — failures only log to the console.
+                void transcriptService.postCallSegment(callId, sessionId, event)
+              }
+            }
+          : undefined,
+    },
+  )
 
   const finalText = useMemo(() => finals.map((f) => f.text).join(' '), [finals])
 

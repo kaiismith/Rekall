@@ -8,10 +8,16 @@ import (
 	"testing"
 	"time"
 
+	"context"
+
 	"github.com/gin-gonic/gin"
 	"github.com/golang-jwt/jwt/v5"
 	"github.com/google/uuid"
-	"context"
+
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/mock"
+	"github.com/stretchr/testify/require"
+	"go.uber.org/zap"
 
 	"github.com/rekall/backend/internal/application/services"
 	"github.com/rekall/backend/internal/domain/entities"
@@ -22,10 +28,6 @@ import (
 	"github.com/rekall/backend/internal/interfaces/http/handlers"
 	wsHub "github.com/rekall/backend/internal/interfaces/http/ws"
 	apperr "github.com/rekall/backend/pkg/errors"
-	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/mock"
-	"github.com/stretchr/testify/require"
-	"go.uber.org/zap"
 )
 
 // ─── helpers ─────────────────────────────────────────────────────────────────
@@ -43,7 +45,7 @@ func newMeetingHandler(svc *services.MeetingService) *handlers.MeetingHandler {
 // newMeetingHandlerWithTicketStore returns the handler plus the in-memory
 // ticket store so Connect tests can issue tickets before calling the upgrade.
 func newMeetingHandlerWithTicketStore(svc *services.MeetingService) (*handlers.MeetingHandler, *storage.MemoryWSTicketStore) {
-	manager := wsHub.NewHubManager(nil, zap.NewNop())
+	manager := wsHub.NewHubManager(nil, nil, zap.NewNop())
 	store := storage.NewMemoryWSTicketStore(zap.NewNop())
 	h := handlers.NewMeetingHandler(svc, nil, nil, manager, store, "http://rekall.test", zap.NewNop())
 	return h, store

@@ -4,6 +4,7 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+
 	"github.com/rekall/backend/internal/domain/entities"
 	"github.com/rekall/backend/internal/domain/ports"
 )
@@ -12,10 +13,10 @@ import (
 
 // CreateMeetingRequest is the body for POST /api/v1/meetings.
 type CreateMeetingRequest struct {
-	Title                string     `json:"title"`
-	Type                 string     `json:"type"       binding:"required,oneof=open private"`
-	ScopeType            string     `json:"scope_type"`
-	ScopeID              *uuid.UUID `json:"scope_id"`
+	Title     string     `json:"title"`
+	Type      string     `json:"type"       binding:"required,oneof=open private"`
+	ScopeType string     `json:"scope_type"`
+	ScopeID   *uuid.UUID `json:"scope_id"`
 	// TranscriptionEnabled allows the host to opt the meeting into the
 	// live-captions / ASR feature at creation time. Defaults to false.
 	TranscriptionEnabled bool `json:"transcription_enabled"`
@@ -32,42 +33,42 @@ type ParticipantPreview struct {
 
 // MeetingResponse is the outbound representation of a Meeting.
 type MeetingResponse struct {
-	ID                  uuid.UUID            `json:"id"`
-	Code                string               `json:"code"`
-	Title               string               `json:"title"`
-	Type                string               `json:"type"`
-	ScopeType           *string              `json:"scope_type,omitempty"`
-	ScopeID             *uuid.UUID           `json:"scope_id,omitempty"`
-	HostID              uuid.UUID            `json:"host_id"`
-	Status              string               `json:"status"`
-	MaxParticipants     int                  `json:"max_participants"`
-	JoinURL             string               `json:"join_url"`
-	StartedAt           *time.Time           `json:"started_at,omitempty"`
-	EndedAt             *time.Time           `json:"ended_at,omitempty"`
-	CreatedAt           time.Time            `json:"created_at"`
-	DurationSeconds     *int64               `json:"duration_seconds,omitempty"`
-	ParticipantPreviews []ParticipantPreview `json:"participant_previews"`
-	TranscriptionEnabled bool                `json:"transcription_enabled"`
+	ID                   uuid.UUID            `json:"id"`
+	Code                 string               `json:"code"`
+	Title                string               `json:"title"`
+	Type                 string               `json:"type"`
+	ScopeType            *string              `json:"scope_type,omitempty"`
+	ScopeID              *uuid.UUID           `json:"scope_id,omitempty"`
+	HostID               uuid.UUID            `json:"host_id"`
+	Status               string               `json:"status"`
+	MaxParticipants      int                  `json:"max_participants"`
+	JoinURL              string               `json:"join_url"`
+	StartedAt            *time.Time           `json:"started_at,omitempty"`
+	EndedAt              *time.Time           `json:"ended_at,omitempty"`
+	CreatedAt            time.Time            `json:"created_at"`
+	DurationSeconds      *int64               `json:"duration_seconds,omitempty"`
+	ParticipantPreviews  []ParticipantPreview `json:"participant_previews"`
+	TranscriptionEnabled bool                 `json:"transcription_enabled"`
 }
 
 // MeetingFromEntity builds a MeetingResponse from a Meeting entity.
 // DurationSeconds and ParticipantPreviews are left as their zero values.
 func MeetingFromEntity(m *entities.Meeting, baseURL string) MeetingResponse {
 	return MeetingResponse{
-		ID:                  m.ID,
-		Code:                m.Code,
-		Title:               m.Title,
-		Type:                m.Type,
-		ScopeType:           m.ScopeType,
-		ScopeID:             m.ScopeID,
-		HostID:              m.HostID,
-		Status:              m.Status,
-		MaxParticipants:     m.MaxParticipants,
-		JoinURL:             m.JoinURL(baseURL),
-		StartedAt:           m.StartedAt,
-		EndedAt:             m.EndedAt,
-		CreatedAt:           m.CreatedAt,
-		ParticipantPreviews: []ParticipantPreview{},
+		ID:                   m.ID,
+		Code:                 m.Code,
+		Title:                m.Title,
+		Type:                 m.Type,
+		ScopeType:            m.ScopeType,
+		ScopeID:              m.ScopeID,
+		HostID:               m.HostID,
+		Status:               m.Status,
+		MaxParticipants:      m.MaxParticipants,
+		JoinURL:              m.JoinURL(baseURL),
+		StartedAt:            m.StartedAt,
+		EndedAt:              m.EndedAt,
+		CreatedAt:            m.CreatedAt,
+		ParticipantPreviews:  []ParticipantPreview{},
 		TranscriptionEnabled: m.TranscriptionEnabled,
 	}
 }
@@ -91,7 +92,7 @@ func MeetingFromListItem(item *ports.MeetingListItem, baseURL string) MeetingRes
 
 // CanJoinResponse is returned by GET /api/v1/meetings/:code/can-join.
 type CanJoinResponse struct {
-	Result  string `json:"result"`  // "direct" | "knock" | "denied"
+	Result  string `json:"result"` // "direct" | "knock" | "denied"
 	KnockID string `json:"knock_id,omitempty"`
 }
 
