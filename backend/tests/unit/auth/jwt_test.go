@@ -5,10 +5,11 @@ import (
 	"time"
 
 	"github.com/google/uuid"
-	infraauth "github.com/rekall/backend/internal/infrastructure/auth"
-	"github.com/rekall/backend/internal/domain/entities"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
+	"github.com/rekall/backend/internal/domain/entities"
+	infraauth "github.com/rekall/backend/internal/infrastructure/auth"
 )
 
 const (

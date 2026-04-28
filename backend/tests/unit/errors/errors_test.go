@@ -5,9 +5,10 @@ import (
 	"net/http"
 	"testing"
 
-	apperr "github.com/rekall/backend/pkg/errors"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
+	apperr "github.com/rekall/backend/pkg/errors"
 )
 
 // ─── Constructors ─────────────────────────────────────────────────────────────

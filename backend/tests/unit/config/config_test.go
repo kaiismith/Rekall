@@ -4,10 +4,11 @@ import (
 	"testing"
 	"time"
 
-	"github.com/rekall/backend/pkg/config"
 	"github.com/spf13/viper"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
+	"github.com/rekall/backend/pkg/config"
 )
 
 // setRequired plants the minimum env vars needed to pass validateRequired.

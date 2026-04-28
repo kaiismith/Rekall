@@ -1,8 +1,9 @@
 package repohelpers
 
 import (
-	"github.com/rekall/backend/internal/domain/ports"
 	"gorm.io/gorm"
+
+	"github.com/rekall/backend/internal/domain/ports"
 )
 
 // ApplyCallFilter chains WHERE conditions onto the query for each populated filter field.

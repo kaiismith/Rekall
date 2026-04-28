@@ -7,6 +7,8 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+	"go.uber.org/zap"
+
 	"github.com/rekall/backend/internal/application/helpers"
 	apputils "github.com/rekall/backend/internal/application/utils"
 	"github.com/rekall/backend/internal/domain/entities"
@@ -16,7 +18,6 @@ import (
 	apperr "github.com/rekall/backend/pkg/errors"
 	applogger "github.com/rekall/backend/pkg/logger"
 	"github.com/rekall/backend/pkg/logger/catalog"
-	"go.uber.org/zap"
 )
 
 // OrganizationService orchestrates organization lifecycle operations:
@@ -27,7 +28,7 @@ type OrganizationService struct {
 	inviteRepo ports.InvitationRepository
 	userRepo   ports.UserRepository
 	mailer     ports.EmailSender
-	appBaseURL  string
+	appBaseURL string
 	inviteTTL  time.Duration
 	logger     *zap.Logger
 }
@@ -458,4 +459,3 @@ func (s *OrganizationService) AcceptInvitation(ctx context.Context, userID uuid.
 	)
 	return org, nil
 }
-

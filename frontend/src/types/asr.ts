@@ -66,6 +66,8 @@ export interface ASRFinalEvent {
   language: string
   start_ms: number
   end_ms: number
+  /** Aggregate confidence in [0,1]; absent when the engine doesn't report it. */
+  confidence?: number
   words?: ASRWordTiming[]
 }
 

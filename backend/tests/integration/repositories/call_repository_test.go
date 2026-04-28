@@ -12,14 +12,15 @@ import (
 	"os"
 	"testing"
 
-	"github.com/rekall/backend/internal/application/services"
-	"github.com/rekall/backend/internal/infrastructure/repositories"
 	"github.com/google/uuid"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"go.uber.org/zap"
 	"gorm.io/driver/postgres"
 	"gorm.io/gorm"
+
+	"github.com/rekall/backend/internal/application/services"
+	"github.com/rekall/backend/internal/infrastructure/repositories"
 )
 
 func testDB(t *testing.T) *gorm.DB {

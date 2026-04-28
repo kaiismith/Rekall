@@ -6,12 +6,13 @@ import (
 	"time"
 
 	"github.com/DATA-DOG/go-sqlmock"
-	"github.com/rekall/backend/internal/infrastructure/database"
-	"github.com/rekall/backend/pkg/config"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"gorm.io/driver/postgres"
 	"gorm.io/gorm"
+
+	"github.com/rekall/backend/internal/infrastructure/database"
+	"github.com/rekall/backend/pkg/config"
 )
 
 // ─── Ping ─────────────────────────────────────────────────────────────────────

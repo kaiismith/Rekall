@@ -6,12 +6,13 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+	"go.uber.org/zap"
+	"golang.org/x/crypto/bcrypt"
+
 	"github.com/rekall/backend/internal/domain/entities"
 	"github.com/rekall/backend/internal/domain/ports"
 	apperr "github.com/rekall/backend/pkg/errors"
 	applogger "github.com/rekall/backend/pkg/logger"
-	"go.uber.org/zap"
-	"golang.org/x/crypto/bcrypt"
 )
 
 // AdminReconciler keeps the platform-admin role on the users table in sync
@@ -30,10 +31,10 @@ import (
 // The env var is the source of truth — re-deploying with a different list is
 // the supported way to rotate platform admins.
 type AdminReconciler struct {
-	userRepo        ports.UserRepository
-	emails          []string
-	bootstrapPwd    string
-	logger          *zap.Logger
+	userRepo     ports.UserRepository
+	emails       []string
+	bootstrapPwd string
+	logger       *zap.Logger
 }
 
 // NewAdminReconciler builds a reconciler. emails should already be

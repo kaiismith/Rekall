@@ -6,13 +6,14 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+	"go.uber.org/zap"
+
 	"github.com/rekall/backend/internal/application/helpers"
 	"github.com/rekall/backend/internal/domain/entities"
 	"github.com/rekall/backend/internal/domain/ports"
 	apperr "github.com/rekall/backend/pkg/errors"
 	applogger "github.com/rekall/backend/pkg/logger"
 	"github.com/rekall/backend/pkg/logger/catalog"
-	"go.uber.org/zap"
 )
 
 // DepartmentService orchestrates department lifecycle and membership operations.
@@ -438,4 +439,3 @@ func (s *DepartmentService) RemoveDeptMember(ctx context.Context, deptID, reques
 	)
 	return nil
 }
-

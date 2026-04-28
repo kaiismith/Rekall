@@ -6,13 +6,14 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
+	"go.uber.org/zap"
+
 	"github.com/rekall/backend/internal/application/services"
 	"github.com/rekall/backend/internal/domain/entities"
 	"github.com/rekall/backend/internal/domain/ports"
 	"github.com/rekall/backend/internal/infrastructure/repositories"
-	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/require"
-	"go.uber.org/zap"
 )
 
 // createTestUser is a helper that creates a user and registers a cleanup to delete it.
@@ -34,7 +35,7 @@ func createTestMeeting(t *testing.T, ctx context.Context, meetingRepo *repositor
 }
 
 // ptr helpers
-func strPtr(s string) *string { return &s }
+func strPtr(s string) *string        { return &s }
 func timePtr(t time.Time) *time.Time { return &t }
 
 // TestMeetingRepository_ListByUser_StatusFilter verifies that passing

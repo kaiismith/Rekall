@@ -8,11 +8,12 @@ import (
 
 	"github.com/DATA-DOG/go-sqlmock"
 	"github.com/gin-gonic/gin"
-	"github.com/rekall/backend/internal/interfaces/http/handlers"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"gorm.io/driver/postgres"
 	"gorm.io/gorm"
+
+	"github.com/rekall/backend/internal/interfaces/http/handlers"
 )
 
 // newMockDB returns a gorm.DB backed by go-sqlmock plus the controlling mock

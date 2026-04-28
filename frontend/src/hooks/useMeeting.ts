@@ -15,6 +15,7 @@ import type {
   ParticipantDirectoryEntry,
   CaptionEntry,
 } from '@/types/meeting'
+import type { ASRFinalEvent } from '@/types/asr'
 import {
   MAX_MESSAGE_LENGTH,
   RATE_LIMIT_MESSAGES,
@@ -271,6 +272,15 @@ export interface UseMeetingReturn {
   captions: CaptionEntry[]
   /** Push a local ASR chunk into the feed and relay it over the meeting WS. */
   sendCaptionChunk: (kind: 'partial' | 'final', text: string, segmentId: string) => void
+  /**
+   * Variant for `final` events that includes the full persistence-shape
+   * payload (session_id + segment_index + start_ms / end_ms + per-word
+   * timings). Triggers the backend's WS hub to BOTH relay to other
+   * participants AND persist to transcript_segments. Use this for finals
+   * when the active ASR session_id is known; fall back to sendCaptionChunk
+   * when it isn't.
+   */
+  sendCaptionFinal: (event: ASRFinalEvent, sessionId: string) => void
 }
 
 const RTC_CONFIG: RTCConfiguration = {
@@ -1711,6 +1721,44 @@ export function useMeeting({ code, onEnd }: UseMeetingOptions): UseMeetingReturn
     [send],
   )
 
+  // Persistence-shape final relay: same broadcast as sendCaptionChunk plus the
+  // session_id / segment_index / start_ms / end_ms / words fields the backend
+  // needs to UPSERT a transcript_segments row. Use this for finals when the
+  // active ASR session_id is known; the backend hub broadcasts to peers AND
+  // persists off the broadcast critical path.
+  const sendCaptionFinal = useCallback(
+    (event: ASRFinalEvent, sessionId: string) => {
+      const uid = localUserIdRef.current
+      if (!uid || !event.text) return
+      const segmentIdStr = String(event.segment_id)
+      const ts = Date.now()
+      setCaptions((prev) =>
+        mergeCaption(prev, {
+          userId: uid,
+          kind: 'final',
+          text: event.text,
+          timestamp: ts,
+        }),
+      )
+      send({
+        type: 'caption_chunk',
+        caption_kind: 'final',
+        caption_text: event.text,
+        caption_segment_id: segmentIdStr,
+        caption_ts: ts,
+        // Persistence-shape additions (Requirement 5.2 of transcript-persistence).
+        session_id: sessionId,
+        segment_index: event.segment_id,
+        start_ms: event.start_ms,
+        end_ms: event.end_ms,
+        language: event.language || undefined,
+        confidence: event.confidence,
+        words: event.words,
+      })
+    },
+    [send],
+  )
+
   // ─────────────────────────────────────────────────────────────────────────
   return {
     meeting,
@@ -1773,5 +1821,6 @@ export function useMeeting({ code, onEnd }: UseMeetingOptions): UseMeetingReturn
     // ── live captions ─────────────────────────────────────────────────────
     captions,
     sendCaptionChunk,
+    sendCaptionFinal,
   }
 }

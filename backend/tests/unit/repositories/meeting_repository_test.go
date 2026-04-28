@@ -8,13 +8,14 @@ import (
 
 	"github.com/DATA-DOG/go-sqlmock"
 	"github.com/google/uuid"
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
+	"gorm.io/gorm"
+
 	"github.com/rekall/backend/internal/domain/entities"
 	"github.com/rekall/backend/internal/domain/ports"
 	"github.com/rekall/backend/internal/infrastructure/repositories"
 	apperr "github.com/rekall/backend/pkg/errors"
-	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/require"
-	"gorm.io/gorm"
 )
 
 func meetingRows() *sqlmock.Rows {
@@ -380,10 +381,10 @@ func TestMeeting_ListByUser_PreviewsInitials(t *testing.T) {
 	// in the preview (cap), exercising the "len < 3" guard.
 	mock.ExpectQuery(regexp.QuoteMeta(`SELECT mp.meeting_id`)).
 		WillReturnRows(sqlmock.NewRows([]string{"meeting_id", "user_id", "full_name"}).
-			AddRow(meetingID, uuid.New(), "").                  // empty → "?"
-			AddRow(meetingID, uuid.New(), "Cher").               // single-word → "C"
-			AddRow(meetingID, uuid.New(), "Mary Jane Watson").   // three-word → "MW"
-			AddRow(meetingID, uuid.New(), "Fourth One"))         // capped out
+			AddRow(meetingID, uuid.New(), "").                 // empty → "?"
+			AddRow(meetingID, uuid.New(), "Cher").             // single-word → "C"
+			AddRow(meetingID, uuid.New(), "Mary Jane Watson"). // three-word → "MW"
+			AddRow(meetingID, uuid.New(), "Fourth One"))       // capped out
 
 	list, err := repo.ListByUser(context.Background(), userID, ports.ListMeetingsFilter{})
 	require.NoError(t, err)

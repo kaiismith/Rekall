@@ -12,11 +12,12 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/gorilla/websocket"
-	"github.com/rekall/backend/internal/domain/entities"
-	wsHub "github.com/rekall/backend/internal/interfaces/http/ws"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"go.uber.org/zap"
+
+	"github.com/rekall/backend/internal/domain/entities"
+	wsHub "github.com/rekall/backend/internal/interfaces/http/ws"
 )
 
 // ─── Test chatRepo implementations ────────────────────────────────────────────
@@ -92,7 +93,7 @@ func makeClientPairWithChatRepo(
 	t.Helper()
 
 	meetingID := uuid.New()
-	hub := wsHub.NewHub(meetingID, userID, chatRepo, nil, zap.NewNop())
+	hub := wsHub.NewHub(meetingID, userID, chatRepo, nil, nil, zap.NewNop())
 	ctx, cancel := context.WithCancel(context.Background())
 	go hub.Run(ctx)
 

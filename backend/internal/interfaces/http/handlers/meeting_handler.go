@@ -13,6 +13,8 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
 	"github.com/gorilla/websocket"
+	"go.uber.org/zap"
+
 	"github.com/rekall/backend/internal/application/services"
 	"github.com/rekall/backend/internal/domain/entities"
 	"github.com/rekall/backend/internal/domain/ports"
@@ -21,7 +23,6 @@ import (
 	"github.com/rekall/backend/internal/interfaces/http/middleware"
 	wsHub "github.com/rekall/backend/internal/interfaces/http/ws"
 	apperr "github.com/rekall/backend/pkg/errors"
-	"go.uber.org/zap"
 )
 
 const wsTicketTTL = 60 * time.Second

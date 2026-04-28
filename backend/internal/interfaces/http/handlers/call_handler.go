@@ -5,6 +5,8 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
+	"go.uber.org/zap"
+
 	"github.com/rekall/backend/internal/application/services"
 	"github.com/rekall/backend/internal/domain/ports"
 	"github.com/rekall/backend/internal/interfaces/http/dto"
@@ -12,7 +14,6 @@ import (
 	"github.com/rekall/backend/internal/interfaces/http/middleware"
 	httputils "github.com/rekall/backend/internal/interfaces/http/utils"
 	apperr "github.com/rekall/backend/pkg/errors"
-	"go.uber.org/zap"
 )
 
 // CallHandler handles HTTP requests for the /calls resource.
@@ -232,5 +233,3 @@ func (h *CallHandler) Delete(c *gin.Context) {
 
 	c.JSON(http.StatusNoContent, nil)
 }
-
-

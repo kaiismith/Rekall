@@ -61,12 +61,42 @@ func (x *StartSessionRequest) ProtoReflect() protoreflect.Message {
 	return messageState(&x.state, x, asrMessageInfos[0])
 }
 
-func (x *StartSessionRequest) GetUserId() string                   { if x != nil { return x.UserId };                   return "" }
-func (x *StartSessionRequest) GetCallId() string                   { if x != nil { return x.CallId };                   return "" }
-func (x *StartSessionRequest) GetModelId() string                  { if x != nil { return x.ModelId };                  return "" }
-func (x *StartSessionRequest) GetLanguage() string                 { if x != nil { return x.Language };                 return "" }
-func (x *StartSessionRequest) GetRequestedTokenTtlSeconds() uint32 { if x != nil { return x.RequestedTokenTtlSeconds }; return 0 }
-func (x *StartSessionRequest) GetMetadata() map[string]string      { if x != nil { return x.Metadata };                 return nil }
+func (x *StartSessionRequest) GetUserId() string {
+	if x != nil {
+		return x.UserId
+	}
+	return ""
+}
+func (x *StartSessionRequest) GetCallId() string {
+	if x != nil {
+		return x.CallId
+	}
+	return ""
+}
+func (x *StartSessionRequest) GetModelId() string {
+	if x != nil {
+		return x.ModelId
+	}
+	return ""
+}
+func (x *StartSessionRequest) GetLanguage() string {
+	if x != nil {
+		return x.Language
+	}
+	return ""
+}
+func (x *StartSessionRequest) GetRequestedTokenTtlSeconds() uint32 {
+	if x != nil {
+		return x.RequestedTokenTtlSeconds
+	}
+	return 0
+}
+func (x *StartSessionRequest) GetMetadata() map[string]string {
+	if x != nil {
+		return x.Metadata
+	}
+	return nil
+}
 
 // ─── StartSessionResponse ────────────────────────────────────────────────────
 
@@ -89,11 +119,36 @@ func (x *StartSessionResponse) ProtoReflect() protoreflect.Message {
 	return messageState(&x.state, x, asrMessageInfos[1])
 }
 
-func (x *StartSessionResponse) GetSessionId() string                 { if x != nil { return x.SessionId };   return "" }
-func (x *StartSessionResponse) GetModelId() string                   { if x != nil { return x.ModelId };     return "" }
-func (x *StartSessionResponse) GetSampleRate() int32                 { if x != nil { return x.SampleRate };  return 0 }
-func (x *StartSessionResponse) GetFrameFormat() string               { if x != nil { return x.FrameFormat }; return "" }
-func (x *StartSessionResponse) GetExpiresAt() *timestamppb.Timestamp { if x != nil { return x.ExpiresAt };   return nil }
+func (x *StartSessionResponse) GetSessionId() string {
+	if x != nil {
+		return x.SessionId
+	}
+	return ""
+}
+func (x *StartSessionResponse) GetModelId() string {
+	if x != nil {
+		return x.ModelId
+	}
+	return ""
+}
+func (x *StartSessionResponse) GetSampleRate() int32 {
+	if x != nil {
+		return x.SampleRate
+	}
+	return 0
+}
+func (x *StartSessionResponse) GetFrameFormat() string {
+	if x != nil {
+		return x.FrameFormat
+	}
+	return ""
+}
+func (x *StartSessionResponse) GetExpiresAt() *timestamppb.Timestamp {
+	if x != nil {
+		return x.ExpiresAt
+	}
+	return nil
+}
 
 // ─── EndSession ──────────────────────────────────────────────────────────────
 
@@ -111,7 +166,12 @@ func (*EndSessionRequest) ProtoMessage()    {}
 func (x *EndSessionRequest) ProtoReflect() protoreflect.Message {
 	return messageState(&x.state, x, asrMessageInfos[2])
 }
-func (x *EndSessionRequest) GetSessionId() string { if x != nil { return x.SessionId }; return "" }
+func (x *EndSessionRequest) GetSessionId() string {
+	if x != nil {
+		return x.SessionId
+	}
+	return ""
+}
 
 type EndSessionResponse struct {
 	state         protoimpl.MessageState
@@ -128,8 +188,18 @@ func (*EndSessionResponse) ProtoMessage()    {}
 func (x *EndSessionResponse) ProtoReflect() protoreflect.Message {
 	return messageState(&x.state, x, asrMessageInfos[3])
 }
-func (x *EndSessionResponse) GetFinalTranscript() string { if x != nil { return x.FinalTranscript }; return "" }
-func (x *EndSessionResponse) GetFinalCount() uint32      { if x != nil { return x.FinalCount };      return 0 }
+func (x *EndSessionResponse) GetFinalTranscript() string {
+	if x != nil {
+		return x.FinalTranscript
+	}
+	return ""
+}
+func (x *EndSessionResponse) GetFinalCount() uint32 {
+	if x != nil {
+		return x.FinalCount
+	}
+	return 0
+}
 
 // ─── GetSession / SessionInfo ────────────────────────────────────────────────
 
@@ -147,7 +217,12 @@ func (*GetSessionRequest) ProtoMessage()    {}
 func (x *GetSessionRequest) ProtoReflect() protoreflect.Message {
 	return messageState(&x.state, x, asrMessageInfos[4])
 }
-func (x *GetSessionRequest) GetSessionId() string { if x != nil { return x.SessionId }; return "" }
+func (x *GetSessionRequest) GetSessionId() string {
+	if x != nil {
+		return x.SessionId
+	}
+	return ""
+}
 
 type SessionInfo struct {
 	state         protoimpl.MessageState
@@ -168,12 +243,42 @@ func (*SessionInfo) ProtoMessage()    {}
 func (x *SessionInfo) ProtoReflect() protoreflect.Message {
 	return messageState(&x.state, x, asrMessageInfos[5])
 }
-func (x *SessionInfo) GetState() string                            { if x != nil { return x.State };                 return "" }
-func (x *SessionInfo) GetStartedAt() *timestamppb.Timestamp        { if x != nil { return x.StartedAt };             return nil }
-func (x *SessionInfo) GetLastActivityAt() *timestamppb.Timestamp   { if x != nil { return x.LastActivityAt };        return nil }
-func (x *SessionInfo) GetAudioSecondsProcessed() uint32            { if x != nil { return x.AudioSecondsProcessed }; return 0 }
-func (x *SessionInfo) GetPartialCount() uint32                     { if x != nil { return x.PartialCount };          return 0 }
-func (x *SessionInfo) GetFinalCount() uint32                       { if x != nil { return x.FinalCount };            return 0 }
+func (x *SessionInfo) GetState() string {
+	if x != nil {
+		return x.State
+	}
+	return ""
+}
+func (x *SessionInfo) GetStartedAt() *timestamppb.Timestamp {
+	if x != nil {
+		return x.StartedAt
+	}
+	return nil
+}
+func (x *SessionInfo) GetLastActivityAt() *timestamppb.Timestamp {
+	if x != nil {
+		return x.LastActivityAt
+	}
+	return nil
+}
+func (x *SessionInfo) GetAudioSecondsProcessed() uint32 {
+	if x != nil {
+		return x.AudioSecondsProcessed
+	}
+	return 0
+}
+func (x *SessionInfo) GetPartialCount() uint32 {
+	if x != nil {
+		return x.PartialCount
+	}
+	return 0
+}
+func (x *SessionInfo) GetFinalCount() uint32 {
+	if x != nil {
+		return x.FinalCount
+	}
+	return 0
+}
 
 // ─── HealthResponse ──────────────────────────────────────────────────────────
 
@@ -182,15 +287,15 @@ type HealthResponse struct {
 	sizeCache     protoimpl.SizeCache
 	unknownFields protoimpl.UnknownFields
 
-	Status           string   `protobuf:"bytes,1,opt,name=status,proto3" json:"status,omitempty"`
-	Version          string   `protobuf:"bytes,2,opt,name=version,proto3" json:"version,omitempty"`
-	UptimeSeconds    uint64   `protobuf:"varint,3,opt,name=uptime_seconds,json=uptimeSeconds,proto3" json:"uptime_seconds,omitempty"`
-	LoadedModels     []string `protobuf:"bytes,4,rep,name=loaded_models,json=loadedModels,proto3" json:"loaded_models,omitempty"`
-	ActiveSessions   uint32   `protobuf:"varint,5,opt,name=active_sessions,json=activeSessions,proto3" json:"active_sessions,omitempty"`
-	WorkerPoolSize   uint32   `protobuf:"varint,6,opt,name=worker_pool_size,json=workerPoolSize,proto3" json:"worker_pool_size,omitempty"`
-	WorkerPoolInUse  uint32   `protobuf:"varint,7,opt,name=worker_pool_in_use,json=workerPoolInUse,proto3" json:"worker_pool_in_use,omitempty"`
-	EngineMode       string   `protobuf:"bytes,8,opt,name=engine_mode,json=engineMode,proto3" json:"engine_mode,omitempty"`
-	EngineTarget     string   `protobuf:"bytes,9,opt,name=engine_target,json=engineTarget,proto3" json:"engine_target,omitempty"`
+	Status          string   `protobuf:"bytes,1,opt,name=status,proto3" json:"status,omitempty"`
+	Version         string   `protobuf:"bytes,2,opt,name=version,proto3" json:"version,omitempty"`
+	UptimeSeconds   uint64   `protobuf:"varint,3,opt,name=uptime_seconds,json=uptimeSeconds,proto3" json:"uptime_seconds,omitempty"`
+	LoadedModels    []string `protobuf:"bytes,4,rep,name=loaded_models,json=loadedModels,proto3" json:"loaded_models,omitempty"`
+	ActiveSessions  uint32   `protobuf:"varint,5,opt,name=active_sessions,json=activeSessions,proto3" json:"active_sessions,omitempty"`
+	WorkerPoolSize  uint32   `protobuf:"varint,6,opt,name=worker_pool_size,json=workerPoolSize,proto3" json:"worker_pool_size,omitempty"`
+	WorkerPoolInUse uint32   `protobuf:"varint,7,opt,name=worker_pool_in_use,json=workerPoolInUse,proto3" json:"worker_pool_in_use,omitempty"`
+	EngineMode      string   `protobuf:"bytes,8,opt,name=engine_mode,json=engineMode,proto3" json:"engine_mode,omitempty"`
+	EngineTarget    string   `protobuf:"bytes,9,opt,name=engine_target,json=engineTarget,proto3" json:"engine_target,omitempty"`
 }
 
 func (x *HealthResponse) Reset()         { *x = HealthResponse{} }
@@ -199,15 +304,60 @@ func (*HealthResponse) ProtoMessage()    {}
 func (x *HealthResponse) ProtoReflect() protoreflect.Message {
 	return messageState(&x.state, x, asrMessageInfos[6])
 }
-func (x *HealthResponse) GetStatus() string             { if x != nil { return x.Status };          return "" }
-func (x *HealthResponse) GetVersion() string            { if x != nil { return x.Version };         return "" }
-func (x *HealthResponse) GetUptimeSeconds() uint64      { if x != nil { return x.UptimeSeconds };   return 0 }
-func (x *HealthResponse) GetLoadedModels() []string     { if x != nil { return x.LoadedModels };    return nil }
-func (x *HealthResponse) GetActiveSessions() uint32     { if x != nil { return x.ActiveSessions };  return 0 }
-func (x *HealthResponse) GetWorkerPoolSize() uint32     { if x != nil { return x.WorkerPoolSize };  return 0 }
-func (x *HealthResponse) GetWorkerPoolInUse() uint32    { if x != nil { return x.WorkerPoolInUse }; return 0 }
-func (x *HealthResponse) GetEngineMode() string         { if x != nil { return x.EngineMode };      return "" }
-func (x *HealthResponse) GetEngineTarget() string       { if x != nil { return x.EngineTarget };    return "" }
+func (x *HealthResponse) GetStatus() string {
+	if x != nil {
+		return x.Status
+	}
+	return ""
+}
+func (x *HealthResponse) GetVersion() string {
+	if x != nil {
+		return x.Version
+	}
+	return ""
+}
+func (x *HealthResponse) GetUptimeSeconds() uint64 {
+	if x != nil {
+		return x.UptimeSeconds
+	}
+	return 0
+}
+func (x *HealthResponse) GetLoadedModels() []string {
+	if x != nil {
+		return x.LoadedModels
+	}
+	return nil
+}
+func (x *HealthResponse) GetActiveSessions() uint32 {
+	if x != nil {
+		return x.ActiveSessions
+	}
+	return 0
+}
+func (x *HealthResponse) GetWorkerPoolSize() uint32 {
+	if x != nil {
+		return x.WorkerPoolSize
+	}
+	return 0
+}
+func (x *HealthResponse) GetWorkerPoolInUse() uint32 {
+	if x != nil {
+		return x.WorkerPoolInUse
+	}
+	return 0
+}
+func (x *HealthResponse) GetEngineMode() string {
+	if x != nil {
+		return x.EngineMode
+	}
+	return ""
+}
+func (x *HealthResponse) GetEngineTarget() string {
+	if x != nil {
+		return x.EngineTarget
+	}
+	return ""
+}
 
 // ─── ReloadModels ────────────────────────────────────────────────────────────
 
@@ -225,7 +375,12 @@ func (*ReloadModelsRequest) ProtoMessage()    {}
 func (x *ReloadModelsRequest) ProtoReflect() protoreflect.Message {
 	return messageState(&x.state, x, asrMessageInfos[7])
 }
-func (x *ReloadModelsRequest) GetEntries() []*ModelEntry { if x != nil { return x.Entries }; return nil }
+func (x *ReloadModelsRequest) GetEntries() []*ModelEntry {
+	if x != nil {
+		return x.Entries
+	}
+	return nil
+}
 
 type ReloadModelsResponse struct {
 	state         protoimpl.MessageState
@@ -242,8 +397,18 @@ func (*ReloadModelsResponse) ProtoMessage()    {}
 func (x *ReloadModelsResponse) ProtoReflect() protoreflect.Message {
 	return messageState(&x.state, x, asrMessageInfos[8])
 }
-func (x *ReloadModelsResponse) GetLoaded() []string { if x != nil { return x.Loaded }; return nil }
-func (x *ReloadModelsResponse) GetFailed() []string { if x != nil { return x.Failed }; return nil }
+func (x *ReloadModelsResponse) GetLoaded() []string {
+	if x != nil {
+		return x.Loaded
+	}
+	return nil
+}
+func (x *ReloadModelsResponse) GetFailed() []string {
+	if x != nil {
+		return x.Failed
+	}
+	return nil
+}
 
 type ModelEntry struct {
 	state         protoimpl.MessageState
@@ -263,11 +428,36 @@ func (*ModelEntry) ProtoMessage()    {}
 func (x *ModelEntry) ProtoReflect() protoreflect.Message {
 	return messageState(&x.state, x, asrMessageInfos[9])
 }
-func (x *ModelEntry) GetId() string       { if x != nil { return x.Id };       return "" }
-func (x *ModelEntry) GetPath() string     { if x != nil { return x.Path };     return "" }
-func (x *ModelEntry) GetLanguage() string { if x != nil { return x.Language }; return "" }
-func (x *ModelEntry) GetNThreads() int32  { if x != nil { return x.NThreads }; return 0 }
-func (x *ModelEntry) GetBeamSize() int32  { if x != nil { return x.BeamSize }; return 0 }
+func (x *ModelEntry) GetId() string {
+	if x != nil {
+		return x.Id
+	}
+	return ""
+}
+func (x *ModelEntry) GetPath() string {
+	if x != nil {
+		return x.Path
+	}
+	return ""
+}
+func (x *ModelEntry) GetLanguage() string {
+	if x != nil {
+		return x.Language
+	}
+	return ""
+}
+func (x *ModelEntry) GetNThreads() int32 {
+	if x != nil {
+		return x.NThreads
+	}
+	return 0
+}
+func (x *ModelEntry) GetBeamSize() int32 {
+	if x != nil {
+		return x.BeamSize
+	}
+	return 0
+}
 
 // ─── StreamSession (server-streaming, internal/test only) ───────────────────
 

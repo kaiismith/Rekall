@@ -46,24 +46,24 @@ func (j *JSONMap) Scan(value interface{}) error {
 
 // Call is the central aggregate root representing a recorded conversation.
 type Call struct {
-	ID           uuid.UUID  `gorm:"type:uuid;primaryKey;default:gen_random_uuid()"   json:"id"`
-	UserID       uuid.UUID  `gorm:"type:uuid;column:user_id;not null;index"          json:"user_id"`
-	Title        string     `gorm:"not null"                                         json:"title"`
-	DurationSec  int        `gorm:"column:duration_sec;not null;default:0"           json:"duration_sec"`
-	Status       string     `gorm:"not null;default:pending"                         json:"status"` // pending | processing | done | failed
-	RecordingURL *string    `gorm:"column:recording_url"                             json:"recording_url,omitempty"`
-	Transcript   *string    `gorm:"type:text"                                        json:"transcript,omitempty"`
-	Metadata     JSONMap    `gorm:"type:jsonb;not null;default:'{}'"                 json:"metadata"`
+	ID           uuid.UUID `gorm:"type:uuid;primaryKey;default:gen_random_uuid()"   json:"id"`
+	UserID       uuid.UUID `gorm:"type:uuid;column:user_id;not null;index"          json:"user_id"`
+	Title        string    `gorm:"not null"                                         json:"title"`
+	DurationSec  int       `gorm:"column:duration_sec;not null;default:0"           json:"duration_sec"`
+	Status       string    `gorm:"not null;default:pending"                         json:"status"` // pending | processing | done | failed
+	RecordingURL *string   `gorm:"column:recording_url"                             json:"recording_url,omitempty"`
+	Transcript   *string   `gorm:"type:text"                                        json:"transcript,omitempty"`
+	Metadata     JSONMap   `gorm:"type:jsonb;not null;default:'{}'"                 json:"metadata"`
 	// Scope attaches this call to an organization or department. NULL on both
 	// means the call is an Open Item — not attached to any team.
-	ScopeType    *string    `gorm:"column:scope_type"                                json:"scope_type,omitempty"`
-	ScopeID      *uuid.UUID `gorm:"type:uuid;column:scope_id"                        json:"scope_id,omitempty"`
-	StartedAt    *time.Time `gorm:"column:started_at"                                json:"started_at,omitempty"`
-	EndedAt      *time.Time `gorm:"column:ended_at"                                  json:"ended_at,omitempty"`
-	CreatedAt    time.Time  `gorm:"autoCreateTime"                                   json:"created_at"`
-	UpdatedAt    time.Time  `gorm:"autoUpdateTime"                                   json:"updated_at"`
+	ScopeType *string    `gorm:"column:scope_type"                                json:"scope_type,omitempty"`
+	ScopeID   *uuid.UUID `gorm:"type:uuid;column:scope_id"                        json:"scope_id,omitempty"`
+	StartedAt *time.Time `gorm:"column:started_at"                                json:"started_at,omitempty"`
+	EndedAt   *time.Time `gorm:"column:ended_at"                                  json:"ended_at,omitempty"`
+	CreatedAt time.Time  `gorm:"autoCreateTime"                                   json:"created_at"`
+	UpdatedAt time.Time  `gorm:"autoUpdateTime"                                   json:"updated_at"`
 	// GORM v2 recognises *time.Time named DeletedAt as a soft-delete field automatically.
-	DeletedAt    *time.Time `gorm:"index"                                            json:"deleted_at,omitempty"`
+	DeletedAt *time.Time `gorm:"index"                                            json:"deleted_at,omitempty"`
 }
 
 // TableName tells GORM which table to use for this model.

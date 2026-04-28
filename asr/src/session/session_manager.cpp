@@ -26,6 +26,20 @@ CreateResult SessionManager::create(const CreateInput& in) {
                                       : nullptr;
     std::string canonical = (model ? model->id() : in.model_id_request);
 
+    // OpenAI mode has no local model registry, so `models_` is null and the
+    // canonical id falls through to whatever the caller sent — which is
+    // typically empty (callers don't override). Fall back to the engine's
+    // configured model name so downstream consumers (Go-side persistence,
+    // logs, dashboards) always see the canonical model id, never an empty
+    // string.
+    if (canonical.empty()) {
+        if (cfg_.engine.mode == rekall::asr::config::EngineMode::OpenAi) {
+            canonical = cfg_.engine.openai.model;
+        } else {
+            canonical = cfg_.models.default_id;
+        }
+    }
+
     std::uint32_t ttl = in.requested_ttl_seconds;
     if (ttl == 0) ttl = cfg_.auth.token_default_ttl_seconds;
     if (ttl < cfg_.auth.token_min_ttl_seconds) ttl = cfg_.auth.token_min_ttl_seconds;

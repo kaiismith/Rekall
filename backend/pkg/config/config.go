@@ -27,10 +27,10 @@ type Config struct {
 type ASRConfig struct {
 	FeatureEnabled bool
 
-	GRPCAddr      string
-	TokenSecret   string
-	TokenIssuer   string
-	TokenAudience string
+	GRPCAddr        string
+	TokenSecret     string
+	TokenIssuer     string
+	TokenAudience   string
 	TokenDefaultTTL time.Duration
 	TokenMaxTTL     time.Duration
 

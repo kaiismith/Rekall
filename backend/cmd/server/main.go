@@ -45,6 +45,8 @@ import (
 	"time"
 
 	"github.com/gin-gonic/gin"
+	"go.uber.org/zap"
+
 	"github.com/rekall/backend/internal/application/services"
 	infraasr "github.com/rekall/backend/internal/infrastructure/asr"
 	"github.com/rekall/backend/internal/infrastructure/database"
@@ -57,7 +59,6 @@ import (
 	"github.com/rekall/backend/pkg/config"
 	applogger "github.com/rekall/backend/pkg/logger"
 	"github.com/rekall/backend/pkg/logger/catalog"
-	"go.uber.org/zap"
 )
 
 func main() {
@@ -139,17 +140,18 @@ func main() {
 	)
 
 	// ── Repositories ─────────────────────────────────────────────────────────
-	callRepo            := repositories.NewCallRepository(db)
-	userRepo            := repositories.NewUserRepository(db)
-	tokenRepo           := repositories.NewTokenRepository(db)
-	orgRepo             := repositories.NewOrganizationRepository(db)
-	memberRepo          := repositories.NewOrgMembershipRepository(db)
-	inviteRepo          := repositories.NewInvitationRepository(db)
-	deptRepo            := repositories.NewDepartmentRepository(db)
-	deptMemberRepo      := repositories.NewDepartmentMembershipRepository(db)
-	meetingRepo         := repositories.NewMeetingRepository(db)
+	callRepo := repositories.NewCallRepository(db)
+	userRepo := repositories.NewUserRepository(db)
+	tokenRepo := repositories.NewTokenRepository(db)
+	orgRepo := repositories.NewOrganizationRepository(db)
+	memberRepo := repositories.NewOrgMembershipRepository(db)
+	inviteRepo := repositories.NewInvitationRepository(db)
+	deptRepo := repositories.NewDepartmentRepository(db)
+	deptMemberRepo := repositories.NewDepartmentMembershipRepository(db)
+	meetingRepo := repositories.NewMeetingRepository(db)
 	meetingParticipRepo := repositories.NewMeetingParticipantRepository(db)
-	meetingMessageRepo  := repositories.NewMeetingMessageRepository(db)
+	meetingMessageRepo := repositories.NewMeetingMessageRepository(db)
+	transcriptRepo := repositories.NewTranscriptRepository(db)
 
 	// ── Infrastructure ────────────────────────────────────────────────────────
 	mailer := infraemail.NewSMTPSender(
@@ -227,8 +229,25 @@ func main() {
 		log.Warn("platform admin reconciliation failed", zap.Error(err))
 	}
 
+	// ── Transcript persistence ────────────────────────────────────────────────
+	// Built unconditionally — when ASR is disabled, no session rows are ever
+	// inserted and the persister sits idle. Cheap to construct.
+	transcriptPersister := services.NewTranscriptPersister(
+		transcriptRepo, callRepo, meetingRepo, log,
+	)
+	transcriptCleanupJob := services.NewTranscriptCleanupJob(
+		transcriptRepo, transcriptPersister,
+		services.TranscriptCleanupConfig{
+			// Reuse the meeting cleanup cadence — orphaned ASR sessions are an
+			// adjacent failure mode, not a separate one.
+			Interval:  cfg.Meeting.CleanupInterval,
+			BatchSize: 100,
+		},
+		log,
+	)
+
 	// ── WebSocket Hub Manager ─────────────────────────────────────────────────
-	hubManager := wsHub.NewHubManager(meetingMessageRepo, log)
+	hubManager := wsHub.NewHubManager(meetingMessageRepo, transcriptPersister, log)
 	defer hubManager.Shutdown()
 
 	// ── WebSocket ticket store (secure WS auth) ───────────────────────────────
@@ -264,7 +283,8 @@ func main() {
 			os.Exit(1)
 		}
 		asrIssuer = services.NewASRTokenIssuer(
-			asrClient, callRepo, meetingRepo, meetingParticipRepo, signer,
+			asrClient, callRepo, meetingRepo, meetingParticipRepo,
+			transcriptPersister, signer,
 			services.ASRTokenIssuerConfig{
 				WSBaseURL:  cfg.ASR.WSURLBase,
 				DefaultTTL: cfg.ASR.TokenDefaultTTL,
@@ -273,14 +293,17 @@ func main() {
 	}
 
 	// ── Handlers ─────────────────────────────────────────────────────────────
-	healthH  := handlers.NewHealthHandler(db)
-	callH    := handlers.NewCallHandler(callSvc, log)
-	userH    := handlers.NewUserHandler(userSvc, log)
-	authH    := handlers.NewAuthHandler(authSvc, cfg.Auth.RefreshTokenTTL, log)
-	orgH     := handlers.NewOrganizationHandler(orgSvc, log)
-	deptH    := handlers.NewDepartmentHandler(deptSvc, log)
+	healthH := handlers.NewHealthHandler(db)
+	callH := handlers.NewCallHandler(callSvc, log)
+	userH := handlers.NewUserHandler(userSvc, log)
+	authH := handlers.NewAuthHandler(authSvc, cfg.Auth.RefreshTokenTTL, log)
+	orgH := handlers.NewOrganizationHandler(orgSvc, log)
+	deptH := handlers.NewDepartmentHandler(deptSvc, log)
 	meetingH := handlers.NewMeetingHandler(meetingSvc, chatMessageSvc, userSvc, hubManager, wsTicketStore, cfg.Auth.AppBaseURL, log)
-	asrH     := handlers.NewASRHandler(asrIssuer, log)
+	asrH := handlers.NewASRHandler(asrIssuer, transcriptPersister, log)
+	transcriptH := handlers.NewTranscriptHandler(
+		transcriptRepo, callRepo, meetingRepo, meetingParticipRepo, log,
+	)
 
 	// ── Router ───────────────────────────────────────────────────────────────
 	ginMode := gin.DebugMode
@@ -301,6 +324,7 @@ func main() {
 		DeptH:          deptH,
 		MeetingH:       meetingH,
 		ASRH:           asrH,
+		TranscriptH:    transcriptH,
 		CORSOrigins:    cfg.CORS.AllowedOrigins,
 		SwaggerEnabled: cfg.Server.SwaggerEnabled,
 	})
@@ -315,6 +339,7 @@ func main() {
 	jobCtx, cancelJobs := context.WithCancel(context.Background())
 	defer cancelJobs()
 	go cleanupJob.Run(jobCtx)
+	go transcriptCleanupJob.Run(jobCtx)
 
 	// ── Server ───────────────────────────────────────────────────────────────
 	srv := httpserver.NewServer(cfg.Server, router, log)

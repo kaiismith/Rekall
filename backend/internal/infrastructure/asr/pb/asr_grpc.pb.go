@@ -102,7 +102,7 @@ type aSRStreamSessionClient struct {
 	grpc.ClientStream
 }
 
-func (x *aSRStreamSessionClient) Send(m *StreamChunk) error      { return x.ClientStream.SendMsg(m) }
+func (x *aSRStreamSessionClient) Send(m *StreamChunk) error { return x.ClientStream.SendMsg(m) }
 func (x *aSRStreamSessionClient) Recv() (*TranscriptEvent, error) {
 	m := new(TranscriptEvent)
 	if err := x.ClientStream.RecvMsg(m); err != nil {

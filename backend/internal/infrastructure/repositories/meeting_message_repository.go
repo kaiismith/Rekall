@@ -5,8 +5,9 @@ import (
 	"time"
 
 	"github.com/google/uuid"
-	"github.com/rekall/backend/internal/domain/entities"
 	"gorm.io/gorm"
+
+	"github.com/rekall/backend/internal/domain/entities"
 )
 
 // MeetingMessageRepository implements ports.MeetingMessageRepository using GORM.

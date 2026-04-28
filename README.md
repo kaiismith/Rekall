@@ -114,11 +114,17 @@ make test              # backend + frontend tests (no docker needed)
 make migrate-up        # apply pending DB migrations
 make migrate-down      # roll back the most recent migration
 
-# Frontend pre-commit hook (auto-installed by `npm install` in frontend/):
-#   - prettier --write + eslint --fix on staged files (lint-staged)
-#   - project-wide tsc --noEmit when any *.ts/*.tsx is staged
-# Bypass with `git commit --no-verify`. CI re-runs the same checks.
-# See [`frontend/README.md`](frontend/README.md#pre-commit-hook) for details.
+# Pre-commit hook (auto-installed by `npm install` in frontend/):
+#   - Frontend: prettier --write + eslint --fix on staged files; tsc --noEmit
+#               when any *.ts/*.tsx is staged
+#   - Go:       gofmt + goimports auto-fix on staged backend/*.go; whole-tree
+#               go vet + golangci-lint + go build (requires goimports +
+#               golangci-lint on $PATH — see backend/README.md for install)
+# Bypass: `git commit --no-verify`, `HUSKY=0`,
+#         `REKALL_PRE_COMMIT_SKIP_GO=1`, `REKALL_PRE_COMMIT_SKIP_FRONTEND=1`.
+# CI re-runs the same checks.
+# See [`frontend/README.md`](frontend/README.md#pre-commit-hook) and
+# [`backend/README.md`](backend/README.md#pre-commit-hook) for details.
 
 # Build commands
 make build             # serial build of every basic-stack image (no asr)
@@ -195,6 +201,15 @@ make up-asr
 The first build is **slow** — 10–15 min — because it compiles whisper.cpp + a
 full vcpkg dependency tree (gRPC, Boost, spdlog, jwt-cpp, prometheus-cpp). All
 subsequent builds reuse the cached layers and complete in seconds.
+
+> **Transcript persistence.** Every `final` ASR event is now stored in
+> `transcript_sessions` + `transcript_segments` (text + per-word timings + the
+> engine + model snapshot) so downstream features — summaries, action items,
+> sentiment, search — can iterate without re-running ASR. The legacy
+> `calls.transcript` column is kept as a denormalised cache, rebuilt at session
+> end. The smoke checklist at
+> [`backend/docs/smoke-transcript-persistence.md`](backend/docs/smoke-transcript-persistence.md)
+> walks through the verification end-to-end.
 
 If you want to build all images (basic + asr) at once in **parallel** rather
 than letting compose serialise them service-by-service:
