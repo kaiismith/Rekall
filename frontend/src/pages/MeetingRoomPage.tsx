@@ -91,6 +91,7 @@ export function MeetingRoomPage() {
     leave,
     isMuted,
     isCameraOff,
+    mediaError,
     isScreenSharing,
     toggleMute,
     toggleCamera,
@@ -240,6 +241,7 @@ export function MeetingRoomPage() {
           audioLevel={audioLevel}
           onToggleMic={toggleMute}
           onToggleCamera={toggleCamera}
+          mediaError={mediaError}
           onJoin={joinNow}
           onCancel={() => navigate('/meetings')}
           onOpenSettings={() => setSettingsOpen(true)}
@@ -822,6 +824,7 @@ interface DeviceCheckScreenProps {
   isMuted: boolean
   isCameraOff: boolean
   audioLevel: number
+  mediaError: string | null
   onToggleMic: () => void
   onToggleCamera: () => void
   onJoin: () => void
@@ -836,6 +839,7 @@ function DeviceCheckScreen({
   isMuted,
   isCameraOff,
   audioLevel,
+  mediaError,
   onToggleMic,
   onToggleCamera,
   onJoin,
@@ -867,6 +871,21 @@ function DeviceCheckScreen({
       }}
     >
       <Stack spacing={3} sx={{ width: '100%', maxWidth: 720, alignItems: 'center' }}>
+        {mediaError && (
+          <Box
+            sx={{
+              width: '100%',
+              px: 2,
+              py: 1.5,
+              borderRadius: 2,
+              bgcolor: 'error.main',
+              color: 'error.contrastText',
+              fontSize: 14,
+            }}
+          >
+            {mediaError}
+          </Box>
+        )}
         <Box sx={{ textAlign: 'center' }}>
           <Typography
             variant="overline"
