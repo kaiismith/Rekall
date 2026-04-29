@@ -209,6 +209,7 @@ export interface UseMeetingReturn {
   // ── media controls ──────────────────────────────────────────────────────────
   isMuted: boolean
   isCameraOff: boolean
+  mediaError: string | null
   isScreenSharing: boolean
   toggleMute: () => void
   toggleCamera: () => void
@@ -350,6 +351,7 @@ export function useMeeting({ code, onEnd }: UseMeetingOptions): UseMeetingReturn
   // enable the camera or mic before the user joins.
   const [isMuted, setIsMuted] = useState(true)
   const [isCameraOff, setIsCameraOff] = useState(true)
+  const [mediaError, setMediaError] = useState<string | null>(null)
   const [isScreenSharing, setIsScreenSharing] = useState(false)
 
   // ── hand + emoji state ─────────────────────────────────────────────────────
@@ -531,21 +533,47 @@ export function useMeeting({ code, onEnd }: UseMeetingOptions): UseMeetingReturn
   // ── Media acquisition ─────────────────────────────────────────────────────
   const acquireMedia = useCallback(async (): Promise<MediaStream> => {
     mlog('acquireMedia →')
-    let stream: MediaStream
+    let audioTrack: MediaStreamTrack | null = null
+    let videoTrack: MediaStreamTrack | null = null
+
     try {
-      stream = await navigator.mediaDevices.getUserMedia({
+      const audioStream = await navigator.mediaDevices.getUserMedia({
         audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true },
-        video: { width: 1280, height: 720, frameRate: 30 },
       })
+      audioTrack = audioStream.getAudioTracks()[0] ?? null
+      setMediaError(null)
     } catch (err) {
-      mlog('acquireMedia FAILED', { name: (err as Error)?.name, message: (err as Error)?.message })
-      throw err
+      const name = (err as Error)?.name
+      mlog('acquireMedia audio FAILED', { name, message: (err as Error)?.message })
+      if (name === 'NotFoundError' || name === 'DevicesNotFoundError') {
+        setMediaError('No microphone found. Please connect a microphone and try again.')
+      } else if (name === 'NotAllowedError' || name === 'PermissionDeniedError') {
+        setMediaError(
+          'Microphone access was denied. Please allow microphone permission in your browser.',
+        )
+      } else {
+        setMediaError('Could not access microphone.')
+      }
     }
-    const [audioTrack] = stream.getAudioTracks()
-    const [videoTrack] = stream.getVideoTracks()
+
+    try {
+      const videoStream = await navigator.mediaDevices.getUserMedia({
+        video: { width: { ideal: 1280 }, height: { ideal: 720 }, frameRate: { ideal: 30 } },
+      })
+      videoTrack = videoStream.getVideoTracks()[0] ?? null
+    } catch (err) {
+      mlog('acquireMedia video FAILED', { name: (err as Error)?.name })
+    }
+
+    if (!audioTrack && !videoTrack) throw new Error('no media tracks available')
+
+    const stream = new MediaStream([
+      ...(audioTrack ? [audioTrack] : []),
+      ...(videoTrack ? [videoTrack] : []),
+    ])
     mlog('acquireMedia ←', { audio: !!audioTrack, video: !!videoTrack })
-    localTracksRef.current.audioTrack = audioTrack ?? null
-    localTracksRef.current.videoTrack = videoTrack ?? null
+    localTracksRef.current.audioTrack = audioTrack
+    localTracksRef.current.videoTrack = videoTrack
 
     // Honour the user's current mute / camera-off preferences when the tracks
     // are first obtained. The device-check screen seeds these to true so
@@ -1001,16 +1029,35 @@ export function useMeeting({ code, onEnd }: UseMeetingOptions): UseMeetingReturn
       if (overrides.audioId) audioConstraint.deviceId = { exact: overrides.audioId }
 
       const videoConstraint: MediaTrackConstraints = {
-        width: 1280,
-        height: 720,
-        frameRate: 30,
+        width: { ideal: 1280 },
+        height: { ideal: 720 },
+        frameRate: { ideal: 30 },
       }
       if (overrides.videoId) videoConstraint.deviceId = { exact: overrides.videoId }
 
-      return navigator.mediaDevices.getUserMedia({
-        audio: audioConstraint,
-        video: videoConstraint,
-      })
+      let audioTrack: MediaStreamTrack | null = null
+      let videoTrack: MediaStreamTrack | null = null
+
+      try {
+        const s = await navigator.mediaDevices.getUserMedia({ audio: audioConstraint })
+        audioTrack = s.getAudioTracks()[0] ?? null
+      } catch (err) {
+        mlog('acquireWithDevice audio FAILED', { name: (err as Error)?.name })
+      }
+
+      try {
+        const s = await navigator.mediaDevices.getUserMedia({ video: videoConstraint })
+        videoTrack = s.getVideoTracks()[0] ?? null
+      } catch (err) {
+        mlog('acquireWithDevice video FAILED', { name: (err as Error)?.name })
+      }
+
+      if (!audioTrack && !videoTrack) throw new Error('no media tracks available')
+
+      return new MediaStream([
+        ...(audioTrack ? [audioTrack] : []),
+        ...(videoTrack ? [videoTrack] : []),
+      ])
     },
     [],
   )
@@ -1782,6 +1829,7 @@ export function useMeeting({ code, onEnd }: UseMeetingOptions): UseMeetingReturn
     leave,
     isMuted,
     isCameraOff,
+    mediaError,
     isScreenSharing,
     toggleMute,
     toggleCamera,
