@@ -75,7 +75,7 @@ void append_int16_to_float(std::vector<float>& dst, const std::vector<std::int16
 
 }  // namespace
 
-LocalEngine::Transcriber(std::shared_ptr<rekall::asr::session::Session> session,
+LocalEngine::LocalEngine(std::shared_ptr<rekall::asr::session::Session> session,
                          std::shared_ptr<LoadedModel> model,
                          rekall::asr::config::SessionConfig session_cfg,
                          rekall::asr::observ::Metrics* metrics)
@@ -88,7 +88,7 @@ LocalEngine::Transcriber(std::shared_ptr<rekall::asr::session::Session> session,
     window_.reserve(window_max_samples_);
 }
 
-LocalEngine::~Transcriber() {
+LocalEngine::~LocalEngine() {
     if (state_ != nullptr) {
         whisper_free_state(state_);
         state_ = nullptr;
