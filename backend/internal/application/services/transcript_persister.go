@@ -81,15 +81,20 @@ type CloseSessionInput struct {
 // endpoint share this single source of truth for "what is a valid segment
 // write?".
 type TranscriptPersister struct {
-	repo        ports.TranscriptRepository
-	callRepo    ports.CallRepository
-	meetingRepo ports.MeetingRepository
-	logger      *zap.Logger
+	repo             ports.TranscriptRepository
+	callRepo         ports.CallRepository
+	meetingRepo      ports.MeetingRepository
+	insightPublisher ports.InsightPublisher
+	logger           *zap.Logger
 }
 
 // NewTranscriptPersister wires the persister. callRepo and meetingRepo are
 // used to resolve scope at session-open time and (for callRepo) to refresh
 // the legacy calls.transcript denormalised cache at session close.
+//
+// The insight publisher is optional and wired in via WithInsightPublisher
+// after construction so existing call sites (and tests) don't have to know
+// about intellikat. When unset, CloseSession skips the publish step entirely.
 func NewTranscriptPersister(
 	repo ports.TranscriptRepository,
 	callRepo ports.CallRepository,
@@ -102,6 +107,15 @@ func NewTranscriptPersister(
 		meetingRepo: meetingRepo,
 		logger:      applogger.WithComponent(logger, "transcript_persister"),
 	}
+}
+
+// WithInsightPublisher attaches the publisher used to fan a "session closed"
+// reference message out to the intellikat consumer. Pass a NoopInsightPublisher
+// when the feature is disabled. Returns the persister for fluent wiring at
+// the composition root.
+func (p *TranscriptPersister) WithInsightPublisher(pub ports.InsightPublisher) *TranscriptPersister {
+	p.insightPublisher = pub
+	return p
 }
 
 // OpenSession inserts a transcript_sessions row keyed by the ASR-issued
@@ -315,6 +329,25 @@ func (p *TranscriptPersister) CloseSession(ctx context.Context, in CloseSessionI
 				zap.String("session_id", in.SessionID.String()),
 				zap.String("call_id", sess.CallID.String()),
 				zap.Error(err),
+			)
+		}
+	}
+
+	// Re-fetch the now-closed session so the publisher sees the final
+	// status / counters. Best-effort — a publish failure is logged but
+	// never propagated; the DB close is the source of truth.
+	if p.insightPublisher != nil {
+		closed, err := p.repo.GetSession(ctx, in.SessionID)
+		if err == nil && closed != nil {
+			correlationID := ""
+			if closed.CorrelationID != nil {
+				correlationID = *closed.CorrelationID
+			}
+			// Run on a background goroutine so the close response isn't
+			// blocked by Service Bus latency. Use context.Background to
+			// avoid cancellation when the request context returns.
+			go p.insightPublisher.PublishSessionClosed(
+				context.Background(), closed, correlationID,
 			)
 		}
 	}

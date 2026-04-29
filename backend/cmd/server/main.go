@@ -51,6 +51,7 @@ import (
 	infraasr "github.com/rekall/backend/internal/infrastructure/asr"
 	"github.com/rekall/backend/internal/infrastructure/database"
 	infraemail "github.com/rekall/backend/internal/infrastructure/email"
+	"github.com/rekall/backend/internal/infrastructure/messaging"
 	"github.com/rekall/backend/internal/infrastructure/repositories"
 	"github.com/rekall/backend/internal/infrastructure/storage"
 	httpserver "github.com/rekall/backend/internal/interfaces/http"
@@ -229,12 +230,26 @@ func main() {
 		log.Warn("platform admin reconciliation failed", zap.Error(err))
 	}
 
+	// ── Intellikat publisher (optional — gated by INTELLIKAT_PUBLISH_ENABLED) ─
+	// Returns a NoopInsightPublisher when disabled so downstream wiring stays
+	// flag-agnostic. Connection failures during boot abort startup; runtime
+	// publish failures are logged but never propagated.
+	insightPublisher, err := messaging.NewIntellikatPublisher(cfg.Intellikat, log)
+	if err != nil {
+		log.Fatal("failed to construct intellikat publisher", zap.Error(err))
+	}
+	defer func() {
+		if err := insightPublisher.Close(); err != nil {
+			log.Warn("intellikat publisher close failed", zap.Error(err))
+		}
+	}()
+
 	// ── Transcript persistence ────────────────────────────────────────────────
 	// Built unconditionally — when ASR is disabled, no session rows are ever
 	// inserted and the persister sits idle. Cheap to construct.
 	transcriptPersister := services.NewTranscriptPersister(
 		transcriptRepo, callRepo, meetingRepo, log,
-	)
+	).WithInsightPublisher(insightPublisher)
 	transcriptCleanupJob := services.NewTranscriptCleanupJob(
 		transcriptRepo, transcriptPersister,
 		services.TranscriptCleanupConfig{

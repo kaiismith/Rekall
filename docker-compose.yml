@@ -64,6 +64,15 @@ services:
       ASR_WS_URL_BASE: ${ASR_WS_URL_BASE:-ws://localhost:8081}
       ASR_TOKEN_DEFAULT_TTL: ${ASR_TOKEN_DEFAULT_TTL:-3m}
       ASR_TOKEN_MAX_TTL: ${ASR_TOKEN_MAX_TTL:-5m}
+      # Intellikat (insights) publisher — feature-flagged off by default.
+      # Set INTELLIKAT_PUBLISH_ENABLED=true AND provide either a
+      # SERVICEBUS_CONNECTION_STRING (dev) or SERVICEBUS_FULLY_QUALIFIED_NAMESPACE
+      # (prod, managed identity) to enable. The publisher will no-op silently
+      # otherwise, so the backend ships without intellikat deployed.
+      INTELLIKAT_PUBLISH_ENABLED: ${INTELLIKAT_PUBLISH_ENABLED:-false}
+      SERVICEBUS_INSIGHTS_TOPIC: ${SERVICEBUS_INSIGHTS_TOPIC:-rekall.transcript.insights}
+      SERVICEBUS_FULLY_QUALIFIED_NAMESPACE: ${SERVICEBUS_FULLY_QUALIFIED_NAMESPACE:-}
+      SERVICEBUS_CONNECTION_STRING: ${SERVICEBUS_CONNECTION_STRING:-}
     ports:
       - "${SERVER_PORT:-8080}:8080"
     healthcheck:
@@ -166,6 +175,39 @@ services:
     ports:
       - "8081:8081"   # WebSocket data plane
       - "9091:9091"   # Prometheus metrics
+
+  # ── Intellikat (Python) — insights consumer ────────────────────────────────
+  # Hosted-mode by default (no torch in the image). Set INTELLIKAT_HF_MODE=local
+  # AND build the `intellikat-local` Docker target if you want in-process
+  # inference. Disabled in dev unless INTELLIKAT_PUBLISH_ENABLED=true on the
+  # backend AND a Service Bus connection string is provided here.
+  intellikat:
+    profiles: ["intellikat"]
+    build:
+      context: ./intellikat
+      dockerfile: docker/Dockerfile
+      target: intellikat-hosted
+    container_name: rekall_intellikat
+    restart: unless-stopped
+    depends_on:
+      - db
+    environment:
+      INTELLIKAT_DATABASE_URL: postgresql+psycopg://intellikat:${INTELLIKAT_DB_PASSWORD:-CHANGEME}@db:5432/${DB_NAME:-rekall}
+      INTELLIKAT_SERVICEBUS_NAMESPACE: ${SERVICEBUS_NAMESPACE:-rekall-dev}
+      INTELLIKAT_SERVICEBUS_CONNECTION_STRING: ${SERVICEBUS_CONNECTION_STRING:-}
+      INTELLIKAT_SERVICEBUS_TOPIC: ${SERVICEBUS_INSIGHTS_TOPIC:-rekall.transcript.insights}
+      INTELLIKAT_SERVICEBUS_SUBSCRIPTION: intellikat
+      INTELLIKAT_HF_MODE: ${INTELLIKAT_HF_MODE:-hosted}
+      INTELLIKAT_HF_TOKEN: ${INTELLIKAT_HF_TOKEN:-}
+      INTELLIKAT_FOUNDRY_ENDPOINT: ${INTELLIKAT_FOUNDRY_ENDPOINT:-}
+      INTELLIKAT_FOUNDRY_API_KEY: ${INTELLIKAT_FOUNDRY_API_KEY:-}
+      INTELLIKAT_FOUNDRY_SUMMARY_DEPLOYMENT: ${INTELLIKAT_FOUNDRY_SUMMARY_DEPLOYMENT:-gpt-4o-mini}
+      INTELLIKAT_LOG_LEVEL: ${INTELLIKAT_LOG_LEVEL:-INFO}
+      INTELLIKAT_LOG_FORMAT: json
+      INTELLIKAT_SERVICE_ENV: development
+      INTELLIKAT_PROMPT_DIR: /app/config/prompts
+    ports:
+      - "8090:8090"   # /healthz + /readyz
 
 volumes:
   postgres_data:

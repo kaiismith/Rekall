@@ -11,14 +11,31 @@ import (
 
 // Config holds all runtime configuration for the application.
 type Config struct {
-	Server   ServerConfig
-	Database DatabaseConfig
-	Logger   LoggerConfig
-	CORS     CORSConfig
-	Auth     AuthConfig
-	SMTP     SMTPConfig
-	Meeting  MeetingConfig
-	ASR      ASRConfig
+	Server     ServerConfig
+	Database   DatabaseConfig
+	Logger     LoggerConfig
+	CORS       CORSConfig
+	Auth       AuthConfig
+	SMTP       SMTPConfig
+	Meeting    MeetingConfig
+	ASR        ASRConfig
+	Intellikat IntellikatConfig
+}
+
+// IntellikatConfig holds the Go-side wiring for the Intellikat insights
+// service. The backend's only responsibility is to publish a small reference
+// message to Service Bus when a transcript session closes; the Python service
+// reads from the shared DB and writes its own tables.
+//
+// PublishEnabled is the master switch — when false, the publisher no-ops
+// and the backend ships without intellikat deployed.
+type IntellikatConfig struct {
+	PublishEnabled bool
+
+	// Service Bus.
+	Topic                   string
+	FullyQualifiedNamespace string // production: managed identity
+	ConnectionString        string // dev fallback; banned in production by Validate
 }
 
 // ASRConfig holds the Go-side knobs for the standalone C++ ASR service.
@@ -283,6 +300,12 @@ func Load() (*Config, error) {
 			CircuitBreakerFailures: viper.GetInt("ASR_CIRCUIT_BREAKER_FAILURES"),
 			CircuitBreakerCooldown: asrCircuitCooldown,
 		},
+		Intellikat: IntellikatConfig{
+			PublishEnabled:          viper.GetBool("INTELLIKAT_PUBLISH_ENABLED"),
+			Topic:                   viper.GetString("SERVICEBUS_INSIGHTS_TOPIC"),
+			FullyQualifiedNamespace: viper.GetString("SERVICEBUS_FULLY_QUALIFIED_NAMESPACE"),
+			ConnectionString:        viper.GetString("SERVICEBUS_CONNECTION_STRING"),
+		},
 	}, nil
 }
 
@@ -307,6 +330,17 @@ func (c *Config) Validate() error {
 			if c.ASR.GRPCClientCert == "" || c.ASR.GRPCClientKey == "" || c.ASR.GRPCServerCA == "" {
 				return fmt.Errorf("non-dev environments require ASR_GRPC_CLIENT_CERT, ASR_GRPC_CLIENT_KEY, ASR_GRPC_SERVER_CA")
 			}
+		}
+	}
+	if c.Intellikat.PublishEnabled {
+		if c.Intellikat.Topic == "" {
+			return fmt.Errorf("INTELLIKAT_PUBLISH_ENABLED=true requires SERVICEBUS_INSIGHTS_TOPIC")
+		}
+		if c.Intellikat.FullyQualifiedNamespace == "" && c.Intellikat.ConnectionString == "" {
+			return fmt.Errorf("INTELLIKAT_PUBLISH_ENABLED=true requires either SERVICEBUS_FULLY_QUALIFIED_NAMESPACE or SERVICEBUS_CONNECTION_STRING")
+		}
+		if !c.Server.IsDevelopment() && c.Intellikat.ConnectionString != "" {
+			return fmt.Errorf("SERVICEBUS_CONNECTION_STRING is not permitted in non-dev environments (use managed identity)")
 		}
 	}
 	return nil
@@ -359,6 +393,11 @@ func setDefaults() {
 	viper.SetDefault("ASR_WS_URL_BASE", "ws://localhost:8081")
 	viper.SetDefault("ASR_CIRCUIT_BREAKER_FAILURES", 3)
 	viper.SetDefault("ASR_CIRCUIT_BREAKER_COOLDOWN", "30s")
+
+	// Intellikat (Service Bus publisher). Master switch defaults off so the
+	// backend ships and runs without intellikat deployed.
+	viper.SetDefault("INTELLIKAT_PUBLISH_ENABLED", false)
+	viper.SetDefault("SERVICEBUS_INSIGHTS_TOPIC", "rekall.transcript.insights")
 }
 
 func validateRequired() error {

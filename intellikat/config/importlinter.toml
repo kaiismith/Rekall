@@ -1,0 +1,24 @@
+[importlinter]
+root_package = "intellikat"
+include_external_packages = false
+
+[[importlinter.contracts]]
+name = "Domain has no infra/interfaces deps"
+type = "forbidden"
+source_modules = ["intellikat.domain"]
+forbidden_modules = ["intellikat.infrastructure", "intellikat.interfaces"]
+
+[[importlinter.contracts]]
+name = "Application uses domain only (no infra/interfaces)"
+type = "forbidden"
+source_modules = ["intellikat.application"]
+forbidden_modules = ["intellikat.infrastructure", "intellikat.interfaces"]
+
+[[importlinter.contracts]]
+name = "Layered: interfaces -> application -> domain (no skipping inward)"
+type = "layers"
+layers = [
+    "intellikat.interfaces",
+    "intellikat.application",
+    "intellikat.domain",
+]

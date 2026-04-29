@@ -320,6 +320,34 @@ for the manual smoke checklist.
 
 ---
 
+## Insights (Intellikat) — sentiment + summarization
+
+The [`intellikat/`](intellikat/) Python service derives **per-segment sentiment**
+(via Hugging Face `MarieAngeA13/Sentiment-Analysis-BERT`, hosted or local)
+and **session summaries** (via Foundry AI) from persisted transcripts.
+
+It is gated behind `INTELLIKAT_PUBLISH_ENABLED` on the backend. When off,
+the backend ships and runs as today; intellikat receives nothing. When on,
+the backend publishes a small reference message (`transcript_session_id`
+only — never transcript text) to Service Bus, and intellikat consumes,
+reads from the shared DB, and writes results to its own three tables.
+
+```bash
+# enable for local dev (requires a Service Bus connection string)
+echo 'INTELLIKAT_PUBLISH_ENABLED=true'                         >> .env
+echo 'SERVICEBUS_CONNECTION_STRING=Endpoint=sb://...'          >> .env
+echo 'INTELLIKAT_HF_TOKEN=hf_...'                              >> .env
+echo 'INTELLIKAT_FOUNDRY_ENDPOINT=https://your.openai.azure.com/' >> .env
+echo 'INTELLIKAT_FOUNDRY_API_KEY=...'                          >> .env
+
+# bring up the intellikat profile alongside the rest of the stack
+docker compose --profile intellikat up -d --build intellikat
+```
+
+See [intellikat/README.md](intellikat/README.md) for the full architecture, modes, and debugging tips.
+
+---
+
 ## Path C — Local backend / ASR container (developer loop)
 
 When iterating on Go code, skip the backend image rebuild by running

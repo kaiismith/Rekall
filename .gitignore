@@ -67,5 +67,17 @@ asr/compile_commands.json
 *.a
 *.lib
 
+# ─── Intellikat (Python) ──────────────────────────────────────────────────────
+intellikat/.venv/
+intellikat/dist/
+intellikat/build/
+intellikat/var/
+intellikat/**/__pycache__/
+intellikat/.pytest_cache/
+intellikat/.mypy_cache/
+intellikat/.ruff_cache/
+intellikat/.coverage
+intellikat/htmlcov/
+
 # ─── Kiro ─────────────────────────────────────────────────────────────────────
 .kiro

@@ -2,7 +2,9 @@
         up down logs restart build build-all build-bake up-asr build-asr migrate \
         backend-test backend-lint backend-build \
         frontend-test frontend-lint frontend-build \
-        asr-build asr-test asr-lint asr-load asr-image asr-proto-go
+        asr-build asr-test asr-lint asr-load asr-image asr-proto-go \
+        intellikat-build intellikat-build-local intellikat-test intellikat-lint \
+        intellikat-migrate intellikat-image
 
 # ─── Docker Compose ───────────────────────────────────────────────────────────
 # `up` builds + starts the basic stack (postgres + backend + frontend + mailpit).
@@ -164,13 +166,47 @@ asr-proto-go:
 	       --go-grpc_out=backend/internal/infrastructure/asr/pb --go-grpc_opt=paths=source_relative \
 	       $(ASR_DIR)/proto/asr.proto
 
+# ─── Intellikat (Python) ──────────────────────────────────────────────────────
+# Set INTELLIKAT_BUILD=1 to include intellikat in the aggregate `test`/`lint`
+# targets. Without it, CI environments without the Python toolchain still pass.
+INTELLIKAT_DIR := intellikat
+UV ?= uv
+
+intellikat-build:
+	cd $(INTELLIKAT_DIR) && $(UV) sync --frozen
+
+intellikat-build-local:
+	cd $(INTELLIKAT_DIR) && $(UV) sync --frozen --extra local
+
+intellikat-test:
+	cd $(INTELLIKAT_DIR) && $(UV) run pytest
+
+intellikat-lint:
+	cd $(INTELLIKAT_DIR) && $(UV) run ruff check src tests
+	cd $(INTELLIKAT_DIR) && $(UV) run ruff format --check src tests
+	cd $(INTELLIKAT_DIR) && $(UV) run mypy src
+	cd $(INTELLIKAT_DIR) && $(UV) run lint-imports --config config/importlinter.toml
+
+intellikat-migrate:
+	cd $(INTELLIKAT_DIR) && $(UV) run alembic -c migrations/alembic.ini upgrade head
+
+intellikat-image:
+	docker build -f $(INTELLIKAT_DIR)/docker/Dockerfile --target intellikat-hosted \
+	  -t rekall-intellikat:dev $(INTELLIKAT_DIR)
+
 # ─── All ──────────────────────────────────────────────────────────────────────
 test: backend-test frontend-test
 ifeq ($(ASR_BUILD),1)
 test: asr-test
 endif
+ifeq ($(INTELLIKAT_BUILD),1)
+test: intellikat-test
+endif
 
 lint: backend-lint frontend-lint
 ifeq ($(ASR_BUILD),1)
 lint: asr-lint
+endif
+ifeq ($(INTELLIKAT_BUILD),1)
+lint: intellikat-lint
 endif
