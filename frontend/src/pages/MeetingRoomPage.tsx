@@ -448,6 +448,7 @@ export function MeetingRoomPage() {
           {/* Local tile */}
           <VideoTile
             label={isScreenSharing ? 'You (sharing)' : 'You'}
+            avatarName={user?.full_name}
             isMuted={isMuted}
             isSpeaking={isSpeaking}
             audioLevel={audioLevel}
@@ -703,6 +704,13 @@ export function MeetingRoomPage() {
 
 interface VideoTileProps {
   label: string
+  /**
+   * Full name used to derive the avatar's initials when the camera is off.
+   * Falls back to `label` when absent. The label is still rendered as a
+   * speaker tag at the bottom of a streaming tile, but is suppressed in the
+   * camera-off layout where the avatar is the dominant visual.
+   */
+  avatarName?: string
   isMuted: boolean
   isSpeaking: boolean
   audioLevel: number
@@ -716,7 +724,8 @@ interface VideoTileProps {
 
 function VideoTile({
   label,
-  isMuted,
+  avatarName,
+  isMuted: _isMuted,
   isSpeaking,
   audioLevel,
   isCameraOff,
@@ -729,8 +738,13 @@ function VideoTile({
   // Border width scales 2–4 px with audio level for local tile; binary for remote.
   const borderWidth = isLocal ? `${2 + audioLevel * 2}px` : '2px'
 
+  // When camera is off, the tile renders as a transparent layer with a
+  // standalone circular avatar — no Paper background, no border, no label
+  // badge — so the avatar reads as a clean profile bubble (matching the
+  // pre-join preview and the user's profile chip).
   return (
     <Paper
+      elevation={isCameraOff ? 0 : 1}
       sx={{
         position: 'relative',
         aspectRatio: '16/9',
@@ -741,49 +755,58 @@ function VideoTile({
         maxHeight: '100%',
         maxWidth: '100%',
         overflow: 'hidden',
-        border: isSpeaking ? `${borderWidth} solid` : '2px solid transparent',
-        borderColor: isSpeaking ? 'primary.main' : 'transparent',
+        border: isSpeaking && !isCameraOff ? `${borderWidth} solid` : '2px solid transparent',
+        borderColor: isSpeaking && !isCameraOff ? 'primary.main' : 'transparent',
         transition: 'border-color 0.1s ease, border-width 0.06s ease-out',
         display: 'flex',
         alignItems: 'center',
         justifyContent: 'center',
-        bgcolor: 'background.paper',
+        bgcolor: isCameraOff ? 'transparent' : 'background.paper',
+        boxShadow: isCameraOff ? 'none' : undefined,
+        borderRadius: isCameraOff ? 0 : undefined,
         justifySelf: 'center',
         alignSelf: 'center',
       }}
     >
-      {/* Video or avatar */}
+      {/* Video or avatar — sized to most of the tile HEIGHT (the smaller
+          dimension on a 16:9 Paper) so the 1:1 circle stays fully visible
+          without top/bottom clipping while taking up most of the tile. */}
       {isCameraOff ? (
-        <Avatar sx={{ width: 64, height: 64, fontSize: '1.5rem', bgcolor: 'primary.dark' }}>
-          {label.slice(0, 2).toUpperCase()}
+        <Avatar
+          sx={{
+            width: 96,
+            height: 96,
+            flexShrink: 0,
+            fontSize: '2rem',
+            fontWeight: 600,
+            bgcolor: avatarColour(avatarName || 'guest'),
+            color: 'common.white',
+          }}
+        >
+          {getInitials(avatarName || 'guest') || '?'}
         </Avatar>
       ) : (
         children
       )}
 
-      {/* Mute icon — bottom left */}
-      <Box
-        sx={{
-          position: 'absolute',
-          bottom: 8,
-          left: 8,
-          display: 'flex',
-          alignItems: 'center',
-          gap: 0.5,
-        }}
-      >
-        {isMuted ? (
-          <MicOffIcon fontSize="small" sx={{ color: 'error.light' }} />
-        ) : (
-          isSpeaking && <MicIcon fontSize="small" color="primary" />
-        )}
-        <Typography
-          variant="caption"
-          sx={{ bgcolor: 'rgba(0,0,0,0.55)', px: 0.5, borderRadius: 0.5 }}
+      {/* Speaker label — only shown when streaming video. Hidden in the
+          camera-off layout so the avatar stands alone. */}
+      {!isCameraOff && (
+        <Box
+          sx={{
+            position: 'absolute',
+            bottom: 8,
+            left: 8,
+          }}
         >
-          {label}
-        </Typography>
-      </Box>
+          <Typography
+            variant="caption"
+            sx={{ bgcolor: 'rgba(0,0,0,0.55)', px: 0.5, borderRadius: 0.5 }}
+          >
+            {label}
+          </Typography>
+        </Box>
+      )}
 
       {/* Hand raise — top right */}
       {isHandRaised && (
@@ -814,13 +837,6 @@ function VideoTile({
             <MicOffIcon fontSize="small" />
           </IconButton>
         </Tooltip>
-      )}
-
-      {/* Camera-off indicator */}
-      {isCameraOff && (
-        <Box sx={{ position: 'absolute', bottom: 8, right: 8 }}>
-          <VideocamOffIcon fontSize="small" sx={{ color: 'text.secondary' }} />
-        </Box>
       )}
 
       {/* Floating emoji reactions */}
@@ -1015,6 +1031,7 @@ function DeviceCheckScreen({
                 sx={{
                   width: 96,
                   height: 96,
+                  flexShrink: 0,
                   fontSize: '2rem',
                   fontWeight: 600,
                   bgcolor: avatarColour(userFullName || 'guest'),

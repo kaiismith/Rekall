@@ -242,14 +242,19 @@ describe('MeetingRoomPage', () => {
 
   // ── Local tile label ──────────────────────────────────────────────────────
 
-  it('local tile shows "You" when not sharing', () => {
-    renderPage()
+  it('local tile shows "You" when not sharing and camera is on', () => {
+    renderPage({ isCameraOff: false })
     expect(screen.getByText('You')).toBeInTheDocument()
   })
 
   it('local tile shows "You (sharing)" when screen sharing', () => {
-    renderPage({ isScreenSharing: true })
+    renderPage({ isCameraOff: false, isScreenSharing: true })
     expect(screen.getByText('You (sharing)')).toBeInTheDocument()
+  })
+
+  it('local tile hides the speaker label when camera is off (avatar stands alone)', () => {
+    renderPage({ isCameraOff: true })
+    expect(screen.queryByText('You')).not.toBeInTheDocument()
   })
 
   // ── Hand raise chip ───────────────────────────────────────────────────────
@@ -306,10 +311,11 @@ describe('MeetingRoomPage', () => {
       close: vi.fn(),
     } as unknown as RTCPeerConnection
     renderPage({
+      isCameraOff: false,
       peers: { 'user-abcdef12': mockPc },
-      mediaStates: { 'user-abcdef12': { audio: true, video: false } },
+      mediaStates: { 'user-abcdef12': { audio: true, video: true } },
     })
-    // Remote tile label shows uid.slice(0,8) + '…'
+    // Remote tile label shows uid.slice(0,8) + '…' when camera is on.
     expect(screen.getByText('user-abc…')).toBeInTheDocument()
   })
 
@@ -442,8 +448,9 @@ describe('MeetingRoomPage', () => {
 
   it('shows avatar with initials when camera is off', () => {
     renderPage({ isCameraOff: true })
-    // Local tile label is "You", avatar shows "YO"
-    expect(screen.getByText('YO')).toBeInTheDocument()
+    // Avatar derives initials from the auth user's full_name ("Host") rather
+    // than the tile label ("You"), matching the pre-join preview behaviour.
+    expect(screen.getByText('H')).toBeInTheDocument()
   })
 
   // ── Fallback title when meeting.title is empty ────────────────────────────
@@ -473,8 +480,8 @@ describe('MeetingRoomPage', () => {
 
   it('does not render local video element when camera is off', () => {
     renderPage({ isCameraOff: true })
-    // When camera is off, the local tile shows an Avatar instead of <video>
-    // The only videos would be from remote tiles
-    expect(screen.getByText('YO')).toBeInTheDocument() // Avatar initials
+    // When camera is off, the local tile shows an Avatar (initials from
+    // user.full_name = "Host" → "H") instead of a <video>.
+    expect(screen.getByText('H')).toBeInTheDocument()
   })
 })
