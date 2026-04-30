@@ -99,10 +99,23 @@ type Hub struct {
 	// a persistence failure must NEVER break the broadcast loop.
 	persister TranscriptPersister
 
+	// kat receives cohort-lifecycle hooks. Nil when Kat is disabled or
+	// unconfigured; the hub skips the calls in that case.
+	kat KatLifecycle
+
+	// activeASR counts the participants who currently have an open ASR
+	// session. The hub uses this to flag whether Kat should treat the
+	// meeting as live-with-speech.
+	activeASR int
+
 	// channels
 	register   chan registerRequest
 	unregister chan *Client
 	inbound    chan inboundEnvelope
+	// external broadcasts (e.g. from the Kat scheduler). Routed through the
+	// run loop so the broadcasts hit the same client-map snapshot that
+	// register/unregister mutate, with no extra locking.
+	external chan externalBroadcast
 
 	// done is closed when the hub's run loop exits.
 	done chan struct{}
@@ -110,6 +123,14 @@ type Hub struct {
 	onEnd func(meetingID uuid.UUID) // called when the meeting ends
 
 	logger *zap.Logger
+}
+
+// externalBroadcast carries an OutboundMessage submitted from outside the
+// hub's run goroutine. Used by the Kat WSBroadcaster adapter so live notes
+// fan out without needing a hub-level lock.
+type externalBroadcast struct {
+	msg    OutboundMessage
+	target *uuid.UUID // nil = broadcast to all admitted clients; non-nil = SendToUser
 }
 
 type registerRequest struct {
@@ -141,6 +162,7 @@ func NewHub(
 		register:   make(chan registerRequest, 8),
 		unregister: make(chan *Client, 8),
 		inbound:    make(chan inboundEnvelope, 64),
+		external:   make(chan externalBroadcast, 64),
 		done:       make(chan struct{}),
 		onEnd:      onEnd,
 		logger:     logger.With(zap.String("meeting_id", meetingID.String())),
@@ -164,6 +186,9 @@ func (h *Hub) Run(ctx context.Context) {
 		select {
 		case <-ctx.Done():
 			h.broadcastAll(OutboundMessage{Type: MsgTypeMeetingEnded})
+			if h.kat != nil {
+				go h.kat.OnMeetingEnded(h.meetingID)
+			}
 			return
 
 		case req := <-h.register:
@@ -178,9 +203,44 @@ func (h *Hub) Run(ctx context.Context) {
 
 		case env := <-h.inbound:
 			h.handleInbound(env)
+
+		case ext := <-h.external:
+			if ext.target == nil {
+				h.broadcastClients(ext.msg)
+			} else {
+				for c := range h.clients {
+					if c.UserID == *ext.target {
+						c.Send(ext.msg)
+					}
+				}
+			}
 		}
 	}
 }
+
+// EnqueueBroadcast routes msg through the run loop and fans it out to every
+// admitted client. Safe to call from any goroutine. Used by the Kat
+// WSBroadcaster adapter; the hub does not interpret msg.Type.
+func (h *Hub) EnqueueBroadcast(msg OutboundMessage) {
+	select {
+	case h.external <- externalBroadcast{msg: msg}:
+	default:
+		// Channel saturated — drop. The Kat scheduler treats broadcast as
+		// fire-and-forget; the in-memory ring buffer covers late joiners.
+	}
+}
+
+// EnqueueSendToUser routes msg to the named user via the hub run loop.
+func (h *Hub) EnqueueSendToUser(userID uuid.UUID, msg OutboundMessage) {
+	select {
+	case h.external <- externalBroadcast{msg: msg, target: &userID}:
+	default:
+	}
+}
+
+// SetKat installs a KatLifecycle hook on the hub. Safe to call before Run;
+// must NOT be called concurrently with Run. nil disables Kat.
+func (h *Hub) SetKat(k KatLifecycle) { h.kat = k }
 
 // Register enqueues a client for admission. direct=true for scope members /
 // open-meeting users; false for knockers.
@@ -208,6 +268,15 @@ func (h *Hub) admitDirect(c *Client) {
 		zap.String("user_id", uid.String()),
 		zap.Bool("send_ok_for_self", ok),
 	)
+	// Kat hook: replay current ring buffer to the joiner and (lazy-)create
+	// the cohort entry. Off the run loop so a slow service does not stall
+	// the hub.
+	if h.kat != nil {
+		kat := h.kat
+		mid := h.meetingID
+		hasASR := h.activeASR > 0
+		go kat.OnParticipantJoined(mid, uid, hasASR)
+	}
 }
 
 // promoteToActive sends a room_state snapshot to the newly admitted client and
@@ -322,6 +391,15 @@ func (h *Hub) handleUnregister(c *Client) {
 
 		h.broadcastAll(OutboundMessage{Type: MsgTypeParticipantLeft, UserID: &uid})
 		h.logger.Info("participant left", zap.String("user_id", uidStr))
+
+		// Kat hook: notify the scheduler so it can drop the cohort entry on
+		// last-leave (and the per-cohort ring buffer with it).
+		if h.kat != nil {
+			kat := h.kat
+			mid := h.meetingID
+			isLast := len(h.clients) == 0
+			go kat.OnParticipantLeft(mid, isLast)
+		}
 
 		// Best-effort: if this client owned an active ASR session and there
 		// was no graceful HTTP End call, close it now so the cleanup job is

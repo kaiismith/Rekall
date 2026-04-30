@@ -19,6 +19,37 @@ type Config struct {
 	SMTP     SMTPConfig
 	Meeting  MeetingConfig
 	ASR      ASRConfig
+	Kat      KatConfig
+}
+
+// KatConfig holds the env-bound knobs for the Kat live-notes scheduler. See
+// .kiro/specs/kat-live-notes/requirements.md (Requirement 7) for the full
+// contract. Notes are NOT persisted; this config only governs the in-memory
+// ring buffer + the Foundry adapter selection.
+type KatConfig struct {
+	Enabled bool
+
+	// Foundry endpoint + deployment + auth selection.
+	FoundryEndpoint   string
+	FoundryDeployment string
+	FoundryAPIVersion string
+	// FoundryAPIKey: empty triggers DefaultAzureCredential. Treated as a
+	// secret — never logged.
+	FoundryAPIKey         string
+	FoundryRequestTimeout time.Duration
+
+	// Sliding-window scheduler.
+	WindowSeconds          int
+	StepSeconds            int
+	MinNewSegments         int
+	MaxConcurrentRuns      int
+	CooldownAfterErrorSecs int
+
+	// In-memory ring buffer for late-join replay.
+	RingBufferCapacity int
+
+	// Prompt versioning.
+	PromptVersion string
 }
 
 // ASRConfig holds the Go-side knobs for the standalone C++ ASR service.
@@ -283,6 +314,21 @@ func Load() (*Config, error) {
 			CircuitBreakerFailures: viper.GetInt("ASR_CIRCUIT_BREAKER_FAILURES"),
 			CircuitBreakerCooldown: asrCircuitCooldown,
 		},
+		Kat: KatConfig{
+			Enabled:                viper.GetBool("KAT_ENABLED"),
+			FoundryEndpoint:        viper.GetString("KAT_FOUNDRY_ENDPOINT"),
+			FoundryDeployment:      viper.GetString("KAT_FOUNDRY_DEPLOYMENT"),
+			FoundryAPIVersion:      viper.GetString("KAT_FOUNDRY_API_VERSION"),
+			FoundryAPIKey:          viper.GetString("KAT_FOUNDRY_API_KEY"),
+			FoundryRequestTimeout:  time.Duration(viper.GetInt("KAT_FOUNDRY_REQUEST_TIMEOUT_MS")) * time.Millisecond,
+			WindowSeconds:          viper.GetInt("KAT_WINDOW_SECONDS"),
+			StepSeconds:            viper.GetInt("KAT_STEP_SECONDS"),
+			MinNewSegments:         viper.GetInt("KAT_MIN_NEW_SEGMENTS"),
+			MaxConcurrentRuns:      viper.GetInt("KAT_MAX_CONCURRENT_RUNS"),
+			CooldownAfterErrorSecs: viper.GetInt("KAT_COOLDOWN_AFTER_ERROR_SECONDS"),
+			RingBufferCapacity:     viper.GetInt("KAT_RING_BUFFER_CAPACITY"),
+			PromptVersion:          viper.GetString("KAT_PROMPT_VERSION"),
+		},
 	}, nil
 }
 
@@ -359,6 +405,22 @@ func setDefaults() {
 	viper.SetDefault("ASR_WS_URL_BASE", "ws://localhost:8081")
 	viper.SetDefault("ASR_CIRCUIT_BREAKER_FAILURES", 3)
 	viper.SetDefault("ASR_CIRCUIT_BREAKER_COOLDOWN", "30s")
+
+	// Kat live-notes scheduler. Master switch is on by default so a deployment
+	// that supplies a Foundry endpoint + key (or managed identity reachable)
+	// gets Kat without further opt-in. When KAT_ENABLED=false (or no
+	// endpoint/deployment is set), Kat reports `configured=false` via
+	// /healthz/kat and the frontend renders the offline panel.
+	viper.SetDefault("KAT_ENABLED", true)
+	viper.SetDefault("KAT_FOUNDRY_API_VERSION", "2024-08-01-preview")
+	viper.SetDefault("KAT_FOUNDRY_REQUEST_TIMEOUT_MS", 15000)
+	viper.SetDefault("KAT_WINDOW_SECONDS", 120)
+	viper.SetDefault("KAT_STEP_SECONDS", 20)
+	viper.SetDefault("KAT_MIN_NEW_SEGMENTS", 2)
+	viper.SetDefault("KAT_MAX_CONCURRENT_RUNS", 4)
+	viper.SetDefault("KAT_COOLDOWN_AFTER_ERROR_SECONDS", 60)
+	viper.SetDefault("KAT_RING_BUFFER_CAPACITY", 20)
+	viper.SetDefault("KAT_PROMPT_VERSION", "kat-v1")
 }
 
 func validateRequired() error {

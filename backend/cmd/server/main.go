@@ -48,9 +48,11 @@ import (
 	"go.uber.org/zap"
 
 	"github.com/rekall/backend/internal/application/services"
+	"github.com/rekall/backend/internal/domain/ports"
 	infraasr "github.com/rekall/backend/internal/infrastructure/asr"
 	"github.com/rekall/backend/internal/infrastructure/database"
 	infraemail "github.com/rekall/backend/internal/infrastructure/email"
+	"github.com/rekall/backend/internal/infrastructure/foundry"
 	"github.com/rekall/backend/internal/infrastructure/repositories"
 	"github.com/rekall/backend/internal/infrastructure/storage"
 	httpserver "github.com/rekall/backend/internal/interfaces/http"
@@ -275,6 +277,19 @@ func main() {
 		}
 		defer func() { _ = asrClient.Close() }()
 
+		// Pre-warm the gRPC channel so the first user-facing StartSession
+		// doesn't pay the TCP+HTTP/2 handshake against `asr:9090` and time
+		// out on its 2 s deadline. Best-effort: a failure here is logged
+		// but does not block boot — the breaker will recover on its own.
+		go func() {
+			ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+			defer cancel()
+			if _, err := asrClient.Health(ctx); err != nil {
+				log.Warn("asr channel pre-warm failed; first session may be slow",
+					zap.Error(err), zap.String("addr", cfg.ASR.GRPCAddr))
+			}
+		}()
+
 		signer, err := infraasr.NewTokenSigner([]byte(cfg.ASR.TokenSecret),
 			cfg.ASR.TokenIssuer, cfg.ASR.TokenAudience)
 		if err != nil {
@@ -292,6 +307,50 @@ func main() {
 			}, log)
 	}
 
+	// ── Kat live notes (ephemeral; no persistence) ──────────────────────────
+	var (
+		katService       *services.KatNotesService
+		katNoteGenerator ports.NoteGenerator
+		katHandler       *handlers.KatHandler
+	)
+	if cfg.Kat.Enabled {
+		foundryClient := foundry.NewClient(foundry.Config{
+			Endpoint:       cfg.Kat.FoundryEndpoint,
+			Deployment:     cfg.Kat.FoundryDeployment,
+			APIVersion:     cfg.Kat.FoundryAPIVersion,
+			APIKey:         cfg.Kat.FoundryAPIKey,
+			RequestTimeout: cfg.Kat.FoundryRequestTimeout,
+		}, log)
+		katNoteGenerator = foundry.NewNoteGenerator(foundryClient, cfg.Kat.WindowSeconds, log)
+
+		katBroadcaster := wsHub.NewKatBroadcaster(hubManager, nil, log)
+		katService = services.NewKatNotesService(
+			services.KatConfig{
+				Enabled:                true,
+				WindowSeconds:          cfg.Kat.WindowSeconds,
+				StepSeconds:            cfg.Kat.StepSeconds,
+				MinNewSegments:         cfg.Kat.MinNewSegments,
+				MaxConcurrentRuns:      cfg.Kat.MaxConcurrentRuns,
+				CooldownAfterErrorSecs: cfg.Kat.CooldownAfterErrorSecs,
+				RingBufferCapacity:     cfg.Kat.RingBufferCapacity,
+				PromptVersion:          cfg.Kat.PromptVersion,
+			},
+			transcriptRepo,
+			katNoteGenerator,
+			meetingRepo,
+			callRepo,
+			userRepo,
+			katBroadcaster,
+			log,
+			services.RealClock{},
+		)
+		hubManager.SetKat(katService)
+		if asrIssuer != nil {
+			asrIssuer.SetKatHooks(katService)
+		}
+	}
+	katHandler = handlers.NewKatHandler(katNoteGenerator, cfg.Kat.FoundryEndpoint)
+
 	// ── Handlers ─────────────────────────────────────────────────────────────
 	healthH := handlers.NewHealthHandler(db)
 	callH := handlers.NewCallHandler(callSvc, log)
@@ -299,7 +358,7 @@ func main() {
 	authH := handlers.NewAuthHandler(authSvc, cfg.Auth.RefreshTokenTTL, log)
 	orgH := handlers.NewOrganizationHandler(orgSvc, log)
 	deptH := handlers.NewDepartmentHandler(deptSvc, log)
-	meetingH := handlers.NewMeetingHandler(meetingSvc, chatMessageSvc, userSvc, hubManager, wsTicketStore, cfg.Auth.AppBaseURL, log)
+	meetingH := handlers.NewMeetingHandler(meetingSvc, chatMessageSvc, userSvc, transcriptRepo, userRepo, hubManager, wsTicketStore, cfg.Auth.AppBaseURL, log)
 	asrH := handlers.NewASRHandler(asrIssuer, transcriptPersister, log)
 	transcriptH := handlers.NewTranscriptHandler(
 		transcriptRepo, callRepo, meetingRepo, meetingParticipRepo, log,
@@ -317,6 +376,7 @@ func main() {
 		JWTSecret:      cfg.Auth.JWTSecret,
 		JWTIssuer:      cfg.Auth.JWTIssuer,
 		HealthH:        healthH,
+		KatH:           katHandler,
 		CallH:          callH,
 		UserH:          userH,
 		AuthH:          authH,
@@ -386,5 +446,13 @@ func main() {
 		)
 	} else {
 		catalog.SysShutdownOK.Info(log)
+	}
+
+	// Drain Kat in-flight runs (10s deadline). Ring buffers are dropped along
+	// with cohort entries, in keeping with the no-persistence stance.
+	if katService != nil {
+		katDrainCtx, katCancel := context.WithTimeout(context.Background(), 10*time.Second)
+		defer katCancel()
+		_ = katService.Shutdown(katDrainCtx)
 	}
 }

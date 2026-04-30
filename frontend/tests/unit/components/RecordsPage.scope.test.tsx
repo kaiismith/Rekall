@@ -4,7 +4,7 @@ import { MemoryRouter, Route, Routes } from 'react-router-dom'
 import { ThemeProvider } from '@mui/material/styles'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import theme from '@/theme'
-import { MeetingsPage } from '@/pages/MeetingsPage'
+import { RecordsPage } from '@/pages/RecordsPage'
 import { useOrgsStore } from '@/store/orgsStore'
 import { useDeptsStore } from '@/store/deptsStore'
 
@@ -34,6 +34,7 @@ const baseList = {
       host_id: 'user-1',
       status: 'ended' as const,
       max_participants: 50,
+      transcription_enabled: false,
       join_url: '/meeting/abc-defg-hij',
       created_at: '2026-04-01T10:00:00Z',
       participant_previews: [],
@@ -46,6 +47,7 @@ const baseList = {
       host_id: 'user-1',
       status: 'ended' as const,
       max_participants: 50,
+      transcription_enabled: false,
       join_url: '/meeting/org-meeting-1',
       created_at: '2026-04-02T10:00:00Z',
       participant_previews: [],
@@ -55,14 +57,14 @@ const baseList = {
   ],
 }
 
-function renderPage(initialEntries = ['/meetings']) {
+function renderPage(initialEntries = ['/records']) {
   const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } })
   return render(
     <QueryClientProvider client={queryClient}>
       <ThemeProvider theme={theme}>
         <MemoryRouter initialEntries={initialEntries}>
           <Routes>
-            <Route path="/meetings" element={<MeetingsPage />} />
+            <Route path="/records" element={<RecordsPage />} />
           </Routes>
         </MemoryRouter>
       </ThemeProvider>
@@ -87,10 +89,13 @@ beforeEach(() => {
     error: null,
   })
   useDeptsStore.setState({ byOrg: {}, isLoading: {}, errors: {} })
-  vi.mocked(meetingServiceModule.meetingService.listMine).mockResolvedValue(baseList)
+  listMineSpy.mockResolvedValue(baseList)
 })
 
-describe('MeetingsPage — scope UI (Task 12.5)', () => {
+// eslint-disable-next-line @typescript-eslint/unbound-method
+const listMineSpy = vi.mocked(meetingServiceModule.meetingService.listMine)
+
+describe('RecordsPage scope UI (Task 12.5)', () => {
   it('renders an Open badge for open meetings and an Acme badge for org-scoped ones', async () => {
     renderPage()
     await waitFor(() => expect(screen.getByText('Open Sync')).toBeInTheDocument())
@@ -106,9 +111,9 @@ describe('MeetingsPage — scope UI (Task 12.5)', () => {
   })
 
   it('forwards the URL ?scope=org:<uuid> filter into the listMine call', async () => {
-    renderPage([`/meetings?scope=org:${ORG}`])
+    renderPage([`/records?scope=org:${ORG}`])
     await waitFor(() => {
-      expect(meetingServiceModule.meetingService.listMine).toHaveBeenCalledWith(
+      expect(listMineSpy).toHaveBeenCalledWith(
         expect.any(Object),
         expect.objectContaining({ type: 'organization', id: ORG }),
       )

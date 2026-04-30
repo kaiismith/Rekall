@@ -232,6 +232,58 @@ func TestTranscriptRepository_FindExpiredActive(t *testing.T) {
 	assert.False(t, foundFresh, "fresh session should NOT be returned")
 }
 
+func TestTranscriptRepository_ListSegmentsByCallInRange(t *testing.T) {
+	db := testDB(t)
+	repo := repositories.NewTranscriptRepository(db)
+	ctx := context.Background()
+
+	user := newTranscriptUser(t, ctx, "rangecall")
+	call := newTranscriptCall(t, ctx, user.ID)
+	sess := newTranscriptSession(call.ID, user.ID)
+	require.NoError(t, repo.CreateSession(ctx, sess))
+
+	base := sess.StartedAt
+	// Insert segments at offsets 0s, 5s, 10s, 15s, 20s
+	offsets := []int{0, 5, 10, 15, 20}
+	for i, off := range offsets {
+		require.NoError(t, repo.UpsertSegment(ctx, &entities.TranscriptSegment{
+			SessionID:        sess.ID,
+			SegmentIndex:     int32(i),
+			SpeakerUserID:    user.ID,
+			CallID:           &call.ID,
+			Text:             "seg",
+			StartMs:          int32(off) * 1000,
+			EndMs:            int32(off)*1000 + 500,
+			EngineMode:       sess.EngineMode,
+			ModelID:          sess.ModelID,
+			SegmentStartedAt: base.Add(time.Duration(off) * time.Second),
+		}))
+	}
+
+	// Empty result: window before any segments → []
+	empty, err := repo.ListSegmentsByCallInRange(ctx, call.ID, base.Add(-10*time.Second), base.Add(-5*time.Second))
+	require.NoError(t, err)
+	assert.NotNil(t, empty, "empty result must be a non-nil empty slice")
+	assert.Len(t, empty, 0)
+
+	// Boundary inclusivity: from inclusive, to exclusive.
+	// Window [base+5s, base+15s) should match offsets 5, 10 — NOT 0, NOT 15.
+	got, err := repo.ListSegmentsByCallInRange(ctx, call.ID, base.Add(5*time.Second), base.Add(15*time.Second))
+	require.NoError(t, err)
+	require.Len(t, got, 2)
+	assert.EqualValues(t, 1, got[0].SegmentIndex) // offset 5s
+	assert.EqualValues(t, 2, got[1].SegmentIndex) // offset 10s
+
+	// Ordering: full window returns rows in (segment_started_at, segment_index) order.
+	all, err := repo.ListSegmentsByCallInRange(ctx, call.ID, base, base.Add(time.Hour))
+	require.NoError(t, err)
+	require.Len(t, all, 5)
+	for i := 1; i < len(all); i++ {
+		assert.True(t, !all[i].SegmentStartedAt.Before(all[i-1].SegmentStartedAt),
+			"segments must be ordered by segment_started_at ASC")
+	}
+}
+
 func TestTranscriptRepository_CallXorMeetingCheckRejects(t *testing.T) {
 	db := testDB(t)
 	repo := repositories.NewTranscriptRepository(db)

@@ -48,18 +48,34 @@ export const transcriptService = {
     }
   },
 
-  /** Read the persisted transcript for a solo call. */
-  async getCallTranscript(callId: string): Promise<CallTranscriptResponse> {
+  /**
+   * Read one page of the persisted transcript for a solo call. Defaults to
+   * page=1, per_page=50; the backend clamps per_page to [1, 200].
+   */
+  async getCallTranscript(
+    callId: string,
+    params: { page?: number; per_page?: number } = {},
+  ): Promise<CallTranscriptResponse> {
     const response = await apiClient.get<ApiResponse<CallTranscriptResponse>>(
       `/calls/${callId}/transcript`,
+      { params },
     )
     return response.data.data
   },
 
-  /** Read the persisted transcript for a meeting (all participants' sessions). */
-  async getMeetingTranscript(meetingCode: string): Promise<MeetingTranscriptResponse> {
+  /**
+   * Read one page of the persisted transcript for a meeting (all
+   * participants' sessions). Defaults to page=1, per_page=50; the backend
+   * clamps per_page to [1, 200]. Sessions are returned in full on every
+   * page; only `segments` is paginated.
+   */
+  async getMeetingTranscript(
+    meetingCode: string,
+    params: { page?: number; per_page?: number } = {},
+  ): Promise<MeetingTranscriptResponse> {
     const response = await apiClient.get<ApiResponse<MeetingTranscriptResponse>>(
       `/meetings/${meetingCode}/transcript`,
+      { params },
     )
     return response.data.data
   },

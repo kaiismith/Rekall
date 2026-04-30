@@ -11,7 +11,6 @@ import Typography from '@mui/material/Typography'
 import DashboardIcon from '@mui/icons-material/Dashboard'
 import PhoneInTalkIcon from '@mui/icons-material/PhoneInTalk'
 import BusinessIcon from '@mui/icons-material/Business'
-import VideoCallIcon from '@mui/icons-material/VideoCall'
 import PersonOutlineOutlinedIcon from '@mui/icons-material/PersonOutlineOutlined'
 import SettingsOutlinedIcon from '@mui/icons-material/SettingsOutlined'
 import { useNavigate, useLocation } from 'react-router-dom'
@@ -22,8 +21,7 @@ import { tokens } from '@/theme'
 
 const NAV_ITEMS = [
   { label: 'Dashboard', path: ROUTES.DASHBOARD, icon: <DashboardIcon /> },
-  { label: 'Calls', path: ROUTES.CALLS, icon: <PhoneInTalkIcon /> },
-  { label: 'Meetings', path: ROUTES.MEETINGS, icon: <VideoCallIcon /> },
+  { label: 'Records', path: ROUTES.RECORDS, icon: <PhoneInTalkIcon /> },
   { label: 'Organizations', path: ROUTES.ORGANIZATIONS, icon: <BusinessIcon /> },
 ]
 
@@ -36,6 +34,7 @@ const FOOTER_NAV_ITEMS = [
 // not once per <Sidebar/> mount. Tests that reset the uiStore in beforeEach
 // can reset this too by calling `resetSidebarSeed()`.
 let sidebarSeeded = false
+// eslint-disable-next-line react-refresh/only-export-components
 export function __resetSidebarSeedForTests() {
   sidebarSeeded = false
 }

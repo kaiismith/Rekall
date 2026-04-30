@@ -1,5 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { render, screen, fireEvent } from '@testing-library/react'
+import type * as ReactRouterDom from 'react-router-dom'
 import { MemoryRouter } from 'react-router-dom'
 import { ThemeProvider } from '@mui/material/styles'
 import theme from '@/theme'
@@ -8,7 +9,7 @@ import type { Meeting } from '@/types/meeting'
 
 const mockNavigate = vi.fn()
 vi.mock('react-router-dom', async (importOriginal) => {
-  const actual = await importOriginal<typeof import('react-router-dom')>()
+  const actual = await importOriginal<typeof ReactRouterDom>()
   return { ...actual, useNavigate: () => mockNavigate }
 })
 
@@ -66,7 +67,9 @@ describe('MeetingCard', () => {
   })
 
   it('shows status dot when meeting is active', () => {
-    const { container } = renderCard(baseMeeting({ status: 'active', started_at: '2025-03-01T10:00:00Z' }))
+    const { container } = renderCard(
+      baseMeeting({ status: 'active', started_at: '2025-03-01T10:00:00Z' }),
+    )
     // The dot is rendered via MUI sx bgcolor — look for the green background.
     const card = container.firstChild as HTMLElement
     expect(card).toBeTruthy()
@@ -80,20 +83,22 @@ describe('MeetingCard', () => {
   })
 
   it('shows static duration for ended meetings', () => {
-    renderCard(baseMeeting({ status: 'ended', started_at: '2025-03-01T10:00:00Z', duration_seconds: 483 }))
+    renderCard(
+      baseMeeting({ status: 'ended', started_at: '2025-03-01T10:00:00Z', duration_seconds: 483 }),
+    )
     expect(screen.getByText('8M 03S')).toBeInTheDocument()
   })
 
-  it('navigates to /meeting/:code on click', () => {
+  it('navigates to /records/:code by default on click', () => {
     renderCard(baseMeeting())
     fireEvent.click(screen.getByRole('button'))
-    expect(mockNavigate).toHaveBeenCalledWith('/meeting/abc-defg-hij')
+    expect(mockNavigate).toHaveBeenCalledWith('/records/abc-defg-hij')
   })
 
   it('navigates on Enter keydown', () => {
     renderCard(baseMeeting())
     fireEvent.keyDown(screen.getByRole('button'), { key: 'Enter' })
-    expect(mockNavigate).toHaveBeenCalledWith('/meeting/abc-defg-hij')
+    expect(mockNavigate).toHaveBeenCalledWith('/records/abc-defg-hij')
   })
 
   it('renders participant avatars', () => {
@@ -115,7 +120,13 @@ describe('MeetingCard', () => {
   })
 
   it('shows "—" when meeting is ended with started_at set but no duration_seconds', () => {
-    renderCard(baseMeeting({ status: 'ended', started_at: '2025-03-01T10:00:00Z', duration_seconds: undefined }))
+    renderCard(
+      baseMeeting({
+        status: 'ended',
+        started_at: '2025-03-01T10:00:00Z',
+        duration_seconds: undefined,
+      }),
+    )
     // Line 96: started_at exists, not live, duration_seconds is undefined → falls through to "—"
     expect(screen.getByText('—')).toBeInTheDocument()
   })

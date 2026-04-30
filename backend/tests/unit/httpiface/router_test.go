@@ -192,7 +192,7 @@ func TestNewRouter_MeetingHWired_RegistersMeetingRoutes(t *testing.T) {
 	// ticket branch can return 401, defeating the purpose of this test.
 	ticketStore := storage.NewMemoryWSTicketStore(log)
 	t.Cleanup(func() { ticketStore.Close() })
-	deps.MeetingH = handlers.NewMeetingHandler(meetingSvc, nil, nil, manager, ticketStore, "http://rekall.test", log)
+	deps.MeetingH = handlers.NewMeetingHandler(meetingSvc, nil, nil, nil, nil, manager, ticketStore, "http://rekall.test", log)
 
 	r := httpiface.NewRouter(deps)
 

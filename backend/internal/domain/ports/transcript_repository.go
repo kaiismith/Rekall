@@ -2,6 +2,7 @@ package ports
 
 import (
 	"context"
+	"time"
 
 	"github.com/google/uuid"
 
@@ -48,6 +49,17 @@ type TranscriptRepository interface {
 	// to the given meeting, paginated. Returns (segments, total, error).
 	ListSegmentsByMeeting(ctx context.Context, meetingID uuid.UUID, page, perPage int) ([]*entities.TranscriptSegment, int, error)
 
+	// ListSegmentsByMeetingInRange returns segments belonging to a meeting
+	// whose segment_started_at falls within [fromTs, toTs) (inclusive lower,
+	// exclusive upper), ordered by (segment_started_at, segment_index).
+	// Used by the Kat live-notes scheduler to load a sliding window of recent
+	// segments. Returns an empty slice (not nil) when nothing matches.
+	ListSegmentsByMeetingInRange(ctx context.Context, meetingID uuid.UUID, fromTs, toTs time.Time) ([]*entities.TranscriptSegment, error)
+
+	// ListSegmentsByCallInRange is the solo-call analogue of
+	// ListSegmentsByMeetingInRange.
+	ListSegmentsByCallInRange(ctx context.Context, callID uuid.UUID, fromTs, toTs time.Time) ([]*entities.TranscriptSegment, error)
+
 	// ListSessionsByCall returns the session rows bound to the given call
 	// ordered by started_at ASC.
 	ListSessionsByCall(ctx context.Context, callID uuid.UUID) ([]*entities.TranscriptSession, error)
@@ -55,6 +67,12 @@ type TranscriptRepository interface {
 	// ListSessionsByMeeting returns the session rows bound to the given meeting
 	// ordered by started_at ASC.
 	ListSessionsByMeeting(ctx context.Context, meetingID uuid.UUID) ([]*entities.TranscriptSession, error)
+
+	// ListSpeakerUserIDsByMeeting returns the distinct user ids that opened a
+	// transcript session against the given meeting, ordered deterministically
+	// by user id ASC. Used by the records detail handler to resolve speaker
+	// display names for the timeline.
+	ListSpeakerUserIDsByMeeting(ctx context.Context, meetingID uuid.UUID) ([]uuid.UUID, error)
 
 	// FindExpiredActive returns active sessions whose expires_at has passed,
 	// up to limit rows, oldest first. Used by the cleanup job.

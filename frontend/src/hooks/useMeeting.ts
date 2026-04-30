@@ -16,6 +16,7 @@ import type {
   CaptionEntry,
 } from '@/types/meeting'
 import type { ASRFinalEvent } from '@/types/asr'
+import type { KatNoteDTO } from '@/types/kat'
 import {
   MAX_MESSAGE_LENGTH,
   RATE_LIMIT_MESSAGES,
@@ -185,6 +186,9 @@ const CUSTOM_BG_MAX_BYTES = 2 * 1024 * 1024 // 2 MB file size limit
 export interface UseMeetingOptions {
   code: string
   onEnd?: () => void
+  /** Invoked when a `kat.note` WS message arrives (live note or late-join
+   *  replay). Forwarded to useKatNotes.pushNote by the meeting room page. */
+  onKatNote?: (note: KatNoteDTO) => void
 }
 
 export interface UseMeetingReturn {
@@ -324,7 +328,11 @@ function mlog(tag: string, ...args: unknown[]): void {
   console.log(`%c[meeting] ${tag}`, 'color:#a78bfa;font-weight:600', ...args)
 }
 
-export function useMeeting({ code, onEnd }: UseMeetingOptions): UseMeetingReturn {
+export function useMeeting({ code, onEnd, onKatNote }: UseMeetingOptions): UseMeetingReturn {
+  // Stable ref to the latest onKatNote callback so the WS message handler
+  // (memoised on a fixed dep set) always invokes the freshest implementation.
+  const onKatNoteRef = useRef(onKatNote)
+  onKatNoteRef.current = onKatNote
   const { accessToken, user } = useAuthStore()
 
   // ── core state ─────────────────────────────────────────────────────────────
@@ -875,6 +883,18 @@ export function useMeeting({ code, onEnd }: UseMeetingOptions): UseMeetingReturn
           cleanup()
           onEnd?.()
           break
+
+        case 'kat.note': {
+          // Forward the structured note payload to the consumer. The hub
+          // sends the same `kat.note` shape for both live broadcasts and
+          // late-join replay; the consumer (useKatNotes.pushNote) handles
+          // dedupe + sort.
+          const dto = msg.data as KatNoteDTO | undefined
+          if (dto && typeof dto.id === 'string') {
+            onKatNoteRef.current?.(dto)
+          }
+          break
+        }
 
         case 'caption_chunk': {
           if (!msg.user_id || !msg.caption_text) break

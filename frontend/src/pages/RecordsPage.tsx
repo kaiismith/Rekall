@@ -1,13 +1,6 @@
 import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import {
-  Badge,
-  Box,
-  CircularProgress,
-  IconButton,
-  Stack,
-  Tooltip,
-} from '@mui/material'
+import { Badge, Box, CircularProgress, IconButton, Stack, Tooltip } from '@mui/material'
 import FilterListIcon from '@mui/icons-material/FilterList'
 import SortIcon from '@mui/icons-material/Sort'
 import AddIcon from '@mui/icons-material/Add'
@@ -17,6 +10,7 @@ import { MeetingCard } from '@/components/meetings/MeetingCard'
 import { FilterPanel } from '@/components/meetings/FilterPanel'
 import { SortMenu } from '@/components/meetings/SortMenu'
 import { EmptyState, GradientButton, PageHeader, ScopePicker } from '@/components/common/ui'
+import { ROUTES } from '@/constants'
 
 const iconBtnSx = {
   bgcolor: 'rgba(255,255,255,0.03)',
@@ -27,10 +21,24 @@ const iconBtnSx = {
   '&:hover': { bgcolor: 'rgba(255,255,255,0.06)' },
 }
 
-export function MeetingsPage() {
+/**
+ * Records list — every meeting the caller hosted or attended, surfaced as a
+ * Record. Cards navigate to /records/:code (the detail page with the stored
+ * transcript) instead of /meeting/:code (the live WebRTC room).
+ */
+export function RecordsPage() {
   const navigate = useNavigate()
-  const { meetings, isLoading, status, sort, scope, setStatus, setSort, setScope, activeFilterCount } =
-    useMeetingsList()
+  const {
+    meetings,
+    isLoading,
+    status,
+    sort,
+    scope,
+    setStatus,
+    setSort,
+    setScope,
+    activeFilterCount,
+  } = useMeetingsList()
 
   const [filterAnchor, setFilterAnchor] = useState<HTMLElement | null>(null)
   const [sortAnchor, setSortAnchor] = useState<HTMLElement | null>(null)
@@ -71,7 +79,7 @@ export function MeetingsPage() {
         size="small"
         fullWidth={false}
         startIcon={<AddIcon />}
-        onClick={() => navigate('/meetings/new')}
+        onClick={() => navigate(ROUTES.NEW_RECORD)}
       >
         New Meeting
       </GradientButton>
@@ -81,8 +89,8 @@ export function MeetingsPage() {
   return (
     <Box sx={{ maxWidth: 960, mx: 'auto' }}>
       <PageHeader
-        title="Your Meetings"
-        subtitle="Manage upcoming and past meeting sessions."
+        title="Your Records"
+        subtitle="Browse past meetings and read their stored transcripts."
         actions={actions}
       />
 
@@ -106,22 +114,19 @@ export function MeetingsPage() {
       ) : meetings.length === 0 ? (
         <EmptyState
           icon={<VideoCallOutlinedIcon />}
-          title={
-            status || scope
-              ? 'No meetings match this filter'
-              : 'No meetings yet'
-          }
+          title={status || scope ? 'No records match this filter' : 'No records yet'}
           description={
             status || scope
               ? 'Try clearing the active filters or adjusting your sort order.'
               : 'Start a meeting to capture conversations, transcripts, and highlights.'
           }
           action={
-            !status && !scope && (
+            !status &&
+            !scope && (
               <GradientButton
                 fullWidth={false}
                 startIcon={<AddIcon />}
-                onClick={() => navigate('/meetings/new')}
+                onClick={() => navigate(ROUTES.NEW_RECORD)}
               >
                 Start a meeting
               </GradientButton>

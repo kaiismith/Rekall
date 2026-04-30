@@ -35,38 +35,46 @@ var wsUpgrader = websocket.Upgrader{
 
 // MeetingHandler handles HTTP and WebSocket requests for the /meetings resource.
 type MeetingHandler struct {
-	service     *services.MeetingService
-	chatService *services.ChatMessageService
-	userService *services.UserService
-	hubManager  *wsHub.HubManager
-	ticketStore ports.WSTicketStore
-	baseURL     string
-	logger      *zap.Logger
+	service        *services.MeetingService
+	chatService    *services.ChatMessageService
+	userService    *services.UserService
+	transcriptRepo ports.TranscriptRepository
+	userRepo       ports.UserRepository
+	hubManager     *wsHub.HubManager
+	ticketStore    ports.WSTicketStore
+	baseURL        string
+	logger         *zap.Logger
 }
 
 // NewMeetingHandler creates a MeetingHandler with its required dependencies.
 // chatService and userService may be nil — the chat endpoints will degrade
 // gracefully (500 / missing names) rather than panic in test harnesses that
-// don't wire them. ticketStore must be supplied when WebSocket routes are
-// registered; nil is acceptable only for tests that do not exercise the WS
-// upgrade or ticket endpoints.
+// don't wire them. transcriptRepo and userRepo may be nil — the detail
+// handler will simply leave Speakers empty in that case (used by tests that
+// don't exercise the records UI). ticketStore must be supplied when
+// WebSocket routes are registered; nil is acceptable only for tests that do
+// not exercise the WS upgrade or ticket endpoints.
 func NewMeetingHandler(
 	service *services.MeetingService,
 	chatService *services.ChatMessageService,
 	userService *services.UserService,
+	transcriptRepo ports.TranscriptRepository,
+	userRepo ports.UserRepository,
 	hubManager *wsHub.HubManager,
 	ticketStore ports.WSTicketStore,
 	baseURL string,
 	logger *zap.Logger,
 ) *MeetingHandler {
 	return &MeetingHandler{
-		service:     service,
-		chatService: chatService,
-		userService: userService,
-		hubManager:  hubManager,
-		ticketStore: ticketStore,
-		baseURL:     baseURL,
-		logger:      logger,
+		service:        service,
+		chatService:    chatService,
+		userService:    userService,
+		transcriptRepo: transcriptRepo,
+		userRepo:       userRepo,
+		hubManager:     hubManager,
+		ticketStore:    ticketStore,
+		baseURL:        baseURL,
+		logger:         logger,
 	}
 }
 
@@ -137,7 +145,59 @@ func (h *MeetingHandler) GetByCode(c *gin.Context) {
 		handlerhelpers.RespondError(c, h.logger, err)
 		return
 	}
-	c.JSON(http.StatusOK, dto.OK(dto.MeetingFromEntity(meeting, h.baseURL)))
+	resp := dto.MeetingFromEntity(meeting, h.baseURL)
+	resp.Speakers = h.resolveSpeakers(c.Request.Context(), meeting.ID)
+	c.JSON(http.StatusOK, dto.OK(resp))
+}
+
+// resolveSpeakers returns the distinct speakers behind every transcript
+// session bound to the given meeting, with names + initials. Returns an empty
+// slice (never nil) when the meeting has no sessions or when the transcript
+// / user repos are not wired (e.g. in test harnesses).
+func (h *MeetingHandler) resolveSpeakers(ctx context.Context, meetingID uuid.UUID) []dto.SpeakerInfo {
+	if h.transcriptRepo == nil || h.userRepo == nil {
+		return []dto.SpeakerInfo{}
+	}
+	ids, err := h.transcriptRepo.ListSpeakerUserIDsByMeeting(ctx, meetingID)
+	if err != nil {
+		h.logger.Warn("resolve speakers: list ids failed",
+			zap.String("meeting_id", meetingID.String()),
+			zap.Error(err),
+		)
+		return []dto.SpeakerInfo{}
+	}
+	if len(ids) == 0 {
+		return []dto.SpeakerInfo{}
+	}
+	users, err := h.userRepo.FindByIDs(ctx, ids)
+	if err != nil {
+		h.logger.Warn("resolve speakers: find users failed",
+			zap.String("meeting_id", meetingID.String()),
+			zap.Error(err),
+		)
+		return []dto.SpeakerInfo{}
+	}
+	byID := make(map[uuid.UUID]*entities.User, len(users))
+	for _, u := range users {
+		byID[u.ID] = u
+	}
+	out := make([]dto.SpeakerInfo, 0, len(ids))
+	for _, id := range ids {
+		if u, ok := byID[id]; ok {
+			out = append(out, dto.SpeakerInfo{
+				UserID:   u.ID.String(),
+				FullName: u.FullName,
+				Initials: userInitials(u.FullName),
+			})
+			continue
+		}
+		out = append(out, dto.SpeakerInfo{
+			UserID:   id.String(),
+			FullName: "",
+			Initials: "?",
+		})
+	}
+	return out
 }
 
 // ListMine handles GET /api/v1/meetings/mine.

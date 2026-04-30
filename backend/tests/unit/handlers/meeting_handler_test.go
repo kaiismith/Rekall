@@ -47,7 +47,7 @@ func newMeetingHandler(svc *services.MeetingService) *handlers.MeetingHandler {
 func newMeetingHandlerWithTicketStore(svc *services.MeetingService) (*handlers.MeetingHandler, *storage.MemoryWSTicketStore) {
 	manager := wsHub.NewHubManager(nil, nil, zap.NewNop())
 	store := storage.NewMemoryWSTicketStore(zap.NewNop())
-	h := handlers.NewMeetingHandler(svc, nil, nil, manager, store, "http://rekall.test", zap.NewNop())
+	h := handlers.NewMeetingHandler(svc, nil, nil, nil, nil, manager, store, "http://rekall.test", zap.NewNop())
 	return h, store
 }
 

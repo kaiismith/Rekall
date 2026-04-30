@@ -24,6 +24,7 @@ type HubManager struct {
 	hubs      map[uuid.UUID]*Hub
 	chatRepo  ports.MeetingMessageRepository
 	persister TranscriptPersister
+	kat       KatLifecycle // optional; attached to every hub created via GetOrCreate
 	logger    *zap.Logger
 	ctx       context.Context
 	cancel    context.CancelFunc
@@ -47,6 +48,15 @@ func NewHubManager(
 		ctx:       ctx,
 		cancel:    cancel,
 	}
+}
+
+// SetKat installs a KatLifecycle hook on the manager; subsequent
+// GetOrCreate calls will attach it to every new hub. Safe to call once at
+// boot before any hub exists. nil clears the hook (no Kat).
+func (m *HubManager) SetKat(k KatLifecycle) {
+	m.mu.Lock()
+	m.kat = k
+	m.mu.Unlock()
 }
 
 // Shutdown cancels the manager's background context, signalling every
@@ -87,6 +97,9 @@ func (m *HubManager) GetOrCreate(_ context.Context, meetingID, hostID uuid.UUID,
 			onEnd(id)
 		}
 	}, m.logger)
+	if m.kat != nil {
+		h.SetKat(m.kat)
+	}
 
 	m.hubs[meetingID] = h
 	go h.Run(m.ctx)
@@ -114,4 +127,16 @@ func (m *HubManager) ActiveMeetingCount() int {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
 	return len(m.hubs)
+}
+
+// allHubs returns a snapshot copy of every live hub. Used by adapters that
+// need to fan out to every hub (e.g. the Kat WSBroadcaster's SendToUser).
+func (m *HubManager) allHubs() []*Hub {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+	out := make([]*Hub, 0, len(m.hubs))
+	for _, h := range m.hubs {
+		out = append(out, h)
+	}
+	return out
 }

@@ -203,6 +203,37 @@ func (r *TranscriptRepository) listSegmentsByParent(
 	return rows, int(total), nil
 }
 
+// ListSegmentsByMeetingInRange returns segments for a meeting whose
+// segment_started_at falls within [fromTs, toTs), ordered by
+// (segment_started_at, segment_index). Backed by the existing partial index
+// idx_transcript_segments_meeting_started.
+func (r *TranscriptRepository) ListSegmentsByMeetingInRange(
+	ctx context.Context,
+	meetingID uuid.UUID,
+	fromTs, toTs time.Time,
+) ([]*entities.TranscriptSegment, error) {
+	rows := make([]*entities.TranscriptSegment, 0)
+	err := r.db.WithContext(ctx).
+		Where("meeting_id = ? AND segment_started_at >= ? AND segment_started_at < ?", meetingID, fromTs, toTs).
+		Order("segment_started_at ASC, segment_index ASC").
+		Find(&rows).Error
+	return rows, err
+}
+
+// ListSegmentsByCallInRange is the solo-call analogue.
+func (r *TranscriptRepository) ListSegmentsByCallInRange(
+	ctx context.Context,
+	callID uuid.UUID,
+	fromTs, toTs time.Time,
+) ([]*entities.TranscriptSegment, error) {
+	rows := make([]*entities.TranscriptSegment, 0)
+	err := r.db.WithContext(ctx).
+		Where("call_id = ? AND segment_started_at >= ? AND segment_started_at < ?", callID, fromTs, toTs).
+		Order("segment_started_at ASC, segment_index ASC").
+		Find(&rows).Error
+	return rows, err
+}
+
 // ListSessionsByCall returns sessions bound to a call, ordered by started_at ASC.
 func (r *TranscriptRepository) ListSessionsByCall(
 	ctx context.Context,
@@ -227,6 +258,28 @@ func (r *TranscriptRepository) ListSessionsByMeeting(
 		Order("started_at ASC").
 		Find(&rows).Error
 	return rows, err
+}
+
+// ListSpeakerUserIDsByMeeting returns the distinct speaker user ids that
+// opened a transcript session against the given meeting, ordered by id.
+func (r *TranscriptRepository) ListSpeakerUserIDsByMeeting(
+	ctx context.Context,
+	meetingID uuid.UUID,
+) ([]uuid.UUID, error) {
+	var ids []uuid.UUID
+	err := r.db.WithContext(ctx).
+		Model(&entities.TranscriptSession{}).
+		Where("meeting_id = ?", meetingID).
+		Distinct("speaker_user_id").
+		Order("speaker_user_id ASC").
+		Pluck("speaker_user_id", &ids).Error
+	if err != nil {
+		return nil, err
+	}
+	if ids == nil {
+		ids = []uuid.UUID{}
+	}
+	return ids, nil
 }
 
 // FindExpiredActive returns active sessions whose expires_at has passed.

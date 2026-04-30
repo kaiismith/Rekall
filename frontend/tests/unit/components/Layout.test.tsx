@@ -26,6 +26,6 @@ describe('Layout', () => {
     expect(screen.getByText('Rekall')).toBeInTheDocument()
     // Navigation items
     expect(screen.getByText('Dashboard')).toBeInTheDocument()
-    expect(screen.getByText('Calls')).toBeInTheDocument()
+    expect(screen.getByText('Records')).toBeInTheDocument()
   })
 })

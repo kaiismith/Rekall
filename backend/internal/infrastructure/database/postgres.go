@@ -3,6 +3,8 @@ package database
 import (
 	"context"
 	"fmt"
+	stdlog "log"
+	"os"
 	"time"
 
 	"gorm.io/driver/postgres"
@@ -21,8 +23,22 @@ func New(cfg config.DatabaseConfig, isDevelopment bool) (*gorm.DB, error) {
 		logLevel = logger.Info
 	}
 
+	// `record not found` is a normal control-flow signal in this codebase
+	// (e.g. admitDirect's "is there already a meeting_participants row?"
+	// pre-check before INSERT). Suppress the noisy log line — handlers still
+	// receive `gorm.ErrRecordNotFound` and switch on it explicitly.
+	gormLogger := logger.New(
+		stdlog.New(os.Stdout, "\r\n", stdlog.LstdFlags),
+		logger.Config{
+			SlowThreshold:             200 * time.Millisecond,
+			LogLevel:                  logLevel,
+			IgnoreRecordNotFoundError: true,
+			Colorful:                  false,
+		},
+	)
+
 	db, err := gorm.Open(postgres.Open(cfg.DSN()), &gorm.Config{
-		Logger:                                   logger.Default.LogMode(logLevel),
+		Logger:                                   gormLogger,
 		PrepareStmt:                              true, // cache prepared statements
 		DisableForeignKeyConstraintWhenMigrating: false,
 	})

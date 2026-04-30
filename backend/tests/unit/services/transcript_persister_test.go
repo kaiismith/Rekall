@@ -111,6 +111,15 @@ func (f *fakeTranscriptRepo) ListSegmentsByCall(_ context.Context, _ uuid.UUID, 
 func (f *fakeTranscriptRepo) ListSegmentsByMeeting(_ context.Context, _ uuid.UUID, _, _ int) ([]*entities.TranscriptSegment, int, error) {
 	return nil, 0, nil
 }
+func (f *fakeTranscriptRepo) ListSpeakerUserIDsByMeeting(_ context.Context, _ uuid.UUID) ([]uuid.UUID, error) {
+	return []uuid.UUID{}, nil
+}
+func (f *fakeTranscriptRepo) ListSegmentsByMeetingInRange(_ context.Context, _ uuid.UUID, _, _ time.Time) ([]*entities.TranscriptSegment, error) {
+	return []*entities.TranscriptSegment{}, nil
+}
+func (f *fakeTranscriptRepo) ListSegmentsByCallInRange(_ context.Context, _ uuid.UUID, _, _ time.Time) ([]*entities.TranscriptSegment, error) {
+	return []*entities.TranscriptSegment{}, nil
+}
 func (f *fakeTranscriptRepo) ListSessionsByCall(_ context.Context, _ uuid.UUID) ([]*entities.TranscriptSession, error) {
 	return nil, nil
 }

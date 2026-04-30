@@ -13,10 +13,7 @@ function AudioBarGraphic() {
   return (
     <Box sx={{ display: 'flex', alignItems: 'flex-end', gap: '2px', height: 16, opacity: 0.35 }}>
       {bars.map((h, i) => (
-        <Box
-          key={i}
-          sx={{ width: 3, height: h, bgcolor: 'text.secondary', borderRadius: '1px' }}
-        />
+        <Box key={i} sx={{ width: 3, height: h, bgcolor: 'text.secondary', borderRadius: '1px' }} />
       ))}
     </Box>
   )
@@ -94,7 +91,8 @@ function Duration({ meeting }: { meeting: Meeting }) {
 
   if (!meeting.started_at) return <span>—</span>
   if (isLive) return <span>{formatMeetingDuration(elapsed)}</span>
-  if (meeting.duration_seconds != null) return <span>{formatMeetingDuration(meeting.duration_seconds)}</span>
+  if (meeting.duration_seconds != null)
+    return <span>{formatMeetingDuration(meeting.duration_seconds)}</span>
   return <span>—</span>
 }
 
@@ -122,9 +120,23 @@ function meetingToScope(m: Meeting): Scope {
 
 interface Props {
   meeting: Meeting
+  /**
+   * When true (default) clicks navigate to the card's target route via the
+   * `linkTo` builder. When false the card renders as plain content (used by
+   * the Record detail page, which displays the same visual as a header).
+   */
+  clickable?: boolean
+  /**
+   * Builds the destination URL for click / Enter. Defaults to the Record
+   * detail page so the Records list opens stored transcripts. Pass a custom
+   * builder (or omit `clickable`) to opt into a different surface.
+   */
+  linkTo?: (meeting: Meeting) => string
 }
 
-export function MeetingCard({ meeting }: Props) {
+const defaultLinkTo = (meeting: Meeting) => `/records/${meeting.code}`
+
+export function MeetingCard({ meeting, clickable = true, linkTo = defaultLinkTo }: Props) {
   const navigate = useNavigate()
   const isLive = meeting.status === 'waiting' || meeting.status === 'active'
   const previews = meeting.participant_previews ?? []
@@ -137,21 +149,25 @@ export function MeetingCard({ meeting }: Props) {
     .format(new Date(meeting.created_at))
     .toUpperCase()
 
+  const target = linkTo(meeting)
+
   return (
     <Box
-      onClick={() => navigate(`/meeting/${meeting.code}`)}
-      onKeyDown={(e) => e.key === 'Enter' && navigate(`/meeting/${meeting.code}`)}
-      tabIndex={0}
-      role="button"
+      onClick={clickable ? () => navigate(target) : undefined}
+      onKeyDown={clickable ? (e) => e.key === 'Enter' && navigate(target) : undefined}
+      tabIndex={clickable ? 0 : -1}
+      role={clickable ? 'button' : undefined}
       sx={{
         position: 'relative',
         bgcolor: 'background.paper',
         borderRadius: 2,
         p: 2.5,
-        cursor: 'pointer',
+        cursor: clickable ? 'pointer' : 'default',
         outline: 'none',
-        '&:hover': { bgcolor: 'action.hover' },
-        '&:focus-visible': { outline: '2px solid', outlineColor: 'primary.main' },
+        '&:hover': clickable ? { bgcolor: 'action.hover' } : undefined,
+        '&:focus-visible': clickable
+          ? { outline: '2px solid', outlineColor: 'primary.main' }
+          : undefined,
       }}
     >
       {/* Status dot */}
@@ -189,10 +205,7 @@ export function MeetingCard({ meeting }: Props) {
       </Typography>
 
       {/* Title */}
-      <Typography
-        fontWeight={700}
-        sx={{ mt: isLive ? 0.5 : 0, mb: 1, pr: 8, fontSize: 15 }}
-      >
+      <Typography fontWeight={700} sx={{ mt: isLive ? 0.5 : 0, mb: 1, pr: 8, fontSize: 15 }}>
         {meeting.title || `Meeting ${meeting.code}`}
       </Typography>
 

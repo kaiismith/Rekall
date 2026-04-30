@@ -42,6 +42,18 @@ func (r *UserRepository) GetByID(ctx context.Context, id uuid.UUID) (*entities.U
 	return &user, nil
 }
 
+// FindByIDs retrieves a slice of non-deleted users by primary key.
+func (r *UserRepository) FindByIDs(ctx context.Context, ids []uuid.UUID) ([]*entities.User, error) {
+	if len(ids) == 0 {
+		return []*entities.User{}, nil
+	}
+	var users []*entities.User
+	if err := r.db.WithContext(ctx).Where("id IN ?", ids).Find(&users).Error; err != nil {
+		return nil, err
+	}
+	return users, nil
+}
+
 // GetByEmail retrieves a non-deleted user by email address.
 func (r *UserRepository) GetByEmail(ctx context.Context, email string) (*entities.User, error) {
 	var user entities.User

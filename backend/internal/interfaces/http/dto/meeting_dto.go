@@ -31,6 +31,15 @@ type ParticipantPreview struct {
 	Initials string `json:"initials"`
 }
 
+// SpeakerInfo is a lightweight user snapshot included on the meeting detail
+// response, identifying every distinct speaker behind the meeting's transcript
+// sessions. Used by the records detail UI to label timeline blocks.
+type SpeakerInfo struct {
+	UserID   string `json:"user_id"`
+	FullName string `json:"full_name"`
+	Initials string `json:"initials"`
+}
+
 // MeetingResponse is the outbound representation of a Meeting.
 type MeetingResponse struct {
 	ID                   uuid.UUID            `json:"id"`
@@ -48,6 +57,7 @@ type MeetingResponse struct {
 	CreatedAt            time.Time            `json:"created_at"`
 	DurationSeconds      *int64               `json:"duration_seconds,omitempty"`
 	ParticipantPreviews  []ParticipantPreview `json:"participant_previews"`
+	Speakers             []SpeakerInfo        `json:"speakers"`
 	TranscriptionEnabled bool                 `json:"transcription_enabled"`
 }
 
@@ -69,6 +79,7 @@ func MeetingFromEntity(m *entities.Meeting, baseURL string) MeetingResponse {
 		EndedAt:              m.EndedAt,
 		CreatedAt:            m.CreatedAt,
 		ParticipantPreviews:  []ParticipantPreview{},
+		Speakers:             []SpeakerInfo{},
 		TranscriptionEnabled: m.TranscriptionEnabled,
 	}
 }

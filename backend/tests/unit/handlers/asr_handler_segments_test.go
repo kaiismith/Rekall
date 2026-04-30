@@ -96,6 +96,15 @@ func (f *fakeTranscriptRepoH) ListSegmentsByCall(_ context.Context, _ uuid.UUID,
 func (f *fakeTranscriptRepoH) ListSegmentsByMeeting(_ context.Context, _ uuid.UUID, _, _ int) ([]*entities.TranscriptSegment, int, error) {
 	return nil, 0, nil
 }
+func (f *fakeTranscriptRepoH) ListSpeakerUserIDsByMeeting(_ context.Context, _ uuid.UUID) ([]uuid.UUID, error) {
+	return []uuid.UUID{}, nil
+}
+func (f *fakeTranscriptRepoH) ListSegmentsByMeetingInRange(_ context.Context, _ uuid.UUID, _, _ time.Time) ([]*entities.TranscriptSegment, error) {
+	return []*entities.TranscriptSegment{}, nil
+}
+func (f *fakeTranscriptRepoH) ListSegmentsByCallInRange(_ context.Context, _ uuid.UUID, _, _ time.Time) ([]*entities.TranscriptSegment, error) {
+	return []*entities.TranscriptSegment{}, nil
+}
 func (f *fakeTranscriptRepoH) ListSessionsByCall(_ context.Context, callID uuid.UUID) ([]*entities.TranscriptSession, error) {
 	f.mu.Lock()
 	defer f.mu.Unlock()

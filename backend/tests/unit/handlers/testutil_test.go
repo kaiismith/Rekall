@@ -129,6 +129,13 @@ func (m *mockUserRepo) List(ctx context.Context, page, perPage int) ([]*entities
 	args := m.Called(ctx, page, perPage)
 	return args.Get(0).([]*entities.User), args.Int(1), args.Error(2)
 }
+func (m *mockUserRepo) FindByIDs(ctx context.Context, ids []uuid.UUID) ([]*entities.User, error) {
+	args := m.Called(ctx, ids)
+	if args.Get(0) == nil {
+		return nil, args.Error(1)
+	}
+	return args.Get(0).([]*entities.User), args.Error(1)
+}
 func (m *mockUserRepo) Update(ctx context.Context, u *entities.User) (*entities.User, error) {
 	args := m.Called(ctx, u)
 	if args.Get(0) == nil {

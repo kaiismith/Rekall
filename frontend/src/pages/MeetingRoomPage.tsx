@@ -24,6 +24,8 @@ import VideocamIcon from '@mui/icons-material/Videocam'
 import BackHandIcon from '@mui/icons-material/BackHand'
 import SettingsIcon from '@mui/icons-material/SettingsOutlined'
 import { useMeeting } from '@/hooks/useMeeting'
+import { useKatNotes } from '@/hooks/useKatNotes'
+import { KatPanel } from '@/components/meeting/KatPanel'
 import { useAuthStore } from '@/store/authStore'
 import { MicButton } from '@/components/meeting/MicButton'
 import { CameraButton } from '@/components/meeting/CameraButton'
@@ -134,9 +136,17 @@ export function MeetingRoomPage() {
     code: code ?? '',
     onEnd: () => {
       console.warn('%c[meeting] page: onEnd → /meetings', 'color:#f59e0b;font-weight:600')
-      navigate('/meetings')
+      navigate('/records')
     },
+    onKatNote: (note) => katNotes.pushNote(note),
   })
+
+  // Kat live AI notes — bootstrapped from /healthz/kat; receives notes via
+  // the meeting WS (live broadcasts + late-join replay use the same
+  // `kat.note` channel). Notes are not persisted; this hook holds them in
+  // memory only for the duration of the page lifecycle.
+
+  const katNotes = useKatNotes()
 
   // ── Live captions: per-user opt-in (no host permission, no meeting flag).
   // Each participant decides for themselves whether to open the captions
@@ -243,7 +253,7 @@ export function MeetingRoomPage() {
           onToggleCamera={toggleCamera}
           mediaError={mediaError}
           onJoin={joinNow}
-          onCancel={() => navigate('/meetings')}
+          onCancel={() => navigate('/records')}
           onOpenSettings={() => setSettingsOpen(true)}
         />
         <DeviceSettingsDialog
@@ -310,7 +320,7 @@ export function MeetingRoomPage() {
           Access Denied
         </Typography>
         <Typography color="text.secondary">Your request to join was declined.</Typography>
-        <Button variant="outlined" onClick={() => navigate('/meetings')}>
+        <Button variant="outlined" onClick={() => navigate('/records')}>
           Back to Meetings
         </Button>
       </Box>
@@ -328,7 +338,7 @@ export function MeetingRoomPage() {
         gap={2}
       >
         <Typography variant="h5">Meeting Ended</Typography>
-        <Button variant="outlined" onClick={() => navigate('/meetings')}>
+        <Button variant="outlined" onClick={() => navigate('/records')}>
           Back to Meetings
         </Button>
       </Box>
@@ -418,12 +428,18 @@ export function MeetingRoomPage() {
           ref={videoGridRef}
           sx={{
             flex: 1,
+            minHeight: 0,
             position: 'relative',
             p: 2,
             display: 'grid',
             gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))',
+            // alignContent: 'center' keeps tiles vertically centred when the
+            // grid is taller than its rows (e.g., solo participant); switching
+            // away from 'start' lets the page stop generating a scrollbar
+            // because the single tile's capped 16:9 height now fits.
+            alignContent: 'center',
+            justifyItems: 'center',
             gap: 2,
-            alignContent: 'start',
             overflow: 'auto',
           }}
         >
@@ -578,13 +594,32 @@ export function MeetingRoomPage() {
               display: 'flex',
             }}
           >
-            <MeetingCaptionsPanel
-              captions={captions}
-              directory={participantDirectory}
-              localUserId={user?.id ?? null}
-              isStreamingLocal={asr.state === 'streaming'}
-              isDisabled={false}
-            />
+            <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2, flex: 1, minHeight: 0 }}>
+              <Box sx={{ flex: 1, minHeight: 0 }}>
+                <MeetingCaptionsPanel
+                  captions={captions}
+                  directory={participantDirectory}
+                  localUserId={user?.id ?? null}
+                  isStreamingLocal={asr.state === 'streaming'}
+                  isDisabled={false}
+                />
+              </Box>
+              <Box
+                sx={{
+                  flex: 1,
+                  minHeight: 0,
+                  borderTop: '1px solid',
+                  borderColor: 'divider',
+                  pt: 2,
+                }}
+              >
+                <KatPanel
+                  status={katNotes.status}
+                  latestNote={katNotes.latestNote}
+                  health={katNotes.health}
+                />
+              </Box>
+            </Box>
           </Box>
         )}
       </Box>
@@ -697,6 +732,12 @@ function VideoTile({
       sx={{
         position: 'relative',
         aspectRatio: '16/9',
+        // Cap height so a sole-participant tile doesn't grow past the
+        // available area and trigger a page-level scroll. The grid container
+        // limits width; this limits height; the 16:9 ratio keeps the smaller
+        // dimension authoritative.
+        maxHeight: '100%',
+        maxWidth: '100%',
         overflow: 'hidden',
         border: isSpeaking ? `${borderWidth} solid` : '2px solid transparent',
         borderColor: isSpeaking ? 'primary.main' : 'transparent',
@@ -705,6 +746,8 @@ function VideoTile({
         alignItems: 'center',
         justifyContent: 'center',
         bgcolor: 'background.paper',
+        justifySelf: 'center',
+        alignSelf: 'center',
       }}
     >
       {/* Video or avatar */}

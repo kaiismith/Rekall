@@ -24,7 +24,8 @@ import { DeptDetailPage } from '@/pages/DeptDetailPage'
 import { ScopedMeetingsPage } from '@/pages/ScopedMeetingsPage'
 import { ScopedCallsPage } from '@/pages/ScopedCallsPage'
 import { InviteAcceptPage } from '@/pages/InviteAcceptPage'
-import { MeetingsPage } from '@/pages/MeetingsPage'
+import { RecordsPage } from '@/pages/RecordsPage'
+import { RecordDetailPage } from '@/pages/RecordDetailPage'
 import { NewMeetingPage } from '@/pages/NewMeetingPage'
 import { MeetingRoomPage } from '@/pages/MeetingRoomPage'
 import { ProfilePage } from '@/pages/ProfilePage'
@@ -67,7 +68,13 @@ function AppRoutes() {
       <Route path={ROUTES.INVITATION_ACCEPT} element={<InviteAcceptPage />} />
 
       {/* Authenticated shell — ProtectedRoute guards, Layout provides the chrome */}
-      <Route element={<ProtectedRoute><Layout /></ProtectedRoute>}>
+      <Route
+        element={
+          <ProtectedRoute>
+            <Layout />
+          </ProtectedRoute>
+        }
+      >
         <Route path={ROUTES.DASHBOARD} element={<DashboardPage />} />
         <Route path={ROUTES.CALLS} element={<CallsPage />} />
         <Route path={ROUTES.ORGANIZATIONS} element={<OrganizationsPage />} />
@@ -77,21 +84,27 @@ function AppRoutes() {
         <Route path={ROUTES.ORG_DEPT_DETAIL} element={<DeptDetailPage />} />
         <Route path={ROUTES.ORG_DEPT_MEETINGS} element={<ScopedMeetingsPage />} />
         <Route path={ROUTES.ORG_DEPT_CALLS} element={<ScopedCallsPage />} />
-        <Route path={ROUTES.MEETINGS} element={<MeetingsPage />} />
+        <Route path={ROUTES.RECORDS} element={<RecordsPage />} />
+        <Route path={ROUTES.RECORD_DETAIL} element={<RecordDetailPage />} />
+        {/* Legacy /meetings → /records (deprecated, deploy-window only). */}
+        <Route path={ROUTES.MEETINGS} element={<Navigate to={ROUTES.RECORDS} replace />} />
         <Route path={ROUTES.PROFILE} element={<ProfilePage />} />
         <Route path={ROUTES.SETTINGS} element={<SettingsPage />} />
         <Route path={ROUTES.HELP} element={<HelpPage />} />
       </Route>
 
-      {/* Rekall landing — full-screen, no sidebar chrome, still requires auth */}
+      {/* Rekall landing — full-screen, no sidebar chrome, still requires auth.
+          Both NEW_RECORD and NEW_MEETING resolve to the same NewMeetingPage; the
+          /meetings/new alias is preserved for now to avoid breaking external links. */}
       <Route
-        path={ROUTES.NEW_MEETING}
+        path={ROUTES.NEW_RECORD}
         element={
           <ProtectedRoute>
             <NewMeetingPage />
           </ProtectedRoute>
         }
       />
+      <Route path={ROUTES.NEW_MEETING} element={<Navigate to={ROUTES.NEW_RECORD} replace />} />
 
       {/* Meeting room — full-screen, no sidebar chrome, still requires auth */}
       <Route
@@ -123,9 +136,13 @@ function ThemedApp({ children }: { children: React.ReactNode }) {
       transitions: {
         create: () => 'none',
         duration: {
-          shortest: 0, shorter: 0, short: 0,
-          standard: 0, complex: 0,
-          enteringScreen: 0, leavingScreen: 0,
+          shortest: 0,
+          shorter: 0,
+          short: 0,
+          standard: 0,
+          complex: 0,
+          enteringScreen: 0,
+          leavingScreen: 0,
         },
       },
     })

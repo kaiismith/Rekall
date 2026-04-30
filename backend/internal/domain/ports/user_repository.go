@@ -18,6 +18,11 @@ type UserRepository interface {
 	// Returns an error wrapping errors.NotFound when no user exists with the given ID.
 	GetByID(ctx context.Context, id uuid.UUID) (*entities.User, error)
 
+	// FindByIDs returns the (non-deleted) users matching the given ids in a
+	// single query. Missing ids are silently omitted from the result; callers
+	// that need a strict ids → users mapping should build it themselves.
+	FindByIDs(ctx context.Context, ids []uuid.UUID) ([]*entities.User, error)
+
 	// GetByEmail retrieves a user by their email address.
 	GetByEmail(ctx context.Context, email string) (*entities.User, error)
 

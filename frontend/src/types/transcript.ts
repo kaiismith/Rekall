@@ -67,12 +67,26 @@ export interface TranscriptSegmentDTO {
   segment_started_at: string // ISO-8601
 }
 
+/**
+ * Page-window metadata returned alongside paginated transcript reads.
+ * Matches dto.TranscriptPagination on the backend.
+ */
+export interface TranscriptPagination {
+  page: number
+  per_page: number
+  total: number
+  total_pages: number
+  has_more: boolean
+}
+
 export interface CallTranscriptResponse {
   session?: TranscriptSessionDTO
   segments: TranscriptSegmentDTO[]
+  pagination: TranscriptPagination
 }
 
 export interface MeetingTranscriptResponse {
   sessions: TranscriptSessionDTO[]
   segments: TranscriptSegmentDTO[]
+  pagination: TranscriptPagination
 }

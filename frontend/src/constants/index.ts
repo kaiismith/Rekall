@@ -1,5 +1,6 @@
 /** Base URL for the backend API. Injected by Vite at build time. */
-export const API_BASE_URL = (import.meta.env['VITE_API_BASE_URL'] as string | undefined) ?? '/api/v1'
+export const API_BASE_URL =
+  (import.meta.env['VITE_API_BASE_URL'] as string | undefined) ?? '/api/v1'
 
 /** Default pagination values. */
 export const DEFAULT_PAGE = 1
@@ -26,7 +27,13 @@ export const ROUTES = {
   ORG_DEPT_MEETINGS: '/organizations/:orgId/departments/:deptId/meetings',
   ORG_DEPT_CALLS: '/organizations/:orgId/departments/:deptId/calls',
   INVITATION_ACCEPT: '/invitations/accept',
-  // Meetings
+  // Records (formerly "Meetings" tab) — list + detail. The live-room route
+  // /meeting/:code is the WebRTC surface and remains separate.
+  RECORDS: '/records',
+  NEW_RECORD: '/records/new',
+  RECORD_DETAIL: '/records/:code',
+  // Meetings — deprecated aliases redirecting to RECORDS during the deploy
+  // window. Remove in a follow-up once external links have migrated.
   MEETINGS: '/meetings',
   NEW_MEETING: '/meetings/new',
   MEETING_ROOM: '/meeting/:code',
@@ -40,8 +47,7 @@ export const ROUTES = {
 /** Navigation items for the sidebar. */
 export const NAV_ITEMS = [
   { label: 'Dashboard', path: ROUTES.DASHBOARD, icon: 'Dashboard' },
-  { label: 'Calls', path: ROUTES.CALLS, icon: 'PhoneInTalk' },
-  { label: 'Meetings', path: ROUTES.MEETINGS, icon: 'VideoCall' },
+  { label: 'Records', path: ROUTES.RECORDS, icon: 'PhoneInTalk' },
 ] as const
 
 /** Call status display config. */

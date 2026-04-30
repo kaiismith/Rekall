@@ -1,10 +1,11 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
-import { render, screen, waitFor } from '@testing-library/react'
+import { render, screen, waitFor, fireEvent } from '@testing-library/react'
+import type * as ReactRouterDom from 'react-router-dom'
 import { MemoryRouter } from 'react-router-dom'
 import { ThemeProvider } from '@mui/material/styles'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import theme from '@/theme'
-import { MeetingsPage } from '@/pages/MeetingsPage'
+import { RecordsPage } from '@/pages/RecordsPage'
 import * as meetingServiceModule from '@/services/meetingService'
 import type { Meeting } from '@/types/meeting'
 
@@ -19,7 +20,7 @@ vi.mock('@/services/meetingService', () => ({
 
 const mockNavigate = vi.fn()
 vi.mock('react-router-dom', async (importOriginal) => {
-  const actual = await importOriginal<typeof import('react-router-dom')>()
+  const actual = await importOriginal<typeof ReactRouterDom>()
   return { ...actual, useNavigate: () => mockNavigate }
 })
 
@@ -32,6 +33,7 @@ function meeting(overrides: Partial<Meeting> = {}): Meeting {
     host_id: 'user-1',
     status: 'ended',
     max_participants: 50,
+    transcription_enabled: false,
     join_url: 'http://localhost/meeting/abc-defg-hij',
     created_at: '2025-03-01T10:00:00Z',
     participant_previews: [],
@@ -39,68 +41,59 @@ function meeting(overrides: Partial<Meeting> = {}): Meeting {
   }
 }
 
-function renderPage(initialUrl = '/meetings') {
+function renderPage(initialUrl = '/records') {
   const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } })
   return render(
     <QueryClientProvider client={queryClient}>
       <ThemeProvider theme={theme}>
         <MemoryRouter initialEntries={[initialUrl]}>
-          <MeetingsPage />
+          <RecordsPage />
         </MemoryRouter>
       </ThemeProvider>
     </QueryClientProvider>,
   )
 }
 
-describe('MeetingsPage', () => {
+// eslint-disable-next-line @typescript-eslint/unbound-method
+const listMineSpy = vi.mocked(meetingServiceModule.meetingService.listMine)
+
+describe('RecordsPage', () => {
   beforeEach(() => {
     vi.clearAllMocks()
   })
 
-  it('renders the page heading', async () => {
-    vi.mocked(meetingServiceModule.meetingService.listMine).mockResolvedValue({
-      success: true,
-      data: [],
-    })
+  it('renders the page heading', () => {
+    listMineSpy.mockResolvedValue({ success: true, data: [] })
     renderPage()
-    expect(screen.getByText('Your Meetings')).toBeInTheDocument()
+    expect(screen.getByText('Your Records')).toBeInTheDocument()
   })
 
-  it('shows empty state when no meetings exist', async () => {
-    vi.mocked(meetingServiceModule.meetingService.listMine).mockResolvedValue({
-      success: true,
-      data: [],
-    })
+  it('shows empty state when no records exist', async () => {
+    listMineSpy.mockResolvedValue({ success: true, data: [] })
     renderPage()
     await waitFor(() => {
-      expect(screen.getByText(/no meetings yet/i)).toBeInTheDocument()
+      expect(screen.getByText(/no records yet/i)).toBeInTheDocument()
     })
   })
 
   it('shows "Start a Meeting" CTA in empty state without filter', async () => {
-    vi.mocked(meetingServiceModule.meetingService.listMine).mockResolvedValue({
-      success: true,
-      data: [],
-    })
+    listMineSpy.mockResolvedValue({ success: true, data: [] })
     renderPage()
     await waitFor(() => {
       expect(screen.getByRole('button', { name: /start a meeting/i })).toBeInTheDocument()
     })
   })
 
-  it('shows "No meetings match this filter" when filter is active and list is empty', async () => {
-    vi.mocked(meetingServiceModule.meetingService.listMine).mockResolvedValue({
-      success: true,
-      data: [],
-    })
-    renderPage('/meetings?status=complete')
+  it('shows "No records match this filter" when filter is active and list is empty', async () => {
+    listMineSpy.mockResolvedValue({ success: true, data: [] })
+    renderPage('/records?status=complete')
     await waitFor(() => {
-      expect(screen.getByText(/no meetings match this filter/i)).toBeInTheDocument()
+      expect(screen.getByText(/no records match this filter/i)).toBeInTheDocument()
     })
   })
 
   it('renders meeting cards when data is returned', async () => {
-    vi.mocked(meetingServiceModule.meetingService.listMine).mockResolvedValue({
+    listMineSpy.mockResolvedValue({
       success: true,
       data: [meeting({ title: 'Team Standup' }), meeting({ id: 'meet-2', title: 'Design Review' })],
     })
@@ -112,27 +105,34 @@ describe('MeetingsPage', () => {
   })
 
   it('shows filter badge with count 1 when status param is set', async () => {
-    vi.mocked(meetingServiceModule.meetingService.listMine).mockResolvedValue({
-      success: true,
-      data: [],
-    })
-    renderPage('/meetings?status=complete')
+    listMineSpy.mockResolvedValue({ success: true, data: [] })
+    renderPage('/records?status=complete')
     await waitFor(() => {
-      // MUI Badge renders badgeContent as a span
       expect(screen.getByText('1')).toBeInTheDocument()
     })
   })
 
   it('passes status and sort URL params to the service', async () => {
-    vi.mocked(meetingServiceModule.meetingService.listMine).mockResolvedValue({
-      success: true,
-      data: [],
-    })
-    renderPage('/meetings?status=complete&sort=duration_desc')
+    listMineSpy.mockResolvedValue({ success: true, data: [] })
+    renderPage('/records?status=complete&sort=duration_desc')
     await waitFor(() => {
-      expect(meetingServiceModule.meetingService.listMine).toHaveBeenCalledWith(
+      expect(listMineSpy).toHaveBeenCalledWith(
         expect.objectContaining({ status: 'complete', sort: 'duration_desc' }),
+        null,
       )
     })
+  })
+
+  it('clicking a meeting card navigates to /records/:code (NOT /meeting/:code)', async () => {
+    listMineSpy.mockResolvedValue({
+      success: true,
+      data: [meeting({ code: 'rec-abc', title: 'Team Standup' })],
+    })
+    renderPage()
+    await waitFor(() => {
+      expect(screen.getByText('Team Standup')).toBeInTheDocument()
+    })
+    fireEvent.click(screen.getByText('Team Standup'))
+    expect(mockNavigate).toHaveBeenCalledWith('/records/rec-abc')
   })
 })

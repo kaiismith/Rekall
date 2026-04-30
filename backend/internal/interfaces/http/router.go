@@ -19,6 +19,7 @@ type RouterDeps struct {
 	JWTSecret      string
 	JWTIssuer      string
 	HealthH        *handlers.HealthHandler
+	KatH           *handlers.KatHandler
 	CallH          *handlers.CallHandler
 	UserH          *handlers.UserHandler
 	AuthH          *handlers.AuthHandler
@@ -44,6 +45,9 @@ func NewRouter(deps RouterDeps) *gin.Engine {
 	// Probe endpoints (no /api/v1 prefix — used by load balancers)
 	router.GET("/health", deps.HealthH.Liveness)
 	router.GET("/ready", deps.HealthH.Readiness)
+	if deps.KatH != nil {
+		router.GET("/healthz/kat", deps.KatH.Health)
+	}
 
 	// API v1
 	v1 := router.Group("/api/v1")

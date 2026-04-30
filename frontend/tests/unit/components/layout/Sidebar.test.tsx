@@ -38,9 +38,12 @@ describe('Sidebar', () => {
   it('shows nav item labels when open', () => {
     renderSidebar()
     expect(screen.getByText('Dashboard')).toBeInTheDocument()
-    expect(screen.getByText('Meetings')).toBeInTheDocument()
-    expect(screen.getByText('Calls')).toBeInTheDocument()
+    expect(screen.getByText('Records')).toBeInTheDocument()
     expect(screen.getByText('Organizations')).toBeInTheDocument()
+    // "Calls" and "Meetings" entries removed; the Records tab is the single
+    // entry point for past sessions.
+    expect(screen.queryByText('Calls')).not.toBeInTheDocument()
+    expect(screen.queryByText('Meetings')).not.toBeInTheDocument()
   })
 
   // ── collapsed state ──────────────────────────────────────────────────────────
@@ -56,7 +59,7 @@ describe('Sidebar', () => {
     useUIStore.setState({ sidebarOpen: false })
     renderSidebar()
     expect(screen.queryByText('Dashboard')).not.toBeInTheDocument()
-    expect(screen.queryByText('Meetings')).not.toBeInTheDocument()
+    expect(screen.queryByText('Records')).not.toBeInTheDocument()
   })
 
   // ── navigation ────────────────────────────────────────────────────────────────
@@ -78,8 +81,8 @@ describe('Sidebar', () => {
   it('renders a nav button for each nav item', () => {
     renderSidebar()
     const buttons = screen.getAllByRole('button')
-    // Primary nav (4) + footer nav (Profile, Settings) = 6
-    expect(buttons.length).toBeGreaterThanOrEqual(6)
+    // Primary nav (Dashboard, Records, Organizations) + footer (Profile, Settings) = 5
+    expect(buttons.length).toBeGreaterThanOrEqual(5)
   })
 
   it('renders Profile and Settings in the footer', () => {
@@ -111,15 +114,15 @@ describe('Sidebar', () => {
     expect(dashBtn?.classList.contains('Mui-selected')).toBe(true)
   })
 
-  it('marks a nested path as active (e.g. /meetings/123 activates Meetings)', () => {
-    renderSidebar('/meetings/abc-123')
+  it('marks a nested path as active (e.g. /records/abc activates Records)', () => {
+    renderSidebar('/records/abc-defg-hij')
     const buttons = screen.getAllByRole('button')
-    const meetBtn = buttons.find((b) => b.textContent?.includes('Meetings'))
-    expect(meetBtn?.classList.contains('Mui-selected')).toBe(true)
+    const recBtn = buttons.find((b) => b.textContent?.includes('Records'))
+    expect(recBtn?.classList.contains('Mui-selected')).toBe(true)
   })
 
-  it('does not mark Dashboard as selected on /meetings path', () => {
-    renderSidebar('/meetings')
+  it('does not mark Dashboard as selected on /records path', () => {
+    renderSidebar('/records')
     const buttons = screen.getAllByRole('button')
     const dashBtn = buttons.find((b) => b.textContent?.includes('Dashboard'))
     expect(dashBtn?.classList.contains('Mui-selected')).toBe(false)

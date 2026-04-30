@@ -76,6 +76,15 @@ type ASRSessionPayload struct {
 	FrameFormat  string
 }
 
+// ASRKatHooks is the slice of KatNotesService that the ASR token issuer
+// depends on. Declared as a small interface so tests don't need a real
+// scheduler and so a Kat-disabled deployment can pass nil. Both methods are
+// best-effort: a panic or error inside them must not affect token issuance.
+type ASRKatHooks interface {
+	OnCallSessionOpened(callID uuid.UUID)
+	OnCallSessionEnded(callID uuid.UUID)
+}
+
 // ASRTokenIssuer mints short-lived JWTs binding a user to an asr session.
 // It is the Go-side complement of the C++ JWTValidator.
 type ASRTokenIssuer struct {
@@ -84,6 +93,7 @@ type ASRTokenIssuer struct {
 	meetingRepo     ports.MeetingRepository
 	participantRepo ports.MeetingParticipantRepository
 	persister       *TranscriptPersister // optional: when nil, sessions are not persisted
+	katHooks        ASRKatHooks          // optional Kat lifecycle callbacks
 	health          *healthCache
 	signer          *asr.TokenSigner
 	cfg             ASRTokenIssuerConfig
@@ -120,6 +130,10 @@ func NewASRTokenIssuer(
 		logger:          applogger.WithComponent(logger, "asr_token_issuer"),
 	}
 }
+
+// SetKatHooks installs optional Kat lifecycle callbacks. Safe to call after
+// construction; nil disables the hooks.
+func (s *ASRTokenIssuer) SetKatHooks(h ASRKatHooks) { s.katHooks = h }
 
 // engineSnapshotFor returns the (mode, target, model) triple to record on a
 // new transcript_sessions row. If Health() is unavailable, fall back to the
@@ -264,6 +278,17 @@ func (s *ASRTokenIssuer) Request(ctx context.Context, in RequestInput) (*ASRSess
 		}
 	}
 
+	// Kat hook: register the call cohort so the live-notes scheduler starts
+	// ticking against this call's transcript. Off the request path; failure
+	// is opaque to the caller.
+	if s.katHooks != nil {
+		callID := in.CallID
+		go func() {
+			defer func() { _ = recover() }()
+			s.katHooks.OnCallSessionOpened(callID)
+		}()
+	}
+
 	return &ASRSessionPayload{
 		SessionID:    out.SessionID.String(),
 		SessionToken: token,
@@ -333,6 +358,17 @@ func (s *ASRTokenIssuer) End(ctx context.Context, callerID, callID, sessionID uu
 			}
 		}
 	}
+
+	// Kat hook: drop the call cohort entry so the live-notes scheduler stops
+	// ticking. Off the request path; failure is opaque to the caller.
+	if s.katHooks != nil {
+		cid := callID
+		go func() {
+			defer func() { _ = recover() }()
+			s.katHooks.OnCallSessionEnded(cid)
+		}()
+	}
+
 	return out, nil
 }
 

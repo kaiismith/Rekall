@@ -17,6 +17,17 @@ export interface ParticipantPreview {
   initials: string
 }
 
+/**
+ * Distinct speaker behind one of the meeting's transcript sessions. Populated
+ * by the backend on the meeting-detail response (NOT on list responses); the
+ * Records detail timeline uses this to label each speaker block.
+ */
+export interface SpeakerInfo {
+  user_id: string
+  full_name: string
+  initials: string
+}
+
 export interface Meeting {
   id: string
   code: string
@@ -36,6 +47,10 @@ export interface Meeting {
   created_at: string
   duration_seconds?: number | null
   participant_previews?: ParticipantPreview[]
+  /** Distinct speakers behind this meeting's transcript sessions. Always
+   *  present on detail responses (empty array when no sessions exist); list
+   *  responses leave this empty. */
+  speakers?: SpeakerInfo[]
 }
 
 export interface ListMeetingsParams {
@@ -88,6 +103,8 @@ export type WsMsgType =
   | 'room_state'
   | 'chat_message'
   | 'caption_chunk'
+  // Kat live AI notes (running summary + key points + open questions)
+  | 'kat.note'
 
 export interface WsMessage {
   type: WsMsgType
@@ -130,6 +147,8 @@ export interface WsMessage {
   language?: string
   confidence?: number
   words?: { w: string; start_ms: number; end_ms: number; p: number }[]
+  // kat.note: the structured note payload (see types/kat.ts).
+  data?: unknown
 }
 
 /** A single caption entry in the merged meeting transcript feed. */

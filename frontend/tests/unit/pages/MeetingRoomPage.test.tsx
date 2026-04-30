@@ -7,7 +7,17 @@ import theme from '@/theme'
 // ── Mock useMeeting ──────────────────────────────────────────────────────────
 
 const defaults = {
-  meeting: { id: 'm1', code: 'abc', title: 'Sprint Sync', type: 'open', host_id: 'host-1', status: 'active', max_participants: 10, join_url: '', created_at: '' },
+  meeting: {
+    id: 'm1',
+    code: 'abc',
+    title: 'Sprint Sync',
+    type: 'open',
+    host_id: 'host-1',
+    status: 'active',
+    max_participants: 10,
+    join_url: '',
+    created_at: '',
+  },
   roomState: 'in_meeting' as string,
   isSpeaking: false,
   audioLevel: 0,
@@ -34,7 +44,11 @@ const defaults = {
   sendEmojiReaction: vi.fn(),
   localPreviewStream: null as MediaStream | null,
   joinNow: vi.fn(),
-  availableDevices: { cameras: [], mics: [], speakers: [] } as { cameras: MediaDeviceInfo[]; mics: MediaDeviceInfo[]; speakers: MediaDeviceInfo[] },
+  availableDevices: { cameras: [], mics: [], speakers: [] } as {
+    cameras: MediaDeviceInfo[]
+    mics: MediaDeviceInfo[]
+    speakers: MediaDeviceInfo[]
+  },
   selectedDeviceIds: { camera: '', mic: '', speaker: '' },
   switchCamera: vi.fn(),
   switchMic: vi.fn(),
@@ -62,14 +76,22 @@ vi.mock('@/hooks/useMeeting', () => ({
 
 vi.mock('@/store/authStore', () => {
   const state = {
-    user: { id: 'host-1', email: 'a@b.com', full_name: 'Host', role: 'member', email_verified: true, created_at: '' },
+    user: {
+      id: 'host-1',
+      email: 'a@b.com',
+      full_name: 'Host',
+      role: 'member',
+      email_verified: true,
+      created_at: '',
+    },
     accessToken: 'tok',
     isInitialised: true,
     setAuth: vi.fn(),
     clearAuth: vi.fn(),
     setInitialised: vi.fn(),
   }
-  const useAuthStore = (selector?: (s: any) => any) => selector ? selector(state) : state
+  type AuthState = typeof state
+  const useAuthStore = <T,>(selector?: (s: AuthState) => T) => (selector ? selector(state) : state)
   useAuthStore.getState = () => state
   useAuthStore.setState = vi.fn()
   useAuthStore.subscribe = vi.fn()
@@ -87,7 +109,7 @@ function renderPage(overrides: Partial<typeof defaults> = {}) {
       <MemoryRouter initialEntries={['/meeting/abc']}>
         <Routes>
           <Route path="/meeting/:code" element={<MeetingRoomPage />} />
-          <Route path="/meetings" element={<div>meetings-list</div>} />
+          <Route path="/records" element={<div>records-list</div>} />
         </Routes>
       </MemoryRouter>
     </ThemeProvider>,
@@ -136,10 +158,10 @@ describe('MeetingRoomPage', () => {
     expect(screen.getByText('Meeting Ended')).toBeInTheDocument()
   })
 
-  it('ended screen Back to Meetings button navigates', () => {
+  it('ended screen Back to Meetings button navigates to /records', () => {
     renderPage({ roomState: 'ended' })
     fireEvent.click(screen.getByRole('button', { name: /back to meetings/i }))
-    expect(screen.getByText('meetings-list')).toBeInTheDocument()
+    expect(screen.getByText('records-list')).toBeInTheDocument()
   })
 
   // ── In-meeting UI ──────────────────────────────────────────────────────────
@@ -172,7 +194,10 @@ describe('MeetingRoomPage', () => {
     } as unknown as RTCPeerConnection
     renderPage({
       peers: { 'user-2': mockPc, 'user-3': mockPc },
-      mediaStates: { 'user-2': { audio: true, video: false }, 'user-3': { audio: true, video: false } },
+      mediaStates: {
+        'user-2': { audio: true, video: false },
+        'user-3': { audio: true, video: false },
+      },
     })
     expect(screen.getByText('3 participants')).toBeInTheDocument()
   })
@@ -408,9 +433,7 @@ describe('MeetingRoomPage', () => {
 
   it('renders emoji reactions on the local tile', () => {
     renderPage({
-      reactionQueue: [
-        { id: 'r1', userId: 'host-1', emoji: '🎉', timestamp: Date.now() },
-      ],
+      reactionQueue: [{ id: 'r1', userId: 'host-1', emoji: '🎉', timestamp: Date.now() }],
     })
     expect(screen.getByText('🎉')).toBeInTheDocument()
   })
