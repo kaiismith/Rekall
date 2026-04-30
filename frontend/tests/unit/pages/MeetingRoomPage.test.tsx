@@ -109,7 +109,7 @@ function renderPage(overrides: Partial<typeof defaults> = {}) {
       <MemoryRouter initialEntries={['/meeting/abc']}>
         <Routes>
           <Route path="/meeting/:code" element={<MeetingRoomPage />} />
-          <Route path="/records" element={<div>records-list</div>} />
+          <Route path="/meetings" element={<div>meetings-list</div>} />
         </Routes>
       </MemoryRouter>
     </ThemeProvider>,
@@ -158,10 +158,10 @@ describe('MeetingRoomPage', () => {
     expect(screen.getByText('Meeting Ended')).toBeInTheDocument()
   })
 
-  it('ended screen Back to Meetings button navigates to /records', () => {
+  it('ended screen Back to Meetings button navigates', () => {
     renderPage({ roomState: 'ended' })
     fireEvent.click(screen.getByRole('button', { name: /back to meetings/i }))
-    expect(screen.getByText('records-list')).toBeInTheDocument()
+    expect(screen.getByText('meetings-list')).toBeInTheDocument()
   })
 
   // ── In-meeting UI ──────────────────────────────────────────────────────────

@@ -24,6 +24,7 @@ import { DeptDetailPage } from '@/pages/DeptDetailPage'
 import { ScopedMeetingsPage } from '@/pages/ScopedMeetingsPage'
 import { ScopedCallsPage } from '@/pages/ScopedCallsPage'
 import { InviteAcceptPage } from '@/pages/InviteAcceptPage'
+import { MeetingsPage } from '@/pages/MeetingsPage'
 import { RecordsPage } from '@/pages/RecordsPage'
 import { RecordDetailPage } from '@/pages/RecordDetailPage'
 import { NewMeetingPage } from '@/pages/NewMeetingPage'
@@ -86,16 +87,23 @@ function AppRoutes() {
         <Route path={ROUTES.ORG_DEPT_CALLS} element={<ScopedCallsPage />} />
         <Route path={ROUTES.RECORDS} element={<RecordsPage />} />
         <Route path={ROUTES.RECORD_DETAIL} element={<RecordDetailPage />} />
-        {/* Legacy /meetings → /records (deprecated, deploy-window only). */}
-        <Route path={ROUTES.MEETINGS} element={<Navigate to={ROUTES.RECORDS} replace />} />
+        <Route path={ROUTES.MEETINGS} element={<MeetingsPage />} />
         <Route path={ROUTES.PROFILE} element={<ProfilePage />} />
         <Route path={ROUTES.SETTINGS} element={<SettingsPage />} />
         <Route path={ROUTES.HELP} element={<HelpPage />} />
       </Route>
 
       {/* Rekall landing — full-screen, no sidebar chrome, still requires auth.
-          Both NEW_RECORD and NEW_MEETING resolve to the same NewMeetingPage; the
-          /meetings/new alias is preserved for now to avoid breaking external links. */}
+          /meetings/new is the canonical create-meeting flow; /records/new is
+          an alias from the Records tab so users on that page can start one too. */}
+      <Route
+        path={ROUTES.NEW_MEETING}
+        element={
+          <ProtectedRoute>
+            <NewMeetingPage />
+          </ProtectedRoute>
+        }
+      />
       <Route
         path={ROUTES.NEW_RECORD}
         element={
@@ -104,7 +112,6 @@ function AppRoutes() {
           </ProtectedRoute>
         }
       />
-      <Route path={ROUTES.NEW_MEETING} element={<Navigate to={ROUTES.NEW_RECORD} replace />} />
 
       {/* Meeting room — full-screen, no sidebar chrome, still requires auth */}
       <Route

@@ -38,12 +38,12 @@ describe('Sidebar', () => {
   it('shows nav item labels when open', () => {
     renderSidebar()
     expect(screen.getByText('Dashboard')).toBeInTheDocument()
+    expect(screen.getByText('Meetings')).toBeInTheDocument()
     expect(screen.getByText('Records')).toBeInTheDocument()
     expect(screen.getByText('Organizations')).toBeInTheDocument()
-    // "Calls" and "Meetings" entries removed; the Records tab is the single
-    // entry point for past sessions.
+    // The legacy "Calls" entry is gone; Meetings is the live-room list and
+    // Records is the stored-transcript list.
     expect(screen.queryByText('Calls')).not.toBeInTheDocument()
-    expect(screen.queryByText('Meetings')).not.toBeInTheDocument()
   })
 
   // ── collapsed state ──────────────────────────────────────────────────────────
@@ -81,8 +81,8 @@ describe('Sidebar', () => {
   it('renders a nav button for each nav item', () => {
     renderSidebar()
     const buttons = screen.getAllByRole('button')
-    // Primary nav (Dashboard, Records, Organizations) + footer (Profile, Settings) = 5
-    expect(buttons.length).toBeGreaterThanOrEqual(5)
+    // Primary nav (Dashboard, Meetings, Records, Organizations) + footer (Profile, Settings) = 6
+    expect(buttons.length).toBeGreaterThanOrEqual(6)
   })
 
   it('renders Profile and Settings in the footer', () => {
@@ -114,15 +114,22 @@ describe('Sidebar', () => {
     expect(dashBtn?.classList.contains('Mui-selected')).toBe(true)
   })
 
-  it('marks a nested path as active (e.g. /records/abc activates Records)', () => {
+  it('marks a nested path as active (e.g. /meetings/123 activates Meetings)', () => {
+    renderSidebar('/meetings/abc-123')
+    const buttons = screen.getAllByRole('button')
+    const meetBtn = buttons.find((b) => b.textContent?.includes('Meetings'))
+    expect(meetBtn?.classList.contains('Mui-selected')).toBe(true)
+  })
+
+  it('marks Records as active on /records/:code', () => {
     renderSidebar('/records/abc-defg-hij')
     const buttons = screen.getAllByRole('button')
     const recBtn = buttons.find((b) => b.textContent?.includes('Records'))
     expect(recBtn?.classList.contains('Mui-selected')).toBe(true)
   })
 
-  it('does not mark Dashboard as selected on /records path', () => {
-    renderSidebar('/records')
+  it('does not mark Dashboard as selected on /meetings path', () => {
+    renderSidebar('/meetings')
     const buttons = screen.getAllByRole('button')
     const dashBtn = buttons.find((b) => b.textContent?.includes('Dashboard'))
     expect(dashBtn?.classList.contains('Mui-selected')).toBe(false)

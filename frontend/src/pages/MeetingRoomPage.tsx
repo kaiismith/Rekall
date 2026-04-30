@@ -27,6 +27,7 @@ import { useMeeting } from '@/hooks/useMeeting'
 import { useKatNotes } from '@/hooks/useKatNotes'
 import { KatPanel } from '@/components/meeting/KatPanel'
 import { useAuthStore } from '@/store/authStore'
+import { avatarColour, getInitials } from '@/utils'
 import { MicButton } from '@/components/meeting/MicButton'
 import { CameraButton } from '@/components/meeting/CameraButton'
 import { ShareButton } from '@/components/meeting/ShareButton'
@@ -136,7 +137,7 @@ export function MeetingRoomPage() {
     code: code ?? '',
     onEnd: () => {
       console.warn('%c[meeting] page: onEnd → /meetings', 'color:#f59e0b;font-weight:600')
-      navigate('/records')
+      navigate('/meetings')
     },
     onKatNote: (note) => katNotes.pushNote(note),
   })
@@ -246,6 +247,7 @@ export function MeetingRoomPage() {
           meetingTitle={meeting?.title || 'Meeting'}
           meetingCode={meeting?.code ?? ''}
           previewStream={localPreviewStream ?? localStream}
+          userFullName={user?.full_name ?? ''}
           isMuted={isMuted}
           isCameraOff={isCameraOff}
           audioLevel={audioLevel}
@@ -253,7 +255,7 @@ export function MeetingRoomPage() {
           onToggleCamera={toggleCamera}
           mediaError={mediaError}
           onJoin={joinNow}
-          onCancel={() => navigate('/records')}
+          onCancel={() => navigate('/meetings')}
           onOpenSettings={() => setSettingsOpen(true)}
         />
         <DeviceSettingsDialog
@@ -320,7 +322,7 @@ export function MeetingRoomPage() {
           Access Denied
         </Typography>
         <Typography color="text.secondary">Your request to join was declined.</Typography>
-        <Button variant="outlined" onClick={() => navigate('/records')}>
+        <Button variant="outlined" onClick={() => navigate('/meetings')}>
           Back to Meetings
         </Button>
       </Box>
@@ -338,7 +340,7 @@ export function MeetingRoomPage() {
         gap={2}
       >
         <Typography variant="h5">Meeting Ended</Typography>
-        <Button variant="outlined" onClick={() => navigate('/records')}>
+        <Button variant="outlined" onClick={() => navigate('/meetings')}>
           Back to Meetings
         </Button>
       </Box>
@@ -864,6 +866,7 @@ interface DeviceCheckScreenProps {
   meetingTitle: string
   meetingCode: string
   previewStream: MediaStream | null
+  userFullName: string
   isMuted: boolean
   isCameraOff: boolean
   audioLevel: number
@@ -879,6 +882,7 @@ function DeviceCheckScreen({
   meetingTitle,
   meetingCode,
   previewStream,
+  userFullName,
   isMuted,
   isCameraOff,
   audioLevel,
@@ -1007,23 +1011,18 @@ function DeviceCheckScreen({
                 gap: 1.5,
               }}
             >
-              <Box
+              <Avatar
                 sx={{
-                  width: 64,
-                  height: 64,
-                  borderRadius: '50%',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  bgcolor: 'rgba(255,255,255,0.05)',
-                  color: 'text.secondary',
+                  width: 96,
+                  height: 96,
+                  fontSize: '2rem',
+                  fontWeight: 600,
+                  bgcolor: avatarColour(userFullName || 'guest'),
+                  color: 'common.white',
                 }}
               >
-                <VideocamOffIcon sx={{ fontSize: '2rem' }} />
-              </Box>
-              <Typography variant="body2" color="text.secondary">
-                Camera is off
-              </Typography>
+                {getInitials(userFullName) || '?'}
+              </Avatar>
             </Stack>
           )}
 
