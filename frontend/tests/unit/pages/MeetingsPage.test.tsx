@@ -63,13 +63,21 @@ describe('MeetingsPage', () => {
   })
 
   it('renders the page heading', () => {
-    listMineSpy.mockResolvedValue({ success: true, data: [] })
+    listMineSpy.mockResolvedValue({
+      success: true,
+      data: [],
+      pagination: { page: 1, per_page: 5, total: 0, total_pages: 0, has_more: false },
+    })
     renderPage()
     expect(screen.getByText('Your Meetings')).toBeInTheDocument()
   })
 
   it('shows empty state when no meetings exist', async () => {
-    listMineSpy.mockResolvedValue({ success: true, data: [] })
+    listMineSpy.mockResolvedValue({
+      success: true,
+      data: [],
+      pagination: { page: 1, per_page: 5, total: 0, total_pages: 0, has_more: false },
+    })
     renderPage()
     await waitFor(() => {
       expect(screen.getByText(/no meetings yet/i)).toBeInTheDocument()
@@ -80,6 +88,7 @@ describe('MeetingsPage', () => {
     listMineSpy.mockResolvedValue({
       success: true,
       data: [meeting({ title: 'Team Standup' })],
+      pagination: { page: 1, per_page: 5, total: 1, total_pages: 1, has_more: false },
     })
     renderPage()
     await waitFor(() => {
@@ -91,6 +100,7 @@ describe('MeetingsPage', () => {
     listMineSpy.mockResolvedValue({
       success: true,
       data: [meeting({ code: 'live-abc', title: 'Live Standup' })],
+      pagination: { page: 1, per_page: 5, total: 1, total_pages: 1, has_more: false },
     })
     renderPage()
     await waitFor(() => {

@@ -20,7 +20,12 @@ export function computeElapsed(startedAt: string): number {
  * Return up to two uppercase initials from a full name (first + last word).
  */
 export function getInitials(fullName: string): string {
-  const parts = fullName.trim().split(/\s+/).filter(Boolean)
+  // Pull only word-tokens that BEGIN with a letter — skips junk like
+  // "(techvify.tc)" or "•" so the initial pair is always two letters.
+  const parts = fullName
+    .trim()
+    .split(/\s+/)
+    .filter((p) => /^[\p{L}]/u.test(p))
   if (parts.length === 0) return '?'
   const first = parts[0][0].toUpperCase()
   if (parts.length === 1) return first
@@ -97,7 +102,12 @@ export function buildQueryString(params: Record<string, unknown>): string {
   const search = new URLSearchParams()
   for (const [key, value] of Object.entries(params)) {
     if (value !== undefined && value !== null && value !== '') {
-      search.set(key, typeof value === 'object' ? JSON.stringify(value) : String(value as string | number | boolean))
+      search.set(
+        key,
+        typeof value === 'object'
+          ? JSON.stringify(value)
+          : String(value as string | number | boolean),
+      )
     }
   }
   const qs = search.toString()

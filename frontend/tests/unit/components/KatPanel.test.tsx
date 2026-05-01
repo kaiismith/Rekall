@@ -8,6 +8,7 @@ import type { KatHealthResponse, KatNoteDTO } from '@/types/kat'
 
 const configuredHealth: KatHealthResponse = {
   configured: true,
+  provider: 'foundry',
   auth_mode: 'api_key',
   deployment: 'gpt-4o-mini',
   endpoint_host: 'foundry.example.com',
@@ -50,13 +51,15 @@ describe('<KatPanel>', () => {
     expect(screen.getByText('Who pages on Friday?')).toBeInTheDocument()
     // The "notes are not saved" hint must be visible in the live state.
     expect(screen.getByText(/Notes are not saved/i)).toBeInTheDocument()
-    // Footer carries the model id from the health response.
-    expect(screen.getByText(/model: gpt-4o-mini/)).toBeInTheDocument()
+    // Footer carries the provider label and the model id.
+    expect(screen.getByText(/Azure AI Foundry/)).toBeInTheDocument()
+    expect(screen.getByText(/gpt-4o-mini/)).toBeInTheDocument()
   })
 
   it('renders the offline state and hides action affordances', () => {
     renderPanel('offline', null, {
       configured: false,
+      provider: '',
       auth_mode: 'none',
       deployment: '',
       endpoint_host: '',

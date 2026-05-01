@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { Badge, Box, CircularProgress, IconButton, Stack, Tooltip } from '@mui/material'
+import { Badge, Box, Button, CircularProgress, IconButton, Stack, Tooltip } from '@mui/material'
 import FilterListIcon from '@mui/icons-material/FilterList'
 import SortIcon from '@mui/icons-material/Sort'
 import AddIcon from '@mui/icons-material/Add'
@@ -33,6 +33,10 @@ export function MeetingsPage() {
   const {
     meetings,
     isLoading,
+    isFetchingNextPage,
+    hasNextPage,
+    loadMore,
+    total,
     status,
     sort,
     scope,
@@ -44,6 +48,8 @@ export function MeetingsPage() {
 
   const [filterAnchor, setFilterAnchor] = useState<HTMLElement | null>(null)
   const [sortAnchor, setSortAnchor] = useState<HTMLElement | null>(null)
+
+  const remaining = Math.max(0, total - meetings.length)
 
   const actions = (
     <>
@@ -140,6 +146,19 @@ export function MeetingsPage() {
           {meetings.map((m) => (
             <MeetingCard key={m.id} meeting={m} linkTo={liveRoomLink} />
           ))}
+          {hasNextPage && (
+            <Button
+              variant="outlined"
+              onClick={loadMore}
+              disabled={isFetchingNextPage}
+              startIcon={isFetchingNextPage ? <CircularProgress size={14} /> : undefined}
+              sx={{ alignSelf: 'center', mt: 1 }}
+            >
+              {isFetchingNextPage
+                ? 'Loading…'
+                : `Show ${remaining > 0 ? remaining : ''} more`.trim()}
+            </Button>
+          )}
         </Stack>
       )}
     </Box>

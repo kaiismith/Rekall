@@ -80,6 +80,12 @@ const (
 	// transcript segments, broadcast to every participant, and held in an
 	// in-memory ring buffer for late-join replay. Nothing is persisted.
 	MsgTypeKatNote = "kat.note"
+
+	// Per-user "AI notes" toggle. The hub aggregates: while at least one
+	// admitted client has it on, Kat ticks fire; when the count reaches zero
+	// the scheduler stops calling Foundry / OpenAI but keeps the cohort
+	// entry alive so the next enable resumes immediately.
+	MsgTypeKatToggle = "kat.toggle"
 )
 
 // InboundMessage is a generic envelope for messages received from a client.
@@ -114,6 +120,10 @@ type InboundMessage struct {
 	Language     *string               `json:"language,omitempty"`
 	Confidence   *float32              `json:"confidence,omitempty"`
 	Words        []entities.WordTiming `json:"words,omitempty"`
+	// kat.toggle: whether this client wants AI notes generated. The hub
+	// aggregates across all admitted clients; cost is only spent when at
+	// least one is on.
+	Enabled *bool `json:"enabled,omitempty"`
 }
 
 // RoomStateParticipant is a snapshot of one participant's ephemeral state.
@@ -194,6 +204,11 @@ type Client struct {
 	// the WS drops without a graceful HTTP `End` call (e.g. tab refresh,
 	// network blip). Owned exclusively by the hub run goroutine — no mutex.
 	activeASRSessionID *uuid.UUID
+
+	// katEnabled tracks whether this client wants AI notes ("Kat") generated.
+	// Updated by handleKatToggle; aggregated across all admitted clients to
+	// drive the cost gate on the scheduler. Owned by the hub run goroutine.
+	katEnabled bool
 }
 
 // ChatRateLimit constants. Server-side enforcement is deliberately lenient so

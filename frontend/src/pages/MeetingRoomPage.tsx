@@ -8,12 +8,15 @@ import {
   Chip,
   CircularProgress,
   Divider,
+  FormControlLabel,
   IconButton,
   Paper,
   Stack,
+  Switch,
   Tooltip,
   Typography,
 } from '@mui/material'
+import AutoAwesomeIcon from '@mui/icons-material/AutoAwesome'
 import CallEndIcon from '@mui/icons-material/CallEnd'
 import CheckIcon from '@mui/icons-material/Check'
 import CloseIcon from '@mui/icons-material/Close'
@@ -133,6 +136,7 @@ export function MeetingRoomPage() {
     captions,
     sendCaptionChunk,
     sendCaptionFinal,
+    sendKatToggle,
   } = useMeeting({
     code: code ?? '',
     onEnd: () => {
@@ -155,7 +159,27 @@ export function MeetingRoomPage() {
   // and broadcasts the resulting chunks via the meeting WS hub; turning it
   // off tears the session down. Other participants who also have captions
   // on will see your text attributed to you, and vice versa.
+  // Transcription is auto-enabled on join so Kat always has segments to
+  // summarize. Captions visibility is a separate, user-driven toggle: the
+  // pipeline runs in the background; the panel is only shown when the
+  // operator opts in via the CC button. Privacy note: this means audio is
+  // uploaded to the configured ASR engine (OpenAI Whisper / whisper.cpp) for
+  // every meeting by default. Surface this in your meeting notice / TOS.
+  const [transcriptionEnabled] = useState(true)
   const [captionsOn, setCaptionsOn] = useState(false)
+  // Wall-clock ms when this user most recently flipped CC on. Captions
+  // entries are filtered to those with `timestamp >= captionsOnSince` so
+  // the user only sees what was said *after* they opted in. Each CC-on
+  // resets this — the prior visible-window is forgotten (Option A: clean
+  // mental model, "fresh start every turn-on"). Backend / DB / Kat are
+  // unaffected; the full transcript continues to persist regardless.
+  const [captionsOnSince, setCaptionsOnSince] = useState<number | null>(null)
+  // AI Notes preference is a PRE-MEETING choice — it's set on the device-
+  // check screen and locked once the user joins. Locking it after join
+  // avoids mid-meeting toggles confusing the cost model: if you decide to
+  // record notes for a meeting, you commit to it for the whole session.
+  // To change the preference, leave and rejoin. Default: OFF (no AI cost).
+  const [aiNotesOn, setAiNotesOn] = useState(false)
 
   // sessionId is set by useASR once the server issues a token. Held in a ref
   // so the inline callbacks below don't capture a stale value across renders.
@@ -191,13 +215,22 @@ export function MeetingRoomPage() {
   // of sessions per second. The fix is to react ONLY to the inputs the user
   // controls.
   useEffect(() => {
-    const shouldStream = captionsOn && roomState === 'in_meeting' && !isMuted
+    const shouldStream = transcriptionEnabled && roomState === 'in_meeting' && !isMuted
     if (shouldStream) {
       void asrRef.current.start()
     } else {
       void asrRef.current.stop()
     }
-  }, [captionsOn, roomState, isMuted])
+  }, [transcriptionEnabled, roomState, isMuted])
+
+  // Signal the AI-notes preference to the backend so the Kat scheduler only
+  // spends Foundry / OpenAI calls when at least one participant has it on.
+  // Re-fires on every toggle change AND when the WS first becomes ready
+  // (roomState === 'in_meeting'), so the backend learns our initial state.
+  useEffect(() => {
+    if (roomState !== 'in_meeting') return
+    sendKatToggle(aiNotesOn)
+  }, [aiNotesOn, roomState, sendKatToggle])
 
   // Log every roomState transition so we can see in devtools exactly where
   // the page lands. Easy to grep on `[meeting]`.
@@ -254,6 +287,8 @@ export function MeetingRoomPage() {
           onToggleMic={toggleMute}
           onToggleCamera={toggleCamera}
           mediaError={mediaError}
+          aiNotesOn={aiNotesOn}
+          onToggleAiNotes={() => setAiNotesOn((on) => !on)}
           onJoin={joinNow}
           onCancel={() => navigate('/meetings')}
           onOpenSettings={() => setSettingsOpen(true)}
@@ -581,12 +616,16 @@ export function MeetingRoomPage() {
           </Box>
         )}
 
-        {/* ── Live-captions sidebar ────────────────────────────────────────── */}
-        {/* Personal opt-in: shown only to participants who clicked the
-            captions button in their own control bar. The captions array is
-            maintained even when the panel is closed, so reopening shows
-            recent history immediately. */}
-        {captionsOn && roomState === 'in_meeting' && (
+        {/* ── Right rail: optional captions panel + optional Kat panel ────────
+            Both panels are independent per-user opt-ins. The underlying
+            transcription pipeline runs unconditionally (see
+            transcriptionEnabled above) so toggling either visibility does NOT
+            start or stop ASR. The captions array and Kat ring buffer keep
+            accumulating regardless of panel visibility — re-opening either
+            panel shows recent history immediately. The whole rail collapses
+            when both toggles are off.
+        */}
+        {roomState === 'in_meeting' && (captionsOn || aiNotesOn) && (
           <Box
             sx={{
               width: 340,
@@ -598,30 +637,46 @@ export function MeetingRoomPage() {
             }}
           >
             <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2, flex: 1, minHeight: 0 }}>
-              <Box sx={{ flex: 1, minHeight: 0 }}>
-                <MeetingCaptionsPanel
-                  captions={captions}
-                  directory={participantDirectory}
-                  localUserId={user?.id ?? null}
-                  isStreamingLocal={asr.state === 'streaming'}
-                  isDisabled={false}
-                />
-              </Box>
-              <Box
-                sx={{
-                  flex: 1,
-                  minHeight: 0,
-                  borderTop: '1px solid',
-                  borderColor: 'divider',
-                  pt: 2,
-                }}
-              >
-                <KatPanel
-                  status={katNotes.status}
-                  latestNote={katNotes.latestNote}
-                  health={katNotes.health}
-                />
-              </Box>
+              {captionsOn && (
+                <Box sx={{ flex: 1, minHeight: 0 }}>
+                  <MeetingCaptionsPanel
+                    captions={
+                      // Filter to captions that arrived AFTER the most recent
+                      // CC-on click. The full array is preserved upstream
+                      // (so transcript persistence + Kat see everything);
+                      // only the panel rendering is gated by this user's
+                      // opt-in moment.
+                      captionsOnSince === null
+                        ? captions
+                        : captions.filter((c) => c.timestamp >= captionsOnSince)
+                    }
+                    directory={participantDirectory}
+                    localUserId={user?.id ?? null}
+                    isStreamingLocal={asr.state === 'streaming'}
+                    isDisabled={false}
+                  />
+                </Box>
+              )}
+              {aiNotesOn && (
+                <Box
+                  sx={{
+                    flex: 1,
+                    minHeight: 0,
+                    ...(captionsOn && {
+                      borderTop: '1px solid',
+                      borderColor: 'divider',
+                      pt: 2,
+                    }),
+                  }}
+                >
+                  <KatPanel
+                    status={katNotes.status}
+                    latestNote={katNotes.latestNote}
+                    health={katNotes.health}
+                    streamingPartial={katNotes.streamingPartial}
+                  />
+                </Box>
+              )}
             </Box>
           </Box>
         )}
@@ -663,7 +718,23 @@ export function MeetingRoomPage() {
           isOpen={isChatPanelOpen}
           onToggle={isChatPanelOpen ? closeChatPanel : openChatPanel}
         />
-        <CaptionsButton enabled={captionsOn} onToggle={() => setCaptionsOn((on) => !on)} />
+        <CaptionsButton
+          enabled={captionsOn}
+          onToggle={() => {
+            setCaptionsOn((on) => {
+              const next = !on
+              // Stamp the new on-moment so the panel filters out any
+              // captions that arrived before this turn-on. Off-state can
+              // leave the timestamp as-is — the panel is hidden anyway and
+              // the next on-flip overwrites it.
+              if (next) setCaptionsOnSince(Date.now())
+              return next
+            })
+          }}
+        />
+        {/* AI Notes is a pre-meeting choice (set on the device-check screen)
+            and intentionally locked once the user has joined. To change it,
+            leave and rejoin. */}
         <Tooltip title="Device settings">
           <IconButton
             size="small"
@@ -889,6 +960,11 @@ interface DeviceCheckScreenProps {
   mediaError: string | null
   onToggleMic: () => void
   onToggleCamera: () => void
+  /** AI Notes pre-meeting opt-in. Locked once joined — surface this on the
+   *  preview screen so the participant decides up front whether their
+   *  conversation should be summarized by Kat. */
+  aiNotesOn: boolean
+  onToggleAiNotes: () => void
   onJoin: () => void
   onCancel: () => void
   onOpenSettings: () => void
@@ -905,6 +981,8 @@ function DeviceCheckScreen({
   mediaError,
   onToggleMic,
   onToggleCamera,
+  aiNotesOn,
+  onToggleAiNotes,
   onJoin,
   onCancel,
   onOpenSettings,
@@ -1136,6 +1214,44 @@ function DeviceCheckScreen({
             </Stack>
           </Box>
         )}
+
+        {/* AI Notes pre-meeting opt-in. Locked once joined; user must leave
+            and rejoin to change it. Default off so no OpenAI summarization
+            cost is incurred unless the participant explicitly opts in. */}
+        <Box
+          sx={{
+            width: '100%',
+            maxWidth: 360,
+            px: 2,
+            py: 1.5,
+            borderRadius: 2,
+            border: '1px solid',
+            borderColor: aiNotesOn ? 'primary.main' : 'rgba(255,255,255,0.08)',
+            bgcolor: 'rgba(255,255,255,0.02)',
+          }}
+        >
+          <FormControlLabel
+            sx={{ width: '100%', m: 0 }}
+            control={<Switch checked={aiNotesOn} onChange={onToggleAiNotes} color="primary" />}
+            labelPlacement="start"
+            label={
+              <Stack direction="row" spacing={1} alignItems="center" sx={{ flex: 1 }}>
+                <AutoAwesomeIcon
+                  fontSize="small"
+                  sx={{ color: aiNotesOn ? 'primary.main' : 'text.disabled' }}
+                />
+                <Box>
+                  <Typography variant="body2" fontWeight={600}>
+                    Enable AI notes
+                  </Typography>
+                  <Typography variant="caption" color="text.secondary">
+                    Kat will produce a running summary during the meeting. Notes aren&apos;t saved.
+                  </Typography>
+                </Box>
+              </Stack>
+            }
+          />
+        </Box>
 
         <Stack
           direction={{ xs: 'column', sm: 'row' }}

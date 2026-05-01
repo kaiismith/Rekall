@@ -29,12 +29,14 @@ import { useKatNotes } from '@/hooks/useKatNotes'
 
 const configuredHealth: KatHealthResponse = {
   configured: true,
+  provider: 'foundry',
   auth_mode: 'api_key',
   deployment: 'gpt-4o-mini',
   endpoint_host: 'foundry.example.com',
 }
 const offlineHealth: KatHealthResponse = {
   configured: false,
+  provider: '',
   auth_mode: 'none',
   deployment: '',
   endpoint_host: '',

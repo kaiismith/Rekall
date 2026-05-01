@@ -4,6 +4,7 @@ import type {
   Meeting,
   CreateMeetingPayload,
   ListMeetingsParams,
+  PaginatedMeetingListResponse,
   ChatMessage,
   ListChatMessagesResponse,
 } from '@/types/meeting'
@@ -48,20 +49,26 @@ export const meetingService = {
   },
 
   /**
-   * List meetings the current user can see. By default scoped to host +
-   * participant; pass `scope` to filter to a specific organization,
-   * department, or open-only slice.
+   * List meetings the current user can see, paginated. By default scoped to
+   * host + participant; pass `scope` to filter to a specific organization,
+   * department, or open-only slice. Pass `params.page` / `params.per_page`
+   * to fetch a specific page (defaults: page 1, per_page 20).
    */
-  async listMine(params?: ListMeetingsParams, scope?: Scope | null): Promise<ApiResponse<Meeting[]>> {
+  async listMine(
+    params?: ListMeetingsParams,
+    scope?: Scope | null,
+  ): Promise<PaginatedMeetingListResponse> {
     const qs = new URLSearchParams()
     if (params?.status) qs.set('filter[status]', params.status)
     if (params?.sort) qs.set('sort', params.sort)
+    if (params?.page) qs.set('page', String(params.page))
+    if (params?.per_page) qs.set('per_page', String(params.per_page))
     const scopeParams = scopeToQueryParams(scope ?? null)
-    for (const k of Object.keys(scopeParams)) {
-      qs.set(k, scopeParams[k]!)
+    for (const [k, v] of Object.entries(scopeParams)) {
+      if (v != null) qs.set(k, v)
     }
     const query = qs.toString() ? `?${qs.toString()}` : ''
-    const response = await apiClient.get<ApiResponse<Meeting[]>>(`/meetings/mine${query}`)
+    const response = await apiClient.get<PaginatedMeetingListResponse>(`/meetings/mine${query}`)
     return response.data
   },
 
@@ -103,11 +110,13 @@ export const meetingService = {
   async requestWsTicket(
     code: string,
   ): Promise<{ ticket: string; wsUrl: string; expiresAt: number }> {
-    const response = await apiClient.post<ApiResponse<{
-      ticket: string
-      expires_at: string
-      ws_url: string
-    }>>(`/meetings/${code}/ws-ticket`)
+    const response = await apiClient.post<
+      ApiResponse<{
+        ticket: string
+        expires_at: string
+        ws_url: string
+      }>
+    >(`/meetings/${code}/ws-ticket`)
     const d = response.data.data
     return {
       ticket: d.ticket,

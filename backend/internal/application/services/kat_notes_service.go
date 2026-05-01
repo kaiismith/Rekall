@@ -3,6 +3,7 @@ package services
 import (
 	"context"
 	"errors"
+	"strings"
 	"sync"
 	"time"
 
@@ -29,6 +30,16 @@ const (
 	DefaultKatRingBufferCapacity     = 20
 	DefaultKatPromptVersion          = "kat-v1"
 )
+
+// KatMaxTranscriptChars is the per-call char budget for the user prompt.
+// When the meeting's accumulated transcript exceeds this, the scheduler
+// switches to rolling summarization: it splits segments into chunks,
+// summarizes each chunk with the prior summary as context, then runs the
+// final structured pass over the last chunk to produce the streaming note.
+//
+// 150,000 chars ≈ ~37k tokens for English text, leaving ~90k headroom in
+// gpt-4o-mini's 128k context window for system prompt + structured output.
+const KatMaxTranscriptChars = 150_000
 
 // KatConfig carries the env-bound knobs for the Kat scheduler. Values are
 // validated by NewKatNotesService; bad values fall back to defaults with a
@@ -100,6 +111,14 @@ type cohortEntry struct {
 	lastSummary      string
 	lastSegmentCount int
 	lastErrorAt      time.Time
+
+	// katEnabled gates whether the scheduler will spend a Foundry / OpenAI
+	// call for this cohort. Defaults to false — clients must opt in via the
+	// "AI notes" UI toggle before any cost is incurred. The cohort entry is
+	// still created on participant.joined so the ring buffer continues to
+	// fill from any prior runs (it doesn't), but ticks become no-ops until
+	// at least one client flips the toggle on.
+	katEnabled bool
 
 	ringBufferMu sync.Mutex
 	ringBuffer   []KatNote
@@ -186,25 +205,21 @@ func sanitizeKatConfig(cfg KatConfig, log *zap.Logger) KatConfig {
 
 // ─── Cohort lifecycle hooks ──────────────────────────────────────────────────
 
-// OnParticipantJoined registers a meeting in the cohort if this is the first
-// active participant + ASR session. It also replays the cohort's current
-// ring-buffer contents to userID via the broadcaster's SendToUser so the
-// joiner sees recent notes immediately (without an HTTP round-trip).
-func (s *KatNotesService) OnParticipantJoined(meetingID uuid.UUID, userID uuid.UUID, hasActiveASR bool) {
+// OnParticipantJoined registers a meeting cohort on first join (or replays
+// the existing buffer when one already exists). The hasActiveASR flag is
+// retained for backward compatibility but no longer gates cohort creation —
+// Kat checks the transcript_segments table directly on each tick. A meeting
+// that nobody has spoken in yet will see ticks fire and find zero segments;
+// the panel renders an "empty" state rather than waiting for an ASR session
+// to start.
+func (s *KatNotesService) OnParticipantJoined(meetingID uuid.UUID, userID uuid.UUID, _hasActiveASR bool) {
 	if !s.cfg.Enabled || !s.generator.IsConfigured() {
 		return
 	}
 	key := meetingKey(meetingID)
 
-	// Replay first: even if hasActiveASR is false (e.g. the new participant
-	// is a viewer who isn't running ASR locally), they should still see the
-	// notes accumulated from other speakers' streams.
+	// Replay first so a late-joiner sees existing notes immediately.
 	s.replayRingBufferToUser(key, userID)
-
-	if !hasActiveASR {
-		// Lazy: only join the cohort once at least one ASR session is open.
-		return
-	}
 
 	s.mu.Lock()
 	if _, ok := s.cohort[key]; ok {
@@ -298,6 +313,31 @@ func (s *KatNotesService) OnCallSessionEnded(callID uuid.UUID) {
 	s.removeCohort(callKey(callID))
 }
 
+// SetKatEnabled toggles the Foundry / OpenAI cost gate for a meeting cohort.
+// While disabled, ticks become no-ops; the cohort entry stays alive so the
+// ring buffer is preserved and the next enable resumes immediately. The
+// caller is the WS hub, aggregating per-client AI-notes preferences.
+func (s *KatNotesService) SetKatEnabled(meetingID uuid.UUID, enabled bool) {
+	s.setKatEnabledByKey(meetingKey(meetingID), enabled)
+}
+
+// SetKatEnabledForCall is the solo-call analogue of SetKatEnabled.
+func (s *KatNotesService) SetKatEnabledForCall(callID uuid.UUID, enabled bool) {
+	s.setKatEnabledByKey(callKey(callID), enabled)
+}
+
+func (s *KatNotesService) setKatEnabledByKey(key string, enabled bool) {
+	s.mu.Lock()
+	ent, ok := s.cohort[key]
+	s.mu.Unlock()
+	if !ok {
+		return
+	}
+	ent.stateMu.Lock()
+	ent.katEnabled = enabled
+	ent.stateMu.Unlock()
+}
+
 func (s *KatNotesService) removeCohort(key string) {
 	s.mu.Lock()
 	ent, ok := s.cohort[key]
@@ -378,6 +418,13 @@ func (s *KatNotesService) Tick(meetingOrCallID uuid.UUID, isMeeting bool) {
 
 func (s *KatNotesService) tick(ent *cohortEntry, now time.Time) {
 	ent.stateMu.Lock()
+	// Per-meeting opt-in gate: tick is a no-op while no client has the
+	// "AI notes" toggle on. This stops Foundry / OpenAI cost when nobody is
+	// looking at the panel.
+	if !ent.katEnabled {
+		ent.stateMu.Unlock()
+		return
+	}
 	if s.cfg.CooldownAfterErrorSecs > 0 && !ent.lastErrorAt.IsZero() &&
 		now.Sub(ent.lastErrorAt) < time.Duration(s.cfg.CooldownAfterErrorSecs)*time.Second {
 		ent.stateMu.Unlock()
@@ -387,8 +434,14 @@ func (s *KatNotesService) tick(ent *cohortEntry, now time.Time) {
 	lastCount := ent.lastSegmentCount
 	ent.stateMu.Unlock()
 
+	// Load EVERY segment from the meeting / call so the model summarizes
+	// the conversation in full. Earlier versions used a 120s sliding window,
+	// which meant long meetings lost their early context (introductions,
+	// decisions made in minute 1) by the time minute 30 came around. Now we
+	// pass the full transcript and rely on chunking (below) when it grows
+	// past the per-call token budget.
 	windowEnd := now
-	windowStart := now.Add(-time.Duration(s.cfg.WindowSeconds) * time.Second)
+	windowStart := time.Unix(0, 0) // far past — matches all segments
 
 	segs, err := s.loadSegments(ent, windowStart, windowEnd)
 	if err != nil {
@@ -396,6 +449,25 @@ func (s *KatNotesService) tick(ent *cohortEntry, now time.Time) {
 		return
 	}
 
+	// Empty-window path: no segments persisted in the meeting's transcript
+	// table for the current sliding window. Skip the OpenAI call entirely
+	// and emit an `empty_window` broadcast so the frontend can render
+	// "There's nothing to take notes" instead of staying stuck on
+	// "Warming up". Also reset lastSegmentCount so the next tick that
+	// finds segments treats them all as new.
+	if len(segs) == 0 {
+		ent.stateMu.Lock()
+		ent.lastTickAt = now
+		ent.lastSegmentCount = 0
+		ent.stateMu.Unlock()
+		s.broadcastEmptyWindow(ent, windowStart, windowEnd, now)
+		catalog.KatTickNoop.Debug(s.log, zap.Int("segments", 0))
+		return
+	}
+
+	// Gate: don't burn an OpenAI call if nothing new arrived since the
+	// previous successful summary. Keeps the panel from rerendering the
+	// same content every tick during long silences.
 	if len(segs)-lastCount < s.cfg.MinNewSegments {
 		ent.stateMu.Lock()
 		ent.lastTickAt = now
@@ -420,12 +492,18 @@ func (s *KatNotesService) tick(ent *cohortEntry, now time.Time) {
 func (s *KatNotesService) runFinalTick(ent *cohortEntry) {
 	now := s.clock.Now()
 	ent.stateMu.Lock()
+	if !ent.katEnabled {
+		// Honour the same opt-in gate as the regular tick — nobody enabled
+		// AI notes, so don't spend a final Foundry call on the way out.
+		ent.stateMu.Unlock()
+		return
+	}
 	lastCount := ent.lastSegmentCount
 	lastSummary := ent.lastSummary
 	ent.stateMu.Unlock()
 
 	windowEnd := now
-	windowStart := now.Add(-time.Duration(s.cfg.WindowSeconds) * time.Second)
+	windowStart := time.Unix(0, 0) // full transcript — matches the regular tick path
 	segs, err := s.loadSegments(ent, windowStart, windowEnd)
 	if err != nil || len(segs)-lastCount < s.cfg.MinNewSegments {
 		return
@@ -463,14 +541,101 @@ func (s *KatNotesService) runGeneration(
 
 	lite, labels := s.buildLiteSegments(ctx, ent, segs)
 
+	// Suppress the placeholder "Brief greeting/setup." from being fed back
+	// as PreviousSummary. Otherwise the model anchors on it and tends to
+	// re-emit the same placeholder even when the new window has substantive
+	// content. Empty PreviousSummary lets the model judge fresh.
+	prevForPrompt := previousSummary
+	if strings.HasPrefix(strings.ToLower(strings.TrimSpace(prevForPrompt)), "brief greeting") {
+		prevForPrompt = ""
+	}
+
+	// Hierarchical fold: when the full transcript would blow past the
+	// per-call char budget, split it into chunks and summarize each one
+	// sequentially. Each non-final chunk's summary feeds into the next call
+	// as PreviousSummary, so the model carries the meeting's earlier context
+	// forward without ever seeing the raw earlier segments again. Only the
+	// final chunk runs with the streaming callback so the user sees the
+	// typewriter effect on the live structured output.
+	chunks := chunkSegmentsByCharBudget(lite, KatMaxTranscriptChars)
+	rollingSummary := prevForPrompt
+	for i := 0; i < len(chunks)-1; i++ {
+		partial := chunks[i]
+		partialIn := ports.NoteGeneratorInput{
+			PromptVersion:   s.cfg.PromptVersion,
+			MeetingTitle:    ent.title,
+			SpeakerLabels:   labels,
+			Segments:        partial,
+			PreviousSummary: rollingSummary,
+		}
+		s.log.Info("kat: rolling chunk start",
+			zap.String("run_id", runID.String()),
+			zap.Int("chunk_index", i),
+			zap.Int("chunk_count", len(chunks)),
+			zap.Int("chunk_segments", len(partial)),
+		)
+		partialOut, perr := s.generator.Generate(ctx, partialIn, nil)
+		if perr != nil {
+			ent.stateMu.Lock()
+			ent.lastErrorAt = now
+			ent.stateMu.Unlock()
+			catalog.KatRunFailed.Warn(s.log,
+				zap.String("run_id", runID.String()),
+				zap.String("parent_kind", ent.parentKind),
+				zap.Int("chunk_index", i),
+				zap.Error(perr),
+			)
+			return
+		}
+		rollingSummary = partialOut.Summary
+		s.log.Info("kat: rolling chunk done",
+			zap.String("run_id", runID.String()),
+			zap.Int("chunk_index", i),
+			zap.String("rolling_summary", rollingSummary),
+		)
+	}
+
+	// Final chunk: structured streaming pass that produces the broadcast note.
+	// In the common (small-meeting) case chunks has length 1 and this runs
+	// over the whole transcript — same shape as before chunking existed.
+	finalSegs := chunks[len(chunks)-1]
 	in := ports.NoteGeneratorInput{
 		PromptVersion:   s.cfg.PromptVersion,
 		MeetingTitle:    ent.title,
 		SpeakerLabels:   labels,
-		Segments:        lite,
-		PreviousSummary: previousSummary,
+		Segments:        finalSegs,
+		PreviousSummary: rollingSummary,
 	}
-	out, err := s.generator.Generate(ctx, in)
+
+	// Log the full transcript fed into the model so we can debug
+	// "Brief greeting/setup" / empty-output cases — usually they mean the
+	// model legitimately saw only filler segments, but having the input
+	// side visible in the log lets us confirm vs. (e.g.) speaker labels
+	// being mangled or segment text getting truncated.
+	transcriptForLog := make([]string, 0, len(finalSegs))
+	for _, seg := range finalSegs {
+		transcriptForLog = append(transcriptForLog, "["+seg.SpeakerLabel+"] "+seg.Text)
+	}
+	s.log.Info("kat: generation input",
+		zap.String("run_id", runID.String()),
+		zap.String("parent_kind", ent.parentKind),
+		zap.Int("total_segments", len(lite)),
+		zap.Int("chunks", len(chunks)),
+		zap.Int("final_chunk_segments", len(finalSegs)),
+		zap.String("prompt_version", s.cfg.PromptVersion),
+		zap.String("meeting_title", ent.title),
+		zap.String("previous_summary", rollingSummary),
+		zap.Strings("transcript", transcriptForLog),
+	)
+
+	// Stream the partial response over WS as tokens arrive. The chunk
+	// callback fires off the OpenAI hot path (every ~250ms throttle) — we
+	// hand each partial to broadcastStreamingChunk which builds a transient
+	// kat.note { status: 'streaming', summary } and fans it to participants.
+	streamRunID := runID // captured by closure
+	out, err := s.generator.Generate(ctx, in, func(partial string) {
+		s.broadcastStreamingChunk(ent, streamRunID, partial, windowStart, windowEnd, now)
+	})
 
 	if err != nil {
 		ent.stateMu.Lock()
@@ -518,11 +683,19 @@ func (s *KatNotesService) runGeneration(
 
 	s.broadcastNote(ent, note)
 
+	// Log the full note (summary + bullets) at Info so we can diff what the
+	// panel SHOULD show against what actually rendered. The transcript text
+	// the model saw is logged below on the input side.
 	catalog.KatRunOk.Info(s.log,
 		zap.String("run_id", runID.String()),
 		zap.String("parent_kind", ent.parentKind),
 		zap.Int("segments", len(segs)),
 		zap.Int32("latency_ms", out.LatencyMs),
+		zap.String("note_summary", note.Summary),
+		zap.Strings("note_key_points", note.KeyPoints),
+		zap.Strings("note_open_questions", note.OpenQuestions),
+		zap.Int32p("prompt_tokens", note.PromptTokens),
+		zap.Int32p("completion_tokens", note.CompletionTokens),
 	)
 }
 
@@ -590,6 +763,114 @@ func (s *KatNotesService) broadcastNote(ent *cohortEntry, note KatNote) {
 		// expected to inspect note.CallID and route accordingly.
 		s.broadcaster.BroadcastToMeeting(*ent.callID, MsgTypeKatNote, note)
 	}
+}
+
+// broadcastStreamingChunk emits a transient KatNote with status='streaming'
+// carrying the running raw text from the LLM. The frontend uses RunID to
+// dedupe consecutive partials and replace previous render with the latest.
+// NOT pushed to the ring buffer (chunks are intermediate state, not durable
+// notes).
+func (s *KatNotesService) broadcastStreamingChunk(
+	ent *cohortEntry,
+	runID uuid.UUID,
+	partial string,
+	windowStart, windowEnd, now time.Time,
+) {
+	if s.broadcaster == nil {
+		return
+	}
+	note := KatNote{
+		ID:              runID, // stable across chunks for the same run, so FE can replace
+		RunID:           runID,
+		MeetingID:       ent.meetingID,
+		CallID:          ent.callID,
+		WindowStartedAt: windowStart,
+		WindowEndedAt:   windowEnd,
+		Summary:         partial, // raw plain-text partial; FE renders progressively
+		KeyPoints:       []string{},
+		OpenQuestions:   []string{},
+		ModelID:         s.generator.ModelID(),
+		PromptVersion:   s.cfg.PromptVersion,
+		Status:          KatNoteStatusStreaming,
+		CreatedAt:       now,
+	}
+	defer func() { _ = recover() }()
+	if ent.meetingID != nil {
+		s.broadcaster.BroadcastToMeeting(*ent.meetingID, MsgTypeKatNote, note)
+		return
+	}
+	if ent.callID != nil {
+		s.broadcaster.BroadcastToMeeting(*ent.callID, MsgTypeKatNote, note)
+	}
+}
+
+// broadcastEmptyWindow emits a placeholder KatNote with status='empty_window'
+// so the frontend can render "There's nothing to take notes" instead of
+// staying in the warming-up state forever. The note is NOT pushed to the
+// ring buffer (late-joiners shouldn't see stale empty markers); it's a
+// transient signal only.
+func (s *KatNotesService) broadcastEmptyWindow(ent *cohortEntry, windowStart, windowEnd, now time.Time) {
+	if s.broadcaster == nil {
+		return
+	}
+	note := KatNote{
+		ID:              uuid.New(),
+		RunID:           uuid.New(),
+		MeetingID:       ent.meetingID,
+		CallID:          ent.callID,
+		WindowStartedAt: windowStart,
+		WindowEndedAt:   windowEnd,
+		Summary:         "",
+		KeyPoints:       []string{},
+		OpenQuestions:   []string{},
+		ModelID:         s.generator.ModelID(),
+		PromptVersion:   s.cfg.PromptVersion,
+		Status:          KatNoteStatusEmptyWindow,
+		CreatedAt:       now,
+	}
+	defer func() { _ = recover() }()
+	if ent.meetingID != nil {
+		s.broadcaster.BroadcastToMeeting(*ent.meetingID, MsgTypeKatNote, note)
+		return
+	}
+	if ent.callID != nil {
+		s.broadcaster.BroadcastToMeeting(*ent.callID, MsgTypeKatNote, note)
+	}
+}
+
+// chunkSegmentsByCharBudget splits segs into consecutive chunks where each
+// chunk's combined transcript text length stays under maxChars. Always returns
+// at least one chunk (possibly empty) so callers can index chunks[len-1].
+//
+// A segment that is itself larger than maxChars goes into its own chunk —
+// the model will still see it but the budget is informational only at that
+// point. In practice transcript segments are short (<500 chars), so this
+// edge case is rare.
+func chunkSegmentsByCharBudget(segs []ports.TranscriptSegmentLite, maxChars int) [][]ports.TranscriptSegmentLite {
+	if len(segs) == 0 {
+		return [][]ports.TranscriptSegmentLite{{}}
+	}
+	if maxChars <= 0 {
+		return [][]ports.TranscriptSegmentLite{segs}
+	}
+	var chunks [][]ports.TranscriptSegmentLite
+	var cur []ports.TranscriptSegmentLite
+	curLen := 0
+	for _, seg := range segs {
+		// Approximate per-segment cost: speaker prefix + text + line break.
+		segLen := len(seg.Text) + len(seg.SpeakerLabel) + 4
+		if curLen+segLen > maxChars && len(cur) > 0 {
+			chunks = append(chunks, cur)
+			cur = nil
+			curLen = 0
+		}
+		cur = append(cur, seg)
+		curLen += segLen
+	}
+	if len(cur) > 0 {
+		chunks = append(chunks, cur)
+	}
+	return chunks
 }
 
 func segmentIndexBounds(segs []*entities.TranscriptSegment) (lo, hi int32) {

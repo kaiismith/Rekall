@@ -155,8 +155,9 @@ func (s *MeetingService) ListMyMeetings(ctx context.Context, hostID uuid.UUID, s
 // enriched with duration and participant previews, filtered and sorted per the
 // given parameters. statusFilter and sort correspond directly to query params
 // from the API (e.g. "in_progress", "complete"; "created_at_desc", "title_asc").
-func (s *MeetingService) ListMeetingsWithMeta(ctx context.Context, userID uuid.UUID, statusFilter, sort string) ([]*ports.MeetingListItem, error) {
-	filter := ports.ListMeetingsFilter{Sort: sort}
+// Returns (items, total, error) so callers can build pagination metadata.
+func (s *MeetingService) ListMeetingsWithMeta(ctx context.Context, userID uuid.UUID, statusFilter, sort string, page, perPage int) ([]*ports.MeetingListItem, int, error) {
+	filter := ports.ListMeetingsFilter{Sort: sort, Page: page, PerPage: perPage}
 	if statusFilter != "" {
 		filter.Status = &statusFilter
 	}
@@ -175,25 +176,26 @@ func (s *MeetingService) ListMeetingsInScope(
 	userID uuid.UUID,
 	scope *ports.ScopeFilter,
 	statusFilter, sort string,
-) ([]*ports.MeetingListItem, error) {
+	page, perPage int,
+) ([]*ports.MeetingListItem, int, error) {
 	if scope == nil {
-		return s.ListMeetingsWithMeta(ctx, userID, statusFilter, sort)
+		return s.ListMeetingsWithMeta(ctx, userID, statusFilter, sort, page, perPage)
 	}
 
 	switch scope.Kind {
 	case ports.ScopeKindOrganization:
 		if err := s.assertScopeMember(ctx, entities.MeetingScopeOrg, scope.ID, userID); err != nil {
 			if apperr.IsNotFound(err) {
-				return nil, apperr.Forbidden("caller is not a member of the organization")
+				return nil, 0, apperr.Forbidden("caller is not a member of the organization")
 			}
-			return nil, err
+			return nil, 0, err
 		}
 	case ports.ScopeKindDepartment:
 		if err := s.assertScopeMember(ctx, entities.MeetingScopeDept, scope.ID, userID); err != nil {
 			if apperr.IsNotFound(err) {
-				return nil, apperr.Forbidden("caller is not a member of the department")
+				return nil, 0, apperr.Forbidden("caller is not a member of the department")
 			}
-			return nil, err
+			return nil, 0, err
 		}
 	case ports.ScopeKindOpen:
 		// Open items are visible to the caller as host or participant only —
@@ -202,10 +204,10 @@ func (s *MeetingService) ListMeetingsInScope(
 		// Model this by passing the filter to the repo with the Open kind; the
 		// repo applies both constraints.
 	default:
-		return nil, apperr.BadRequest("invalid scope kind")
+		return nil, 0, apperr.BadRequest("invalid scope kind")
 	}
 
-	filter := ports.ListMeetingsFilter{Sort: sort, Scope: scope}
+	filter := ports.ListMeetingsFilter{Sort: sort, Scope: scope, Page: page, PerPage: perPage}
 	if statusFilter != "" {
 		filter.Status = &statusFilter
 	}

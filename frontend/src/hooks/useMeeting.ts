@@ -286,6 +286,11 @@ export interface UseMeetingReturn {
    * when it isn't.
    */
   sendCaptionFinal: (event: ASRFinalEvent, sessionId: string) => void
+
+  /** Toggle Kat (AI notes) cost gate for this meeting. The hub aggregates
+   *  per-client preference; the scheduler only spends Foundry / OpenAI calls
+   *  while at least one participant has it on. */
+  sendKatToggle: (enabled: boolean) => void
 }
 
 const RTC_CONFIG: RTCConfiguration = {
@@ -889,9 +894,25 @@ export function useMeeting({ code, onEnd, onKatNote }: UseMeetingOptions): UseMe
           // sends the same `kat.note` shape for both live broadcasts and
           // late-join replay; the consumer (useKatNotes.pushNote) handles
           // dedupe + sort.
-          const dto = msg.data as KatNoteDTO | undefined
+          const data = msg.data as Record<string, unknown> | undefined
+          // eslint-disable-next-line no-console
+          console.debug('[kat] raw kat.note payload', {
+            hasData: data !== undefined,
+            dataKeys: data ? Object.keys(data) : null,
+            dataIdType: data ? typeof data.id : null,
+            dataIDType: data ? typeof data.ID : null,
+            sample: data,
+          })
+          const dto = data as KatNoteDTO | undefined
           if (dto && typeof dto.id === 'string') {
             onKatNoteRef.current?.(dto)
+          } else {
+            console.warn(
+              '[kat] dropping note — type guard rejected. ' +
+                'Most likely cause: backend not rebuilt with snake_case JSON tags. ' +
+                'Run: docker compose --profile asr up -d --build backend',
+              { data },
+            )
           }
           break
         }
@@ -1826,6 +1847,17 @@ export function useMeeting({ code, onEnd, onKatNote }: UseMeetingOptions): UseMe
     [send],
   )
 
+  // Per-client AI-notes toggle. The hub aggregates across all admitted
+  // clients and only signals the Kat scheduler to spend Foundry / OpenAI
+  // calls when at least one participant has it on. Captions / transcript
+  // persistence is unaffected.
+  const sendKatToggle = useCallback(
+    (enabled: boolean) => {
+      send({ type: 'kat.toggle', enabled })
+    },
+    [send],
+  )
+
   // ─────────────────────────────────────────────────────────────────────────
   return {
     meeting,
@@ -1890,5 +1922,6 @@ export function useMeeting({ code, onEnd, onKatNote }: UseMeetingOptions): UseMe
     captions,
     sendCaptionChunk,
     sendCaptionFinal,
+    sendKatToggle,
   }
 }

@@ -2,11 +2,11 @@ package foundry
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
 	"math/rand"
 	"net/http"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/openai/openai-go/v3"
@@ -74,15 +74,28 @@ func (g *NoteGenerator) AuthMode() string {
 	return g.client.authMode
 }
 
+// Provider returns the selected backend ("foundry" | "openai" | "").
+func (g *NoteGenerator) Provider() string {
+	if g.client == nil {
+		return ""
+	}
+	return g.client.Provider()
+}
+
 // IsConfigured returns false when no auth strategy could be picked at boot.
 // In that case Generate short-circuits with ErrFoundryUnconfigured.
 func (g *NoteGenerator) IsConfigured() bool {
 	return g.client != nil && g.client.configured
 }
 
-// Generate renders the kat-v1 prompt, calls Foundry, parses the response, and
-// returns a structured NoteGeneratorOutput on success.
-func (g *NoteGenerator) Generate(ctx context.Context, in ports.NoteGeneratorInput) (*ports.NoteGeneratorOutput, error) {
+// Generate renders the kat-v1 prompt, calls Foundry / OpenAI with streaming,
+// emits incremental chunks via onChunk, and returns the final parsed output.
+// onChunk may be nil (non-streaming consumers).
+func (g *NoteGenerator) Generate(
+	ctx context.Context,
+	in ports.NoteGeneratorInput,
+	onChunk ports.StreamCallback,
+) (*ports.NoteGeneratorOutput, error) {
 	if !g.IsConfigured() {
 		return nil, ErrFoundryUnconfigured
 	}
@@ -100,29 +113,17 @@ func (g *NoteGenerator) Generate(ctx context.Context, in ports.NoteGeneratorInpu
 	defer cancel()
 
 	start := time.Now()
-	parsed, usage, err := g.callOnce(callCtx, system, user, false)
+	parsed, usage, err := g.streamOnce(callCtx, system, user, onChunk)
 	latency := time.Since(start)
 
-	// On bad JSON, retry once with a corrective system message.
-	if errors.Is(err, errBadJSON) {
-		correctiveStart := time.Now()
-		parsed, usage, err = g.callOnce(callCtx, system, user, true)
-		latency = time.Since(correctiveStart)
-		if errors.Is(err, errBadJSON) {
-			catalog.KatFoundryParseFailed.Warn(g.log)
-			return nil, ErrFoundryParseFailed
-		}
-	}
-
 	if err != nil {
-		// Retry once on retriable errors; if that succeeds, fall through to
-		// the success packaging below. Otherwise map to a sentinel.
+		// Retriable transport / 5xx / 429 error: try once more (without
+		// streaming chunks during retry — keeps the panel from flickering
+		// the same partial twice).
 		retryParsed, retryUsage, sentinel := g.classifyAndRetry(callCtx, err, system, user)
 		if sentinel != nil {
 			return nil, sentinel
 		}
-		// classifyAndRetry may return (nil, nil, nil) when it elects not to retry;
-		// in that path treat it as the original error mapped to Unavailable.
 		if retryParsed == nil {
 			return nil, ErrFoundryUnavailable
 		}
@@ -207,13 +208,15 @@ func (g *NoteGenerator) classifyAndRetry(
 	}
 }
 
-// retryAfter sleeps for d (respecting ctx) and then runs callOnce a single
+// retryAfter sleeps for d (respecting ctx) and then runs streamOnce a single
 // time. Returns the parsed result if successful or the underlying error.
+// Retry path runs without streaming chunks — keeps the panel from rendering
+// the same partial twice if the first attempt mid-streamed before failing.
 func (g *NoteGenerator) retryAfter(
 	ctx context.Context,
 	d time.Duration,
 	system, user string,
-	corrective bool,
+	_corrective bool,
 ) (*noteResponseSchema, *openai.CompletionUsage, error) {
 	timer := time.NewTimer(d)
 	defer timer.Stop()
@@ -222,60 +225,186 @@ func (g *NoteGenerator) retryAfter(
 		return nil, nil, ctx.Err()
 	case <-timer.C:
 	}
-	return g.callOnce(ctx, system, user, corrective)
+	return g.streamOnce(ctx, system, user, nil)
 }
 
-// errBadJSON is an internal sentinel signalling a parseable HTTP success but a
-// non-conforming response body. Triggers the corrective retry.
-var errBadJSON = errors.New("foundry: bad json response")
-
-// callOnce performs one Foundry chat-completions request with response_format
-// set to json_object. When corrective is true a second system message tells
-// the model to re-emit JSON only.
-func (g *NoteGenerator) callOnce(
+// streamOnce performs one Foundry / OpenAI chat-completions request with
+// streaming enabled. As tokens arrive it concatenates them into a buffer and
+// invokes onChunk (when non-nil) with the running text. When the stream ends
+// it parses the plain-text section format defined in prompt.go (kat-v1).
+func (g *NoteGenerator) streamOnce(
 	ctx context.Context,
 	system, user string,
-	corrective bool,
+	onChunk ports.StreamCallback,
 ) (*noteResponseSchema, *openai.CompletionUsage, error) {
-	messages := []openai.ChatCompletionMessageParamUnion{
-		openai.SystemMessage(system),
-		openai.UserMessage(user),
-	}
-	if corrective {
-		messages = append(messages, openai.SystemMessage(
-			"Your previous response was not valid JSON. Re-emit ONLY the JSON object.",
-		))
-	}
-
 	params := openai.ChatCompletionNewParams{
-		Model:    openai.ChatModel(g.client.deployment),
-		Messages: messages,
-		ResponseFormat: openai.ChatCompletionNewParamsResponseFormatUnion{
-			OfJSONObject: &openai.ResponseFormatJSONObjectParam{Type: "json_object"},
+		Model: openai.ChatModel(g.client.deployment),
+		Messages: []openai.ChatCompletionMessageParamUnion{
+			openai.SystemMessage(system),
+			openai.UserMessage(user),
 		},
 		Temperature: openai.Float(0.2),
 	}
 
-	resp, err := g.client.oai.Chat.Completions.New(ctx, params)
-	if err != nil {
+	stream := g.client.oai.Chat.Completions.NewStreaming(ctx, params)
+	defer stream.Close()
+
+	var (
+		buf      strings.Builder
+		lastEmit time.Time
+		// Throttle WS broadcasts. 250ms gives ~4 fps of partials — fast
+		// enough to feel live, slow enough that the React renderer doesn't
+		// drop intermediate states and the user sees the typing animation
+		// progress visibly. The frontend-side typewriter further smooths
+		// gaps for short responses where OpenAI ships everything in <1s.
+		emitEvery = 250 * time.Millisecond
+		usage     *openai.CompletionUsage
+	)
+
+	for stream.Next() {
+		chunk := stream.Current()
+		if len(chunk.Choices) > 0 {
+			delta := chunk.Choices[0].Delta.Content
+			if delta != "" {
+				buf.WriteString(delta)
+				if onChunk != nil && time.Since(lastEmit) >= emitEvery {
+					onChunk(buf.String())
+					lastEmit = time.Now()
+				}
+			}
+		}
+		// Some providers emit `usage` in a final chunk; capture if present.
+		if chunk.Usage.TotalTokens > 0 {
+			u := chunk.Usage
+			usage = &u
+		}
+	}
+	if err := stream.Err(); err != nil {
 		return nil, nil, err
 	}
-	if len(resp.Choices) == 0 {
-		return nil, nil, errBadJSON
+
+	final := buf.String()
+	if final == "" {
+		g.log.Warn("kat: foundry returned empty stream",
+			zap.String("model", g.client.deployment),
+		)
+		return nil, nil, ErrFoundryParseFailed
+	}
+	// Final emit so the frontend gets the last few tokens that fell inside
+	// the throttle window.
+	if onChunk != nil {
+		onChunk(final)
 	}
 
-	content := resp.Choices[0].Message.Content
-	var parsed noteResponseSchema
-	if err := json.Unmarshal([]byte(content), &parsed); err != nil {
-		return nil, nil, errBadJSON
+	// Log the raw model output so we can debug "Brief greeting/setup" /
+	// section-marker / empty-bullets cases without re-running the meeting.
+	// This fires on EVERY successful generation — Info level. Trim very
+	// long responses to keep log lines bounded.
+	rawForLog := final
+	if len(rawForLog) > 2000 {
+		rawForLog = rawForLog[:2000] + "...[truncated]"
 	}
-	if parsed.KeyPoints == nil {
-		parsed.KeyPoints = []string{}
+	g.log.Info("kat: foundry raw response",
+		zap.String("model", g.client.deployment),
+		zap.Int("raw_len", len(final)),
+		zap.String("raw", rawForLog),
+	)
+
+	parsed, err := parseSectionedResponse(final)
+	if err != nil {
+		catalog.KatFoundryParseFailed.Warn(g.log,
+			zap.Error(err),
+			zap.String("raw", rawForLog),
+		)
+		return nil, nil, ErrFoundryParseFailed
 	}
-	if parsed.OpenQuestions == nil {
-		parsed.OpenQuestions = []string{}
+
+	// Log the parsed structured output for diagnostic visibility into what
+	// the panel will eventually render.
+	g.log.Info("kat: foundry parsed response",
+		zap.String("summary", parsed.Summary),
+		zap.Int("summary_len", len(parsed.Summary)),
+		zap.Strings("key_points", parsed.KeyPoints),
+		zap.Strings("open_questions", parsed.OpenQuestions),
+	)
+
+	return parsed, usage, nil
+}
+
+// parseSectionedResponse turns the kat-v1 plain-text format into a
+// noteResponseSchema. Tolerant of casing, extra whitespace, missing trailing
+// sections, and the literal "(none)" placeholder.
+func parseSectionedResponse(text string) (*noteResponseSchema, error) {
+	out := &noteResponseSchema{
+		KeyPoints:     []string{},
+		OpenQuestions: []string{},
 	}
-	return &parsed, &resp.Usage, nil
+
+	// Section markers: SUMMARY: ... KEY POINTS: ... OPEN QUESTIONS: ...
+	upper := strings.ToUpper(text)
+	idxSummary := strings.Index(upper, "SUMMARY:")
+	idxKey := strings.Index(upper, "KEY POINTS:")
+	idxOpen := strings.Index(upper, "OPEN QUESTIONS:")
+
+	// summary: everything between SUMMARY: and KEY POINTS: (or end)
+	if idxSummary >= 0 {
+		startSum := idxSummary + len("SUMMARY:")
+		endSum := len(text)
+		if idxKey > idxSummary {
+			endSum = idxKey
+		} else if idxOpen > idxSummary {
+			endSum = idxOpen
+		}
+		out.Summary = strings.TrimSpace(text[startSum:endSum])
+	} else {
+		// Defensive fallback: treat the whole response as the summary.
+		out.Summary = strings.TrimSpace(text)
+	}
+
+	// key_points: bullets between KEY POINTS: and OPEN QUESTIONS: (or end)
+	if idxKey >= 0 {
+		startKP := idxKey + len("KEY POINTS:")
+		endKP := len(text)
+		if idxOpen > idxKey {
+			endKP = idxOpen
+		}
+		out.KeyPoints = parseBullets(text[startKP:endKP])
+	}
+	// open_questions: bullets after OPEN QUESTIONS: to end
+	if idxOpen >= 0 {
+		out.OpenQuestions = parseBullets(text[idxOpen+len("OPEN QUESTIONS:"):])
+	}
+
+	if out.Summary == "" {
+		return nil, errors.New("empty summary")
+	}
+	return out, nil
+}
+
+// parseBullets extracts "- ..." lines, drops "(none)" placeholders, returns
+// a (possibly empty) slice.
+func parseBullets(s string) []string {
+	out := []string{}
+	for _, line := range strings.Split(s, "\n") {
+		line = strings.TrimSpace(line)
+		if line == "" {
+			continue
+		}
+		// Accept "-", "*", "•" as bullet markers.
+		if strings.HasPrefix(line, "-") || strings.HasPrefix(line, "*") || strings.HasPrefix(line, "•") {
+			line = strings.TrimSpace(strings.TrimLeft(line, "-*• "))
+		}
+		if line == "" {
+			continue
+		}
+		// Skip "(none)" / "none" placeholders.
+		lower := strings.ToLower(line)
+		if lower == "(none)" || lower == "none" {
+			continue
+		}
+		out = append(out, line)
+	}
+	return out
 }
 
 // asAPIError unwraps an openai.Error if present.

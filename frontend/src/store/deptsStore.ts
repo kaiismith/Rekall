@@ -25,8 +25,14 @@ export const useDeptsStore = create<DeptsState>()((set, get) => ({
 
   ensureLoaded: async (orgId) => {
     const state = get()
+    // Skip if cached, in-flight, or previously errored. The error guard is
+    // critical: without it, a failed fetch (e.g. 401 on an expired session)
+    // re-fires every render of every consumer because `byOrg[orgId]` stays
+    // undefined. invalidate(orgId) clears the cache and the error to allow
+    // a deliberate retry.
     if (state.byOrg[orgId] !== undefined) return
     if (state.isLoading[orgId]) return
+    if (state.errors[orgId] !== undefined) return
     set((s) => ({
       isLoading: { ...s.isLoading, [orgId]: true },
       errors: { ...s.errors, [orgId]: undefined },
@@ -48,9 +54,11 @@ export const useDeptsStore = create<DeptsState>()((set, get) => ({
 
   invalidate: (orgId) =>
     set((s) => {
-      const next: Record<string, Department[] | undefined> = { ...s.byOrg }
-      delete next[orgId]
-      return { byOrg: next }
+      const nextByOrg: Record<string, Department[] | undefined> = { ...s.byOrg }
+      delete nextByOrg[orgId]
+      const nextErrors: Record<string, string | undefined> = { ...s.errors }
+      delete nextErrors[orgId]
+      return { byOrg: nextByOrg, errors: nextErrors }
     }),
 
   getDeptName: (orgId, deptId) => get().byOrg[orgId]?.find((d) => d.id === deptId)?.name,

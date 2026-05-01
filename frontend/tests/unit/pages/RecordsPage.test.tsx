@@ -63,13 +63,21 @@ describe('RecordsPage', () => {
   })
 
   it('renders the page heading', () => {
-    listMineSpy.mockResolvedValue({ success: true, data: [] })
+    listMineSpy.mockResolvedValue({
+      success: true,
+      data: [],
+      pagination: { page: 1, per_page: 5, total: 0, total_pages: 0, has_more: false },
+    })
     renderPage()
     expect(screen.getByText('Your Records')).toBeInTheDocument()
   })
 
   it('shows empty state when no records exist', async () => {
-    listMineSpy.mockResolvedValue({ success: true, data: [] })
+    listMineSpy.mockResolvedValue({
+      success: true,
+      data: [],
+      pagination: { page: 1, per_page: 5, total: 0, total_pages: 0, has_more: false },
+    })
     renderPage()
     await waitFor(() => {
       expect(screen.getByText(/no records yet/i)).toBeInTheDocument()
@@ -77,7 +85,11 @@ describe('RecordsPage', () => {
   })
 
   it('shows "Start a Meeting" CTA in empty state without filter', async () => {
-    listMineSpy.mockResolvedValue({ success: true, data: [] })
+    listMineSpy.mockResolvedValue({
+      success: true,
+      data: [],
+      pagination: { page: 1, per_page: 5, total: 0, total_pages: 0, has_more: false },
+    })
     renderPage()
     await waitFor(() => {
       expect(screen.getByRole('button', { name: /start a meeting/i })).toBeInTheDocument()
@@ -85,7 +97,11 @@ describe('RecordsPage', () => {
   })
 
   it('shows "No records match this filter" when filter is active and list is empty', async () => {
-    listMineSpy.mockResolvedValue({ success: true, data: [] })
+    listMineSpy.mockResolvedValue({
+      success: true,
+      data: [],
+      pagination: { page: 1, per_page: 5, total: 0, total_pages: 0, has_more: false },
+    })
     renderPage('/records?status=complete')
     await waitFor(() => {
       expect(screen.getByText(/no records match this filter/i)).toBeInTheDocument()
@@ -96,6 +112,7 @@ describe('RecordsPage', () => {
     listMineSpy.mockResolvedValue({
       success: true,
       data: [meeting({ title: 'Team Standup' }), meeting({ id: 'meet-2', title: 'Design Review' })],
+      pagination: { page: 1, per_page: 5, total: 2, total_pages: 1, has_more: false },
     })
     renderPage()
     await waitFor(() => {
@@ -105,7 +122,11 @@ describe('RecordsPage', () => {
   })
 
   it('shows filter badge with count 1 when status param is set', async () => {
-    listMineSpy.mockResolvedValue({ success: true, data: [] })
+    listMineSpy.mockResolvedValue({
+      success: true,
+      data: [],
+      pagination: { page: 1, per_page: 5, total: 0, total_pages: 0, has_more: false },
+    })
     renderPage('/records?status=complete')
     await waitFor(() => {
       expect(screen.getByText('1')).toBeInTheDocument()
@@ -113,7 +134,11 @@ describe('RecordsPage', () => {
   })
 
   it('passes status and sort URL params to the service', async () => {
-    listMineSpy.mockResolvedValue({ success: true, data: [] })
+    listMineSpy.mockResolvedValue({
+      success: true,
+      data: [],
+      pagination: { page: 1, per_page: 5, total: 0, total_pages: 0, has_more: false },
+    })
     renderPage('/records?status=complete&sort=duration_desc')
     await waitFor(() => {
       expect(listMineSpy).toHaveBeenCalledWith(
@@ -127,6 +152,7 @@ describe('RecordsPage', () => {
     listMineSpy.mockResolvedValue({
       success: true,
       data: [meeting({ code: 'rec-abc', title: 'Team Standup' })],
+      pagination: { page: 1, per_page: 5, total: 1, total_pages: 1, has_more: false },
     })
     renderPage()
     await waitFor(() => {

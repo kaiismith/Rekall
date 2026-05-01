@@ -29,13 +29,27 @@ type Config struct {
 type KatConfig struct {
 	Enabled bool
 
+	// Provider selects the LLM backend: "foundry" (Azure AI Foundry) or
+	// "openai" (OpenAI public API or any OpenAI-wire-compatible endpoint).
+	// Empty defaults to "foundry" for backward compatibility.
+	Provider string
+
 	// Foundry endpoint + deployment + auth selection.
 	FoundryEndpoint   string
 	FoundryDeployment string
 	FoundryAPIVersion string
 	// FoundryAPIKey: empty triggers DefaultAzureCredential. Treated as a
 	// secret — never logged.
-	FoundryAPIKey         string
+	FoundryAPIKey string
+
+	// OpenAI API key + model + optional base URL. BaseURL is empty for
+	// api.openai.com; set it for OpenAI-wire-compatible providers (vLLM,
+	// LM Studio, third-party proxies).
+	OpenAIAPIKey  string
+	OpenAIBaseURL string
+	OpenAIModel   string
+
+	// Per-call deadline applied to whichever provider is selected.
 	FoundryRequestTimeout time.Duration
 
 	// Sliding-window scheduler.
@@ -316,10 +330,14 @@ func Load() (*Config, error) {
 		},
 		Kat: KatConfig{
 			Enabled:                viper.GetBool("KAT_ENABLED"),
+			Provider:               viper.GetString("KAT_PROVIDER"),
 			FoundryEndpoint:        viper.GetString("KAT_FOUNDRY_ENDPOINT"),
 			FoundryDeployment:      viper.GetString("KAT_FOUNDRY_DEPLOYMENT"),
 			FoundryAPIVersion:      viper.GetString("KAT_FOUNDRY_API_VERSION"),
 			FoundryAPIKey:          viper.GetString("KAT_FOUNDRY_API_KEY"),
+			OpenAIAPIKey:           viper.GetString("KAT_OPENAI_API_KEY"),
+			OpenAIBaseURL:          viper.GetString("KAT_OPENAI_BASE_URL"),
+			OpenAIModel:            viper.GetString("KAT_OPENAI_MODEL"),
 			FoundryRequestTimeout:  time.Duration(viper.GetInt("KAT_FOUNDRY_REQUEST_TIMEOUT_MS")) * time.Millisecond,
 			WindowSeconds:          viper.GetInt("KAT_WINDOW_SECONDS"),
 			StepSeconds:            viper.GetInt("KAT_STEP_SECONDS"),
@@ -412,7 +430,9 @@ func setDefaults() {
 	// endpoint/deployment is set), Kat reports `configured=false` via
 	// /healthz/kat and the frontend renders the offline panel.
 	viper.SetDefault("KAT_ENABLED", true)
+	viper.SetDefault("KAT_PROVIDER", "foundry") // "foundry" | "openai"
 	viper.SetDefault("KAT_FOUNDRY_API_VERSION", "2024-08-01-preview")
+	viper.SetDefault("KAT_OPENAI_MODEL", "gpt-4o-mini")
 	viper.SetDefault("KAT_FOUNDRY_REQUEST_TIMEOUT_MS", 15000)
 	viper.SetDefault("KAT_WINDOW_SECONDS", 120)
 	viper.SetDefault("KAT_STEP_SECONDS", 20)

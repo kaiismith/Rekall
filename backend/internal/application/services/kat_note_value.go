@@ -15,28 +15,28 @@ import (
 // See ../../../.kiro/specs/kat-live-notes/requirements.md Requirement 1
 // (Ephemerality, No Persistence) for the design contract.
 type KatNote struct {
-	ID               uuid.UUID
-	RunID            uuid.UUID
-	MeetingID        *uuid.UUID
-	CallID           *uuid.UUID
-	WindowStartedAt  time.Time
-	WindowEndedAt    time.Time
-	SegmentIndexLo   int32
-	SegmentIndexHi   int32
-	Summary          string
-	KeyPoints        []string
-	OpenQuestions    []string
-	ModelID          string
-	PromptVersion    string
-	PromptTokens     *int32
-	CompletionTokens *int32
-	LatencyMs        int32
+	ID               uuid.UUID  `json:"id"`
+	RunID            uuid.UUID  `json:"run_id"`
+	MeetingID        *uuid.UUID `json:"meeting_id,omitempty"`
+	CallID           *uuid.UUID `json:"call_id,omitempty"`
+	WindowStartedAt  time.Time  `json:"window_started_at"`
+	WindowEndedAt    time.Time  `json:"window_ended_at"`
+	SegmentIndexLo   int32      `json:"segment_index_lo"`
+	SegmentIndexHi   int32      `json:"segment_index_hi"`
+	Summary          string     `json:"summary"`
+	KeyPoints        []string   `json:"key_points"`
+	OpenQuestions    []string   `json:"open_questions"`
+	ModelID          string     `json:"model_id"`
+	PromptVersion    string     `json:"prompt_version"`
+	PromptTokens     *int32     `json:"prompt_tokens,omitempty"`
+	CompletionTokens *int32     `json:"completion_tokens,omitempty"`
+	LatencyMs        int32      `json:"latency_ms"`
 	// Status carries the run outcome. v1 ring-buffer pushes only OK notes;
 	// Errored is recorded in logs only (no persistence layer to write to).
-	Status       KatNoteStatus
-	ErrorCode    *string
-	ErrorMessage *string
-	CreatedAt    time.Time
+	Status       KatNoteStatus `json:"status"`
+	ErrorCode    *string       `json:"error_code,omitempty"`
+	ErrorMessage *string       `json:"error_message,omitempty"`
+	CreatedAt    time.Time     `json:"created_at"`
 }
 
 // KatNoteStatus enumerates the run outcome.
@@ -45,4 +45,14 @@ type KatNoteStatus string
 const (
 	KatNoteStatusOK      KatNoteStatus = "ok"
 	KatNoteStatusErrored KatNoteStatus = "errored"
+	// KatNoteStatusEmptyWindow signals the frontend that the most recent
+	// tick found no transcript segments in the window. The panel renders a
+	// "Nothing to take notes" empty state instead of the warming-up
+	// placeholder. NOT pushed to the ring buffer — purely transient.
+	KatNoteStatusEmptyWindow KatNoteStatus = "empty_window"
+	// KatNoteStatusStreaming carries an in-flight partial response from the
+	// LLM. The frontend renders the partial text progressively while the
+	// stream completes; on stream end a final 'ok' note replaces it. NOT
+	// pushed to the ring buffer.
+	KatNoteStatusStreaming KatNoteStatus = "streaming"
 )

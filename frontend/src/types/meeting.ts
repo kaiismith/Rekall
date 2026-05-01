@@ -56,6 +56,24 @@ export interface Meeting {
 export interface ListMeetingsParams {
   status?: MeetingStatusFilter
   sort?: MeetingSortKey
+  page?: number
+  per_page?: number
+}
+
+/** Page-window metadata returned alongside the paginated meetings list. */
+export interface MeetingListPagination {
+  page: number
+  per_page: number
+  total: number
+  total_pages: number
+  has_more: boolean
+}
+
+/** Paginated wire shape for GET /api/v1/meetings/mine. */
+export interface PaginatedMeetingListResponse {
+  success: boolean
+  data: Meeting[]
+  pagination: MeetingListPagination
 }
 
 export interface CreateMeetingPayload {
@@ -105,6 +123,10 @@ export type WsMsgType =
   | 'caption_chunk'
   // Kat live AI notes (running summary + key points + open questions)
   | 'kat.note'
+  // Per-user AI-notes opt-in toggle (client → server). Aggregated across
+  // all admitted clients; the Kat scheduler only spends Foundry / OpenAI
+  // calls while at least one participant has it on.
+  | 'kat.toggle'
 
 export interface WsMessage {
   type: WsMsgType
@@ -149,6 +171,8 @@ export interface WsMessage {
   words?: { w: string; start_ms: number; end_ms: number; p: number }[]
   // kat.note: the structured note payload (see types/kat.ts).
   data?: unknown
+  // kat.toggle: per-client AI-notes opt-in flag (client → server).
+  enabled?: boolean
 }
 
 /** A single caption entry in the merged meeting transcript feed. */

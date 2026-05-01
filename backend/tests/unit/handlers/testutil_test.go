@@ -424,12 +424,13 @@ func (m *mockMeetingRepo) FindActiveWithNoParticipants(ctx context.Context) ([]*
 	args := m.Called(ctx)
 	return args.Get(0).([]*entities.Meeting), args.Error(1)
 }
-func (m *mockMeetingRepo) ListByUser(ctx context.Context, userID uuid.UUID, filter ports.ListMeetingsFilter) ([]*ports.MeetingListItem, error) {
+func (m *mockMeetingRepo) ListByUser(ctx context.Context, userID uuid.UUID, filter ports.ListMeetingsFilter) ([]*ports.MeetingListItem, int, error) {
 	args := m.Called(ctx, userID, filter)
 	if args.Get(0) == nil {
-		return nil, args.Error(1)
+		return nil, 0, args.Error(2)
 	}
-	return args.Get(0).([]*ports.MeetingListItem), args.Error(1)
+	items := args.Get(0).([]*ports.MeetingListItem)
+	return items, args.Int(1), args.Error(2)
 }
 
 // ─── Mock: MeetingParticipantRepository ──────────────────────────────────────

@@ -65,12 +65,12 @@ func (m *mockMeetingRepo) FindActiveWithNoParticipants(ctx context.Context) ([]*
 	args := m.Called(ctx)
 	return args.Get(0).([]*entities.Meeting), args.Error(1)
 }
-func (m *mockMeetingRepo) ListByUser(ctx context.Context, userID uuid.UUID, filter ports.ListMeetingsFilter) ([]*ports.MeetingListItem, error) {
+func (m *mockMeetingRepo) ListByUser(ctx context.Context, userID uuid.UUID, filter ports.ListMeetingsFilter) ([]*ports.MeetingListItem, int, error) {
 	args := m.Called(ctx, userID, filter)
 	if args.Get(0) == nil {
-		return nil, args.Error(1)
+		return nil, 0, args.Error(2)
 	}
-	return args.Get(0).([]*ports.MeetingListItem), args.Error(1)
+	return args.Get(0).([]*ports.MeetingListItem), args.Int(1), args.Error(2)
 }
 
 type mockParticipantRepo struct{ mock.Mock }
@@ -823,10 +823,10 @@ func TestListMeetingsWithMeta_NoFilter_PassesThrough(t *testing.T) {
 	items := []*ports.MeetingListItem{
 		{Meeting: &entities.Meeting{ID: uuid.New(), Code: "aaa-bbbb-ccc", Status: entities.MeetingStatusActive, CreatedAt: now}},
 	}
-	mr.On("ListByUser", mock.Anything, userID, ports.ListMeetingsFilter{Sort: "created_at_desc"}).
-		Return(items, nil)
+	mr.On("ListByUser", mock.Anything, userID, ports.ListMeetingsFilter{Sort: "created_at_desc", Page: 1, PerPage: 20}).
+		Return(items, len(items), nil)
 
-	result, err := svc.ListMeetingsWithMeta(context.Background(), userID, "", "created_at_desc")
+	result, _, err := svc.ListMeetingsWithMeta(context.Background(), userID, "", "created_at_desc", 1, 20)
 	require.NoError(t, err)
 	assert.Len(t, result, 1)
 	mr.AssertExpectations(t)
@@ -838,10 +838,10 @@ func TestListMeetingsWithMeta_StatusFilter_PassedToRepo(t *testing.T) {
 
 	userID := uuid.New()
 	status := "complete"
-	mr.On("ListByUser", mock.Anything, userID, ports.ListMeetingsFilter{Status: &status, Sort: "created_at_desc"}).
-		Return([]*ports.MeetingListItem{}, nil)
+	mr.On("ListByUser", mock.Anything, userID, ports.ListMeetingsFilter{Status: &status, Sort: "created_at_desc", Page: 1, PerPage: 20}).
+		Return([]*ports.MeetingListItem{}, 0, nil)
 
-	result, err := svc.ListMeetingsWithMeta(context.Background(), userID, "complete", "created_at_desc")
+	result, _, err := svc.ListMeetingsWithMeta(context.Background(), userID, "complete", "created_at_desc", 1, 20)
 	require.NoError(t, err)
 	assert.Empty(t, result)
 	mr.AssertExpectations(t)
@@ -852,10 +852,10 @@ func TestListMeetingsWithMeta_SortKey_PassedToRepo(t *testing.T) {
 	svc := newTestMeetingService(mr, new(mockParticipantRepo), new(meetingMockOrgMemberRepo), new(meetingMockDeptMemberRepo))
 
 	userID := uuid.New()
-	mr.On("ListByUser", mock.Anything, userID, ports.ListMeetingsFilter{Sort: "duration_desc"}).
-		Return([]*ports.MeetingListItem{}, nil)
+	mr.On("ListByUser", mock.Anything, userID, ports.ListMeetingsFilter{Sort: "duration_desc", Page: 1, PerPage: 20}).
+		Return([]*ports.MeetingListItem{}, 0, nil)
 
-	_, err := svc.ListMeetingsWithMeta(context.Background(), userID, "", "duration_desc")
+	_, _, err := svc.ListMeetingsWithMeta(context.Background(), userID, "", "duration_desc", 1, 20)
 	require.NoError(t, err)
 	mr.AssertExpectations(t)
 }
@@ -874,10 +874,10 @@ func TestListMeetingsWithMeta_DurationSeconds_ComputedByRepo(t *testing.T) {
 			DurationSeconds: &d,
 		},
 	}
-	mr.On("ListByUser", mock.Anything, userID, ports.ListMeetingsFilter{Sort: "created_at_desc"}).
-		Return(items, nil)
+	mr.On("ListByUser", mock.Anything, userID, ports.ListMeetingsFilter{Sort: "created_at_desc", Page: 1, PerPage: 20}).
+		Return(items, len(items), nil)
 
-	result, err := svc.ListMeetingsWithMeta(context.Background(), userID, "", "created_at_desc")
+	result, _, err := svc.ListMeetingsWithMeta(context.Background(), userID, "", "created_at_desc", 1, 20)
 	require.NoError(t, err)
 	require.Len(t, result, 1)
 	require.NotNil(t, result[0].DurationSeconds)
@@ -892,10 +892,10 @@ func TestListMeetingsWithMeta_NilDuration_WhenInProgress(t *testing.T) {
 	items := []*ports.MeetingListItem{
 		{Meeting: &entities.Meeting{ID: uuid.New(), Status: entities.MeetingStatusActive}, DurationSeconds: nil},
 	}
-	mr.On("ListByUser", mock.Anything, userID, ports.ListMeetingsFilter{Sort: "created_at_desc"}).
-		Return(items, nil)
+	mr.On("ListByUser", mock.Anything, userID, ports.ListMeetingsFilter{Sort: "created_at_desc", Page: 1, PerPage: 20}).
+		Return(items, len(items), nil)
 
-	result, err := svc.ListMeetingsWithMeta(context.Background(), userID, "", "created_at_desc")
+	result, _, err := svc.ListMeetingsWithMeta(context.Background(), userID, "", "created_at_desc", 1, 20)
 	require.NoError(t, err)
 	require.Len(t, result, 1)
 	assert.Nil(t, result[0].DurationSeconds)
@@ -907,10 +907,10 @@ func TestListMeetingsWithMeta_InProgressFilter_PassedToRepo(t *testing.T) {
 
 	userID := uuid.New()
 	status := "in_progress"
-	mr.On("ListByUser", mock.Anything, userID, ports.ListMeetingsFilter{Status: &status, Sort: "created_at_desc"}).
-		Return([]*ports.MeetingListItem{}, nil)
+	mr.On("ListByUser", mock.Anything, userID, ports.ListMeetingsFilter{Status: &status, Sort: "created_at_desc", Page: 1, PerPage: 20}).
+		Return([]*ports.MeetingListItem{}, 0, nil)
 
-	result, err := svc.ListMeetingsWithMeta(context.Background(), userID, "in_progress", "created_at_desc")
+	result, _, err := svc.ListMeetingsWithMeta(context.Background(), userID, "in_progress", "created_at_desc", 1, 20)
 	require.NoError(t, err)
 	assert.Empty(t, result)
 	mr.AssertExpectations(t)
@@ -924,10 +924,10 @@ func TestListMeetingsWithMeta_ProcessingFilter_ReturnsEmpty(t *testing.T) {
 	// "processing" is a reserved status — the repository short-circuits and
 	// returns an empty slice before executing any query.
 	status := "processing"
-	mr.On("ListByUser", mock.Anything, userID, ports.ListMeetingsFilter{Status: &status, Sort: "created_at_desc"}).
-		Return([]*ports.MeetingListItem{}, nil)
+	mr.On("ListByUser", mock.Anything, userID, ports.ListMeetingsFilter{Status: &status, Sort: "created_at_desc", Page: 1, PerPage: 20}).
+		Return([]*ports.MeetingListItem{}, 0, nil)
 
-	result, err := svc.ListMeetingsWithMeta(context.Background(), userID, "processing", "created_at_desc")
+	result, _, err := svc.ListMeetingsWithMeta(context.Background(), userID, "processing", "created_at_desc", 1, 20)
 	require.NoError(t, err)
 	assert.Empty(t, result)
 	mr.AssertExpectations(t)
@@ -941,10 +941,10 @@ func TestListMeetingsWithMeta_UnrecognisedSort_FallsBackToDefault(t *testing.T) 
 	// The service passes the sort string through; listSortExpr in the repo maps
 	// unrecognised values to "created_at DESC". Verify the service does not
 	// swallow or reject an unknown sort key.
-	mr.On("ListByUser", mock.Anything, userID, ports.ListMeetingsFilter{Sort: "bogus_sort"}).
-		Return([]*ports.MeetingListItem{}, nil)
+	mr.On("ListByUser", mock.Anything, userID, ports.ListMeetingsFilter{Sort: "bogus_sort", Page: 1, PerPage: 20}).
+		Return([]*ports.MeetingListItem{}, 0, nil)
 
-	result, err := svc.ListMeetingsWithMeta(context.Background(), userID, "", "bogus_sort")
+	result, _, err := svc.ListMeetingsWithMeta(context.Background(), userID, "", "bogus_sort", 1, 20)
 	require.NoError(t, err)
 	assert.Empty(t, result)
 	mr.AssertExpectations(t)
@@ -963,10 +963,10 @@ func TestListMeetingsWithMeta_ParticipantPreviews_CappedAt3(t *testing.T) {
 	items := []*ports.MeetingListItem{
 		{Meeting: &entities.Meeting{ID: uuid.New()}, ParticipantPreviews: previews},
 	}
-	mr.On("ListByUser", mock.Anything, userID, ports.ListMeetingsFilter{Sort: "created_at_desc"}).
-		Return(items, nil)
+	mr.On("ListByUser", mock.Anything, userID, ports.ListMeetingsFilter{Sort: "created_at_desc", Page: 1, PerPage: 20}).
+		Return(items, len(items), nil)
 
-	result, err := svc.ListMeetingsWithMeta(context.Background(), userID, "", "created_at_desc")
+	result, _, err := svc.ListMeetingsWithMeta(context.Background(), userID, "", "created_at_desc", 1, 20)
 	require.NoError(t, err)
 	assert.Len(t, result[0].ParticipantPreviews, 3)
 }
@@ -1005,10 +1005,10 @@ func TestListMeetingsInScope_NilScope_FallsBackToDefault(t *testing.T) {
 	svc := newTestMeetingService(mr, new(mockParticipantRepo), new(meetingMockOrgMemberRepo), new(meetingMockDeptMemberRepo))
 
 	userID := uuid.New()
-	mr.On("ListByUser", mock.Anything, userID, ports.ListMeetingsFilter{Sort: "created_at_desc"}).
-		Return([]*ports.MeetingListItem{}, nil)
+	mr.On("ListByUser", mock.Anything, userID, ports.ListMeetingsFilter{Sort: "created_at_desc", Page: 1, PerPage: 20}).
+		Return([]*ports.MeetingListItem{}, 0, nil)
 
-	_, err := svc.ListMeetingsInScope(context.Background(), userID, nil, "", "created_at_desc")
+	_, _, err := svc.ListMeetingsInScope(context.Background(), userID, nil, "", "created_at_desc", 1, 20)
 	require.NoError(t, err)
 	mr.AssertExpectations(t)
 }
@@ -1023,9 +1023,9 @@ func TestListMeetingsInScope_OrgScope_NonMember_Forbidden(t *testing.T) {
 	or.On("GetByOrgAndUser", mock.Anything, orgID, userID).
 		Return(nil, apperr.NotFound("OrgMembership", orgID.String()))
 
-	_, err := svc.ListMeetingsInScope(context.Background(), userID,
+	_, _, err := svc.ListMeetingsInScope(context.Background(), userID,
 		&ports.ScopeFilter{Kind: ports.ScopeKindOrganization, ID: orgID},
-		"", "created_at_desc")
+		"", "created_at_desc", 1, 20)
 	require.Error(t, err)
 	appErr, ok := apperr.AsAppError(err)
 	require.True(t, ok)
@@ -1042,10 +1042,10 @@ func TestListMeetingsInScope_OrgScope_Member_PassesFilterToRepo(t *testing.T) {
 	orgID := uuid.New()
 	scope := &ports.ScopeFilter{Kind: ports.ScopeKindOrganization, ID: orgID}
 	or.On("GetByOrgAndUser", mock.Anything, orgID, userID).Return(&entities.OrgMembership{}, nil)
-	mr.On("ListByUser", mock.Anything, userID, ports.ListMeetingsFilter{Sort: "created_at_desc", Scope: scope}).
-		Return([]*ports.MeetingListItem{}, nil)
+	mr.On("ListByUser", mock.Anything, userID, ports.ListMeetingsFilter{Sort: "created_at_desc", Scope: scope, Page: 1, PerPage: 20}).
+		Return([]*ports.MeetingListItem{}, 0, nil)
 
-	_, err := svc.ListMeetingsInScope(context.Background(), userID, scope, "", "created_at_desc")
+	_, _, err := svc.ListMeetingsInScope(context.Background(), userID, scope, "", "created_at_desc", 1, 20)
 	require.NoError(t, err)
 	mr.AssertExpectations(t)
 }
@@ -1060,9 +1060,9 @@ func TestListMeetingsInScope_DeptScope_NonMember_Forbidden(t *testing.T) {
 	dr.On("GetByDeptAndUser", mock.Anything, deptID, userID).
 		Return(nil, apperr.NotFound("DepartmentMembership", deptID.String()))
 
-	_, err := svc.ListMeetingsInScope(context.Background(), userID,
+	_, _, err := svc.ListMeetingsInScope(context.Background(), userID,
 		&ports.ScopeFilter{Kind: ports.ScopeKindDepartment, ID: deptID},
-		"", "created_at_desc")
+		"", "created_at_desc", 1, 20)
 	require.Error(t, err)
 	appErr, ok := apperr.AsAppError(err)
 	require.True(t, ok)
@@ -1075,10 +1075,10 @@ func TestListMeetingsInScope_OpenScope_PassesScopeFilterToRepo(t *testing.T) {
 
 	userID := uuid.New()
 	scope := &ports.ScopeFilter{Kind: ports.ScopeKindOpen}
-	mr.On("ListByUser", mock.Anything, userID, ports.ListMeetingsFilter{Sort: "created_at_desc", Scope: scope}).
-		Return([]*ports.MeetingListItem{}, nil)
+	mr.On("ListByUser", mock.Anything, userID, ports.ListMeetingsFilter{Sort: "created_at_desc", Scope: scope, Page: 1, PerPage: 20}).
+		Return([]*ports.MeetingListItem{}, 0, nil)
 
-	_, err := svc.ListMeetingsInScope(context.Background(), userID, scope, "", "created_at_desc")
+	_, _, err := svc.ListMeetingsInScope(context.Background(), userID, scope, "", "created_at_desc", 1, 20)
 	require.NoError(t, err)
 	mr.AssertExpectations(t)
 }

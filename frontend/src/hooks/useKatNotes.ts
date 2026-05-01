@@ -19,6 +19,10 @@ export interface UseKatNotesResult {
   status: KatStatus
   /** Health probe response; used by the panel footer ("model: gpt-4o-mini"). */
   health: KatHealthResponse | null
+  /** Running raw text from an in-flight streaming response. Cleared when
+   *  the next final ('ok') note arrives. The panel renders this directly
+   *  while the LLM is producing tokens. */
+  streamingPartial: string | null
   /** Push a note received over the meeting WS. Idempotent on `id`. */
   pushNote: (note: KatNoteDTO) => void
   /** Manual retry — re-runs the bootstrap probe. */
@@ -39,6 +43,9 @@ export function useKatNotes(): UseKatNotesResult {
   const [notes, setNotes] = useState<KatNoteDTO[]>([])
   const [status, setStatus] = useState<KatStatus>('idle')
   const [health, setHealth] = useState<KatHealthResponse | null>(null)
+  // Latest in-flight streaming text. Reset on each completed note. The
+  // panel renders this directly during the typing animation.
+  const [streamingPartial, setStreamingPartial] = useState<string | null>(null)
   const warmingUpTimerRef = useRef<number | null>(null)
   const probeIDRef = useRef(0)
 
@@ -85,26 +92,79 @@ export function useKatNotes(): UseKatNotesResult {
   }, [status])
 
   const pushNote = useCallback((note: KatNoteDTO) => {
+    // Diagnostic — verbose on purpose. Lets the operator see in DevTools
+    // exactly what the WS delivered for each kat.note message. Pre-shipping
+    // we can switch this to a debug-only flag, but during the live tuning
+    // pass it's invaluable.
+    // eslint-disable-next-line no-console
+    console.debug('[kat] note received', {
+      status: note.status,
+      id: note.id,
+      run_id: note.run_id,
+      summary_preview: note.summary?.slice(0, 200),
+      summary_len: note.summary?.length ?? 0,
+      key_points: note.key_points,
+      open_questions: note.open_questions,
+    })
+
+    // Streaming partial: in-flight LLM response. Update the running buffer
+    // so the panel can show tokens as they arrive. Don't push to the
+    // notes list — it's intermediate state.
+    if (note.status === 'streaming') {
+      setStreamingPartial(note.summary)
+      setStatus((s) => (s === 'offline' || s === 'error' ? s : 'streaming'))
+      return
+    }
+
+    // Empty-window: backend tick found no transcript segments. Don't add
+    // the placeholder to the notes list; just flip status so the panel
+    // shows the empty-state copy.
+    if (note.status === 'empty_window') {
+      setStatus((s) => {
+        if (s === 'offline' || s === 'error') return s
+        if (s === 'live') return s
+        return 'empty'
+      })
+      return
+    }
+
+    // Errored notes: log only, don't disturb the panel.
+    if (note.status === 'errored') {
+      console.warn('kat: errored note received', note)
+      return
+    }
+
+    // Final ('ok') note: handoff to the structured "live" view, but give
+    // the typewriter ~700ms grace so the panel doesn't snap from
+    // mid-typing to the final layout.
+    //
+    // We render whatever the model produced — including short or
+    // boilerplate summaries. If the model collapses substantive content
+    // into a placeholder, that's a prompt-tuning issue to fix at the
+    // source. Hiding output here would mask the bug.
     setNotes((prev) => {
-      // Dedupe by id; merge by `window_started_at` ascending.
       if (prev.some((n) => n.id === note.id)) return prev
       const merged = [...prev, note].sort((a, b) =>
         a.window_started_at.localeCompare(b.window_started_at),
       )
-      // FIFO cap — drop the oldest entries when the array grows too long.
       if (merged.length > CLIENT_NOTE_CAP) {
         return merged.slice(merged.length - CLIENT_NOTE_CAP)
       }
       return merged
     })
-    // First note flips warming_up -> live. Other states (offline, error,
-    // idle) are sticky until probe() runs again.
-    setStatus((s) => (s === 'warming_up' || s === 'idle' ? 'live' : s))
+    // Keep the streaming view visible briefly so the typewriter can finish.
+    window.setTimeout(() => {
+      setStreamingPartial(null)
+      setStatus((s) => {
+        if (s === 'offline' || s === 'error') return s
+        return 'live'
+      })
+    }, 700)
   }, [])
 
   const latestNote = useMemo(() => (notes.length > 0 ? notes[notes.length - 1] : null), [notes])
 
   // probe returns a Promise; the public `retry` contract is fire-and-forget.
   // eslint-disable-next-line @typescript-eslint/no-misused-promises
-  return { notes, latestNote, status, health, pushNote, retry: probe }
+  return { notes, latestNote, status, health, streamingPartial, pushNote, retry: probe }
 }

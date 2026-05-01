@@ -55,6 +55,7 @@ const baseList = {
       scope_id: ORG,
     },
   ],
+  pagination: { page: 1, per_page: 5, total: 2, total_pages: 1, has_more: false },
 }
 
 function renderPage(initialEntries = ['/records']) {

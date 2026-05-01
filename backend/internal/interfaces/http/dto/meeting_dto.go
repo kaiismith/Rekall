@@ -119,6 +119,25 @@ type MeetingListResponse struct {
 	Data    []MeetingResponse `json:"data"`
 }
 
+// MeetingListPagination is the page-window metadata returned alongside the
+// paginated meetings list endpoint. Lets the client decide when to stop
+// fetching and how many pages exist.
+type MeetingListPagination struct {
+	Page       int  `json:"page"`
+	PerPage    int  `json:"per_page"`
+	Total      int  `json:"total"`
+	TotalPages int  `json:"total_pages"`
+	HasMore    bool `json:"has_more"`
+}
+
+// PaginatedMeetingListResponse wraps a single page of meetings + the
+// pagination metadata. Returned by GET /api/v1/meetings/mine.
+type PaginatedMeetingListResponse struct {
+	Success    bool                  `json:"success" example:"true"`
+	Data       []MeetingResponse     `json:"data"`
+	Pagination MeetingListPagination `json:"pagination"`
+}
+
 // ─── Chat message DTOs ────────────────────────────────────────────────────────
 
 // ChatMessage is the outbound representation of a MeetingMessage.

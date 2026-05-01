@@ -23,13 +23,15 @@ type stubGenerator struct {
 	configured bool
 	authMode   string
 	modelID    string
+	provider   string
 }
 
-func (s *stubGenerator) Generate(_ context.Context, _ ports.NoteGeneratorInput) (*ports.NoteGeneratorOutput, error) {
+func (s *stubGenerator) Generate(_ context.Context, _ ports.NoteGeneratorInput, _ ports.StreamCallback) (*ports.NoteGeneratorOutput, error) {
 	return nil, nil
 }
 func (s *stubGenerator) ModelID() string    { return s.modelID }
 func (s *stubGenerator) AuthMode() string   { return s.authMode }
+func (s *stubGenerator) Provider() string   { return s.provider }
 func (s *stubGenerator) IsConfigured() bool { return s.configured }
 
 func katServeHealth(t *testing.T, h *handlers.KatHandler) (int, dto.KatHealthResponse, string) {

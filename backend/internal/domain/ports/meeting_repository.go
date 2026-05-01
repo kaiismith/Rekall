@@ -20,6 +20,12 @@ type ListMeetingsFilter struct {
 	// Scope, when non-nil, restricts the result to meetings matching the given
 	// scope. Nil preserves the caller's default visibility (host + participant).
 	Scope *ScopeFilter
+	// Page is 1-indexed. Zero/negative values default to 1 in the repo.
+	Page int
+	// PerPage caps the page size. Zero/negative values default to 20; the
+	// repository clamps to a reasonable upper bound (200) so a malicious
+	// request can't ask for an unbounded page.
+	PerPage int
 }
 
 // ParticipantPreview is a lightweight user snapshot used in list responses.
@@ -50,8 +56,10 @@ type MeetingRepository interface {
 	ListByHost(ctx context.Context, hostID uuid.UUID, status string) ([]*entities.Meeting, error)
 
 	// ListByUser returns meetings where the user is the host or a participant,
-	// enriched with duration and up to 3 participant previews.
-	ListByUser(ctx context.Context, userID uuid.UUID, filter ListMeetingsFilter) ([]*MeetingListItem, error)
+	// enriched with duration and up to 3 participant previews. The result is
+	// paginated by filter.Page / filter.PerPage; the second return value is
+	// the total count of matching rows so callers can compute total_pages.
+	ListByUser(ctx context.Context, userID uuid.UUID, filter ListMeetingsFilter) ([]*MeetingListItem, int, error)
 
 	// CountActiveByHost counts meetings with status 'waiting' or 'active' for
 	// the given host. Used to enforce the per-host limit.

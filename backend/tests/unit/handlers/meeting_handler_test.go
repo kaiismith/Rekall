@@ -221,7 +221,7 @@ func TestMeetingListMineHandler_Success(t *testing.T) {
 	r := newMeetingRouter(h, hostID)
 
 	mr.On("ListByUser", mock.Anything, hostID, mock.Anything).
-		Return([]*ports.MeetingListItem{{Meeting: activeMeeting(hostID)}}, nil)
+		Return([]*ports.MeetingListItem{{Meeting: activeMeeting(hostID)}}, 1, nil)
 
 	w := doRequest(r, http.MethodGet, "/meetings/mine", nil)
 
@@ -242,7 +242,7 @@ func TestMeetingListMineHandler_StatusFilter(t *testing.T) {
 
 	// filter[status]=in_progress is parsed and forwarded to ListByUser.
 	mr.On("ListByUser", mock.Anything, hostID, mock.Anything).
-		Return([]*ports.MeetingListItem{}, nil)
+		Return([]*ports.MeetingListItem{}, 0, nil)
 
 	w := doRequest(r, http.MethodGet, "/meetings/mine?filter%5Bstatus%5D=in_progress", nil)
 
@@ -268,7 +268,7 @@ func TestMeetingListMineHandler_ResponseIncludesDTOFields(t *testing.T) {
 		ParticipantPreviews: previews,
 	}
 	mr.On("ListByUser", mock.Anything, hostID, mock.Anything).
-		Return([]*ports.MeetingListItem{item}, nil)
+		Return([]*ports.MeetingListItem{item}, 1, nil)
 
 	w := doRequest(r, http.MethodGet, "/meetings/mine", nil)
 
@@ -298,7 +298,7 @@ func TestMeetingListMineHandler_SortParam(t *testing.T) {
 
 	// sort=duration_desc is parsed and forwarded to ListByUser.
 	mr.On("ListByUser", mock.Anything, hostID, mock.Anything).
-		Return([]*ports.MeetingListItem{}, nil)
+		Return([]*ports.MeetingListItem{}, 0, nil)
 
 	w := doRequest(r, http.MethodGet, "/meetings/mine?sort=duration_desc", nil)
 
@@ -314,7 +314,7 @@ func TestMeetingListMineHandler_ServiceError(t *testing.T) {
 	r := newMeetingRouter(h, hostID)
 
 	mr.On("ListByUser", mock.Anything, hostID, mock.Anything).
-		Return(nil, assert.AnError)
+		Return(nil, 0, assert.AnError)
 
 	w := doRequest(r, http.MethodGet, "/meetings/mine", nil)
 
@@ -345,7 +345,7 @@ func TestMeetingListMineHandler_ScopeOpen_PassesFilter(t *testing.T) {
 
 	mr.On("ListByUser", mock.Anything, hostID, mock.MatchedBy(func(f ports.ListMeetingsFilter) bool {
 		return f.Scope != nil && f.Scope.Kind == ports.ScopeKindOpen
-	})).Return([]*ports.MeetingListItem{}, nil)
+	})).Return([]*ports.MeetingListItem{}, 0, nil)
 
 	w := doRequest(r, http.MethodGet, "/meetings/mine?filter%5Bscope_type%5D=open", nil)
 
@@ -380,7 +380,7 @@ func TestMeetingListMineHandler_ScopeOrg_Member_200(t *testing.T) {
 		Return(&entities.OrgMembership{Role: "member"}, nil)
 	mr.On("ListByUser", mock.Anything, hostID, mock.MatchedBy(func(f ports.ListMeetingsFilter) bool {
 		return f.Scope != nil && f.Scope.Kind == ports.ScopeKindOrganization && f.Scope.ID == orgID
-	})).Return([]*ports.MeetingListItem{}, nil)
+	})).Return([]*ports.MeetingListItem{}, 0, nil)
 
 	h := newMeetingHandler(newMeetingServiceWithMembers(mr, pr, memberRepo, new(mockDeptMemberRepo)))
 	r := newMeetingRouter(h, hostID)
@@ -666,7 +666,7 @@ func TestMeetingListMineHandler_ServiceError2(t *testing.T) {
 	r := newMeetingRouter(h, hostID)
 
 	mr.On("ListByUser", mock.Anything, hostID, mock.Anything).
-		Return([]*ports.MeetingListItem(nil), assert.AnError)
+		Return([]*ports.MeetingListItem(nil), 0, assert.AnError)
 
 	w := doRequest(r, http.MethodGet, "/meetings/mine", nil)
 	assert.NotEqual(t, http.StatusOK, w.Code)

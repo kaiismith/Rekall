@@ -226,13 +226,14 @@ func TestMeeting_ListByUser_Empty(t *testing.T) {
 	repo := repositories.NewMeetingRepository(db)
 
 	userID := uuid.New()
-	mock.ExpectQuery(regexp.QuoteMeta(`SELECT * FROM "meetings" WHERE host_id = $1 OR id IN`)).
+	mock.ExpectQuery(regexp.QuoteMeta(`SELECT count(*) FROM "meetings" WHERE host_id = $1 OR id IN`)).
 		WithArgs(userID, userID).
-		WillReturnRows(meetingRows())
+		WillReturnRows(sqlmock.NewRows([]string{"count"}).AddRow(0))
 
-	list, err := repo.ListByUser(context.Background(), userID, ports.ListMeetingsFilter{})
+	list, total, err := repo.ListByUser(context.Background(), userID, ports.ListMeetingsFilter{})
 	require.NoError(t, err)
 	assert.Empty(t, list)
+	assert.Equal(t, 0, total)
 }
 
 func TestMeeting_ListByUser_WithResultsAndPreviews(t *testing.T) {
@@ -244,9 +245,14 @@ func TestMeeting_ListByUser_WithResultsAndPreviews(t *testing.T) {
 	started := time.Now().Add(-time.Hour)
 	ended := time.Now()
 
-	// Primary query
-	mock.ExpectQuery(regexp.QuoteMeta(`SELECT * FROM "meetings" WHERE host_id = $1 OR id IN`)).
+	// Count query
+	mock.ExpectQuery(regexp.QuoteMeta(`SELECT count(*) FROM "meetings" WHERE host_id = $1 OR id IN`)).
 		WithArgs(userID, userID).
+		WillReturnRows(sqlmock.NewRows([]string{"count"}).AddRow(1))
+
+	// Page query
+	mock.ExpectQuery(regexp.QuoteMeta(`SELECT * FROM "meetings" WHERE host_id = $1 OR id IN`)).
+		// LIMIT positional arg added by paginated ListByUser; skip strict arg matching.
 		WillReturnRows(meetingRows().AddRow(
 			meetingID, "abc", "Test", "open", userID, "ended", 50, started, ended, time.Now(), time.Now(),
 		))
@@ -257,9 +263,10 @@ func TestMeeting_ListByUser_WithResultsAndPreviews(t *testing.T) {
 			AddRow(meetingID, uuid.New(), "Alice Smith").
 			AddRow(meetingID, uuid.New(), "Bob Jones"))
 
-	list, err := repo.ListByUser(context.Background(), userID, ports.ListMeetingsFilter{})
+	list, total, err := repo.ListByUser(context.Background(), userID, ports.ListMeetingsFilter{})
 	require.NoError(t, err)
 	require.Len(t, list, 1)
+	assert.Equal(t, 1, total)
 	assert.Equal(t, meetingID, list[0].Meeting.ID)
 	assert.Len(t, list[0].ParticipantPreviews, 2)
 	require.NotNil(t, list[0].DurationSeconds)
@@ -272,11 +279,11 @@ func TestMeeting_ListByUser_StatusInProgress(t *testing.T) {
 
 	userID := uuid.New()
 	status := "in_progress"
-	mock.ExpectQuery(regexp.QuoteMeta(`SELECT * FROM "meetings" WHERE (host_id = $1 OR id IN`)).
+	mock.ExpectQuery(regexp.QuoteMeta(`SELECT count(*) FROM "meetings" WHERE (host_id = $1 OR id IN`)).
 		WithArgs(userID, userID, "waiting", "active").
-		WillReturnRows(meetingRows())
+		WillReturnRows(sqlmock.NewRows([]string{"count"}).AddRow(0))
 
-	list, err := repo.ListByUser(context.Background(), userID, ports.ListMeetingsFilter{Status: &status})
+	list, _, err := repo.ListByUser(context.Background(), userID, ports.ListMeetingsFilter{Status: &status})
 	require.NoError(t, err)
 	assert.Empty(t, list)
 }
@@ -287,11 +294,11 @@ func TestMeeting_ListByUser_StatusComplete(t *testing.T) {
 
 	userID := uuid.New()
 	status := "complete"
-	mock.ExpectQuery(regexp.QuoteMeta(`SELECT * FROM "meetings" WHERE (host_id = $1 OR id IN`)).
+	mock.ExpectQuery(regexp.QuoteMeta(`SELECT count(*) FROM "meetings" WHERE (host_id = $1 OR id IN`)).
 		WithArgs(userID, userID, "ended").
-		WillReturnRows(meetingRows())
+		WillReturnRows(sqlmock.NewRows([]string{"count"}).AddRow(0))
 
-	list, err := repo.ListByUser(context.Background(), userID, ports.ListMeetingsFilter{Status: &status})
+	list, _, err := repo.ListByUser(context.Background(), userID, ports.ListMeetingsFilter{Status: &status})
 	require.NoError(t, err)
 	assert.Empty(t, list)
 }
@@ -303,14 +310,16 @@ func TestMeeting_ListByUser_StatusProcessing_EmptyShortCircuit(t *testing.T) {
 	// "processing" and "failed" short-circuit to empty without any DB query.
 	userID := uuid.New()
 	status := "processing"
-	list, err := repo.ListByUser(context.Background(), userID, ports.ListMeetingsFilter{Status: &status})
+	list, total, err := repo.ListByUser(context.Background(), userID, ports.ListMeetingsFilter{Status: &status})
 	require.NoError(t, err)
 	assert.Empty(t, list)
+	assert.Equal(t, 0, total)
 
 	status = "failed"
-	list, err = repo.ListByUser(context.Background(), userID, ports.ListMeetingsFilter{Status: &status})
+	list, total, err = repo.ListByUser(context.Background(), userID, ports.ListMeetingsFilter{Status: &status})
 	require.NoError(t, err)
 	assert.Empty(t, list)
+	assert.Equal(t, 0, total)
 }
 
 func TestMeeting_ListByUser_QueryError(t *testing.T) {
@@ -318,11 +327,11 @@ func TestMeeting_ListByUser_QueryError(t *testing.T) {
 	repo := repositories.NewMeetingRepository(db)
 
 	userID := uuid.New()
-	mock.ExpectQuery(regexp.QuoteMeta(`SELECT * FROM "meetings" WHERE host_id = $1 OR id IN`)).
+	mock.ExpectQuery(regexp.QuoteMeta(`SELECT count(*) FROM "meetings" WHERE host_id = $1 OR id IN`)).
 		WithArgs(userID, userID).
 		WillReturnError(assert.AnError)
 
-	_, err := repo.ListByUser(context.Background(), userID, ports.ListMeetingsFilter{})
+	_, _, err := repo.ListByUser(context.Background(), userID, ports.ListMeetingsFilter{})
 	require.Error(t, err)
 }
 
@@ -331,15 +340,18 @@ func TestMeeting_ListByUser_PreviewError(t *testing.T) {
 	repo := repositories.NewMeetingRepository(db)
 
 	userID := uuid.New()
-	mock.ExpectQuery(regexp.QuoteMeta(`SELECT * FROM "meetings" WHERE host_id = $1 OR id IN`)).
+	mock.ExpectQuery(regexp.QuoteMeta(`SELECT count(*) FROM "meetings" WHERE host_id = $1 OR id IN`)).
 		WithArgs(userID, userID).
+		WillReturnRows(sqlmock.NewRows([]string{"count"}).AddRow(1))
+	mock.ExpectQuery(regexp.QuoteMeta(`SELECT * FROM "meetings" WHERE host_id = $1 OR id IN`)).
+		// LIMIT positional arg added by paginated ListByUser; skip strict arg matching.
 		WillReturnRows(meetingRows().AddRow(
 			uuid.New(), "abc", "Test", "open", userID, "waiting", 50, nil, nil, time.Now(), time.Now(),
 		))
 	mock.ExpectQuery(regexp.QuoteMeta(`SELECT mp.meeting_id`)).
 		WillReturnError(assert.AnError)
 
-	_, err := repo.ListByUser(context.Background(), userID, ports.ListMeetingsFilter{})
+	_, _, err := repo.ListByUser(context.Background(), userID, ports.ListMeetingsFilter{})
 	require.Error(t, err)
 }
 
@@ -353,11 +365,11 @@ func TestMeeting_ListByUser_SortVariants(t *testing.T) {
 			repo := repositories.NewMeetingRepository(db)
 
 			userID := uuid.New()
-			mock.ExpectQuery(regexp.QuoteMeta(`SELECT * FROM "meetings" WHERE host_id = $1 OR id IN`)).
+			mock.ExpectQuery(regexp.QuoteMeta(`SELECT count(*) FROM "meetings" WHERE host_id = $1 OR id IN`)).
 				WithArgs(userID, userID).
-				WillReturnRows(meetingRows())
+				WillReturnRows(sqlmock.NewRows([]string{"count"}).AddRow(0))
 
-			_, err := repo.ListByUser(context.Background(), userID, ports.ListMeetingsFilter{Sort: s})
+			_, _, err := repo.ListByUser(context.Background(), userID, ports.ListMeetingsFilter{Sort: s})
 			require.NoError(t, err)
 		})
 	}
@@ -371,8 +383,11 @@ func TestMeeting_ListByUser_PreviewsInitials(t *testing.T) {
 	userID := uuid.New()
 	meetingID := uuid.New()
 
-	mock.ExpectQuery(regexp.QuoteMeta(`SELECT * FROM "meetings" WHERE host_id = $1 OR id IN`)).
+	mock.ExpectQuery(regexp.QuoteMeta(`SELECT count(*) FROM "meetings" WHERE host_id = $1 OR id IN`)).
 		WithArgs(userID, userID).
+		WillReturnRows(sqlmock.NewRows([]string{"count"}).AddRow(1))
+	mock.ExpectQuery(regexp.QuoteMeta(`SELECT * FROM "meetings" WHERE host_id = $1 OR id IN`)).
+		// LIMIT positional arg added by paginated ListByUser; skip strict arg matching.
 		WillReturnRows(meetingRows().AddRow(
 			meetingID, "abc", "T", "open", userID, "waiting", 50, nil, nil, time.Now(), time.Now(),
 		))
@@ -386,7 +401,7 @@ func TestMeeting_ListByUser_PreviewsInitials(t *testing.T) {
 			AddRow(meetingID, uuid.New(), "Mary Jane Watson"). // three-word → "MW"
 			AddRow(meetingID, uuid.New(), "Fourth One"))       // capped out
 
-	list, err := repo.ListByUser(context.Background(), userID, ports.ListMeetingsFilter{})
+	list, _, err := repo.ListByUser(context.Background(), userID, ports.ListMeetingsFilter{})
 	require.NoError(t, err)
 	require.Len(t, list, 1)
 	require.Len(t, list[0].ParticipantPreviews, 3) // capped at 3

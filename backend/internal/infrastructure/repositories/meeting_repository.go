@@ -100,11 +100,30 @@ func (r *MeetingRepository) FindActiveWithNoParticipants(ctx context.Context) ([
 }
 
 // ListByUser returns meetings where userID is the host or a participant,
-// enriched with computed duration and up to 3 participant previews.
-func (r *MeetingRepository) ListByUser(ctx context.Context, userID uuid.UUID, filter ports.ListMeetingsFilter) ([]*ports.MeetingListItem, error) {
+// enriched with computed duration and up to 3 participant previews. The
+// query is paginated by filter.Page / filter.PerPage; the second return
+// value is the total count of matching rows.
+func (r *MeetingRepository) ListByUser(ctx context.Context, userID uuid.UUID, filter ports.ListMeetingsFilter) ([]*ports.MeetingListItem, int, error) {
+	const (
+		defaultPerPage = 20
+		maxPerPage     = 200
+	)
+
+	page := filter.Page
+	if page < 1 {
+		page = 1
+	}
+	perPage := filter.PerPage
+	switch {
+	case perPage < 1:
+		perPage = defaultPerPage
+	case perPage > maxPerPage:
+		perPage = maxPerPage
+	}
+
 	var meetings []*entities.Meeting
 
-	q := r.db.WithContext(ctx)
+	q := r.db.WithContext(ctx).Model(&entities.Meeting{})
 
 	// When a scope filter is active, membership in org/department scopes is the
 	// authorisation gate (enforced by the service); every meeting in the scope
@@ -141,15 +160,28 @@ func (r *MeetingRepository) ListByUser(ctx context.Context, userID uuid.UUID, fi
 			q = q.Where("status = ?", entities.MeetingStatusEnded)
 		case "processing", "failed":
 			// Reserved for future pipeline use — always empty for now.
-			return []*ports.MeetingListItem{}, nil
+			return []*ports.MeetingListItem{}, 0, nil
 		}
 	}
 
-	if err := q.Order(listSortExpr(filter.Sort)).Find(&meetings).Error; err != nil {
-		return nil, err
+	var total int64
+	if err := q.Count(&total).Error; err != nil {
+		return nil, 0, err
+	}
+	if total == 0 {
+		return []*ports.MeetingListItem{}, 0, nil
+	}
+
+	offset := (page - 1) * perPage
+	if err := q.
+		Order(listSortExpr(filter.Sort)).
+		Limit(perPage).
+		Offset(offset).
+		Find(&meetings).Error; err != nil {
+		return nil, 0, err
 	}
 	if len(meetings) == 0 {
-		return []*ports.MeetingListItem{}, nil
+		return []*ports.MeetingListItem{}, int(total), nil
 	}
 
 	// Batch-fetch participant previews for all returned meetings.
@@ -170,7 +202,7 @@ func (r *MeetingRepository) ListByUser(ctx context.Context, userID uuid.UUID, fi
 		Where("mp.meeting_id IN ?", meetingIDs).
 		Order("mp.meeting_id, mp.joined_at ASC NULLS LAST").
 		Scan(&previewRows).Error; err != nil {
-		return nil, err
+		return nil, 0, err
 	}
 
 	// Cap at 3 previews per meeting.
@@ -197,7 +229,7 @@ func (r *MeetingRepository) ListByUser(ctx context.Context, userID uuid.UUID, fi
 		}
 		items[i] = item
 	}
-	return items, nil
+	return items, int(total), nil
 }
 
 // listSortExpr maps the sort key from the API to an ORDER BY clause.

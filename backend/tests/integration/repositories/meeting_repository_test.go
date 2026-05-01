@@ -75,7 +75,7 @@ func TestMeetingRepository_ListByUser_StatusFilter(t *testing.T) {
 	createTestMeeting(t, ctx, meetingRepo, activeMeeting)
 
 	filter := ports.ListMeetingsFilter{Status: strPtr("complete")}
-	items, err := meetingRepo.ListByUser(ctx, host.ID, filter)
+	items, _, err := meetingRepo.ListByUser(ctx, host.ID, filter)
 	require.NoError(t, err)
 
 	ids := make([]uuid.UUID, len(items))
@@ -144,7 +144,7 @@ func TestMeetingRepository_ListByUser_SortByDuration(t *testing.T) {
 	createTestMeeting(t, ctx, meetingRepo, waitingMeeting)
 
 	filter := ports.ListMeetingsFilter{Sort: "duration_desc"}
-	items, err := meetingRepo.ListByUser(ctx, host.ID, filter)
+	items, _, err := meetingRepo.ListByUser(ctx, host.ID, filter)
 	require.NoError(t, err)
 	require.GreaterOrEqual(t, len(items), 3, "expected at least 3 meetings")
 
@@ -218,7 +218,7 @@ func TestMeetingRepository_ListByUser_ParticipantPreviewsCappedAt3(t *testing.T)
 	}
 
 	filter := ports.ListMeetingsFilter{}
-	items, err := meetingRepo.ListByUser(ctx, host.ID, filter)
+	items, _, err := meetingRepo.ListByUser(ctx, host.ID, filter)
 	require.NoError(t, err)
 
 	var found *ports.MeetingListItem

@@ -26,7 +26,6 @@ import { ScopedCallsPage } from '@/pages/ScopedCallsPage'
 import { InviteAcceptPage } from '@/pages/InviteAcceptPage'
 import { MeetingsPage } from '@/pages/MeetingsPage'
 import { RecordsPage } from '@/pages/RecordsPage'
-import { RecordDetailPage } from '@/pages/RecordDetailPage'
 import { NewMeetingPage } from '@/pages/NewMeetingPage'
 import { MeetingRoomPage } from '@/pages/MeetingRoomPage'
 import { ProfilePage } from '@/pages/ProfilePage'
@@ -85,8 +84,12 @@ function AppRoutes() {
         <Route path={ROUTES.ORG_DEPT_DETAIL} element={<DeptDetailPage />} />
         <Route path={ROUTES.ORG_DEPT_MEETINGS} element={<ScopedMeetingsPage />} />
         <Route path={ROUTES.ORG_DEPT_CALLS} element={<ScopedCallsPage />} />
+        {/* Records uses a two-pane layout: the list always renders on the
+            left; the right pane is the empty state on /records, or the
+            selected record's detail on /records/:code. Both routes point to
+            the same component which reads :code from useParams. */}
         <Route path={ROUTES.RECORDS} element={<RecordsPage />} />
-        <Route path={ROUTES.RECORD_DETAIL} element={<RecordDetailPage />} />
+        <Route path={ROUTES.RECORD_DETAIL} element={<RecordsPage />} />
         <Route path={ROUTES.MEETINGS} element={<MeetingsPage />} />
         <Route path={ROUTES.PROFILE} element={<ProfilePage />} />
         <Route path={ROUTES.SETTINGS} element={<SettingsPage />} />

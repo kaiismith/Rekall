@@ -203,7 +203,7 @@ func (h *MeetingHandler) resolveSpeakers(ctx context.Context, meetingID uuid.UUI
 // ListMine handles GET /api/v1/meetings/mine.
 //
 // @Summary      List my meetings
-// @Description  Returns all meetings the authenticated user hosted or participated in, enriched with computed duration and up to 3 participant previews. Supports filtering by status and sorting by multiple criteria.
+// @Description  Returns the authenticated user's meetings (host or participant), enriched with computed duration and up to 3 participant previews. Supports filtering by status, sorting, and `page` / `per_page` pagination. Default `per_page` is 20; max is 200.
 // @Tags         Meetings
 // @Produce      json
 // @Security     BearerAuth
@@ -211,7 +211,9 @@ func (h *MeetingHandler) resolveSpeakers(ctx context.Context, meetingID uuid.UUI
 // @Param        filter[scope_type]  query     string  false  "Filter by scope"   Enums(organization,department,open)
 // @Param        filter[scope_id]    query     string  false  "UUID of the org or dept; required when scope_type is organization or department"
 // @Param        sort                query     string  false  "Sort order"        Enums(created_at_desc,created_at_asc,duration_desc,duration_asc,title_asc,title_desc)  default(created_at_desc)
-// @Success      200  {object}  dto.MeetingListResponse  "List of meetings"
+// @Param        page                query     int     false  "Page number (1-indexed). Defaults to 1; unparseable values silently treated as 1."
+// @Param        per_page            query     int     false  "Page size. Defaults to 20; clamped to [1, 200]."
+// @Success      200  {object}  dto.PaginatedMeetingListResponse  "Page of meetings"
 // @Failure      400  {object}  dto.ErrorResponse        "Malformed scope parameters"
 // @Failure      401  {object}  dto.ErrorResponse        "Missing or invalid token"
 // @Failure      403  {object}  dto.ErrorResponse        "Caller is not a member of the requested scope"
@@ -231,6 +233,7 @@ func (h *MeetingHandler) ListMine(c *gin.Context) {
 
 	statusFilter := c.Query("filter[status]")
 	sort := c.DefaultQuery("sort", "created_at_desc")
+	page, perPage := parseMeetingPagination(c)
 
 	scope, err := dto.ParseScopeFilter(c)
 	if err != nil {
@@ -238,7 +241,7 @@ func (h *MeetingHandler) ListMine(c *gin.Context) {
 		return
 	}
 
-	items, err := h.service.ListMeetingsInScope(c.Request.Context(), userID, scope, statusFilter, sort)
+	items, total, err := h.service.ListMeetingsInScope(c.Request.Context(), userID, scope, statusFilter, sort, page, perPage)
 	if err != nil {
 		handlerhelpers.RespondError(c, h.logger, err)
 		return
@@ -248,7 +251,52 @@ func (h *MeetingHandler) ListMine(c *gin.Context) {
 	for _, item := range items {
 		resp = append(resp, dto.MeetingFromListItem(item, h.baseURL))
 	}
-	c.JSON(http.StatusOK, dto.OK(resp))
+
+	totalPages := 0
+	if perPage > 0 {
+		totalPages = (total + perPage - 1) / perPage
+	}
+	c.JSON(http.StatusOK, dto.PaginatedMeetingListResponse{
+		Success: true,
+		Data:    resp,
+		Pagination: dto.MeetingListPagination{
+			Page:       page,
+			PerPage:    perPage,
+			Total:      total,
+			TotalPages: totalPages,
+			HasMore:    page < totalPages,
+		},
+	})
+}
+
+const (
+	defaultMeetingPerPage = 20
+	maxMeetingPerPage     = 200
+)
+
+// parseMeetingPagination reads `page` / `per_page` query params with silent
+// fallback to defaults on missing or unparseable values.
+func parseMeetingPagination(c *gin.Context) (page, perPage int) {
+	page = 1
+	perPage = defaultMeetingPerPage
+	if v := c.Query("page"); v != "" {
+		if n, err := strconv.Atoi(v); err == nil && n > 0 {
+			page = n
+		}
+	}
+	if v := c.Query("per_page"); v != "" {
+		if n, err := strconv.Atoi(v); err == nil {
+			switch {
+			case n < 1:
+				perPage = defaultMeetingPerPage
+			case n > maxMeetingPerPage:
+				perPage = maxMeetingPerPage
+			default:
+				perPage = n
+			}
+		}
+	}
+	return
 }
 
 // End handles DELETE /api/v1/meetings/:code (host ends meeting).

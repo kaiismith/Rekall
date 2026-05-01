@@ -18,4 +18,11 @@ type KatLifecycle interface {
 	OnParticipantJoined(meetingID uuid.UUID, userID uuid.UUID, hasActiveASR bool)
 	OnParticipantLeft(meetingID uuid.UUID, isLast bool)
 	OnMeetingEnded(meetingID uuid.UUID)
+
+	// SetKatEnabled gates whether the scheduler will fire Foundry/OpenAI
+	// calls for the meeting. The cohort entry stays alive (transcription
+	// segments still flow into the ring buffer for replay), but ticks become
+	// no-ops while the flag is false. This lets per-user "AI notes" toggles
+	// stop the cost without tearing the cohort down.
+	SetKatEnabled(meetingID uuid.UUID, enabled bool)
 }

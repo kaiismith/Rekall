@@ -174,6 +174,7 @@ func NewHub(
 		MsgTypeHandRaise:     handleHandRaise,
 		MsgTypeChatMessage:   handleChatMessage,
 		MsgTypeCaptionChunk:  handleCaptionChunk,
+		MsgTypeKatToggle:     handleKatToggle,
 	}
 	return h
 }
@@ -399,6 +400,19 @@ func (h *Hub) handleUnregister(c *Client) {
 			mid := h.meetingID
 			isLast := len(h.clients) == 0
 			go kat.OnParticipantLeft(mid, isLast)
+
+			// Recompute the AI-notes aggregate now this client is gone. If
+			// the disconnecting client was the last one with Kat enabled,
+			// the scheduler stops spending OpenAI cost. If others still
+			// have it on, no-op.
+			any := false
+			for cc := range h.clients {
+				if cc.katEnabled {
+					any = true
+					break
+				}
+			}
+			go kat.SetKatEnabled(mid, any)
 		}
 
 		// Best-effort: if this client owned an active ASR session and there

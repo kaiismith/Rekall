@@ -1,4 +1,4 @@
-import { useMemo } from 'react'
+import { useEffect, useMemo, useRef } from 'react'
 import {
   Avatar,
   Box,
@@ -30,6 +30,29 @@ interface Props {
 export function TranscriptTimeline({ code, meeting }: Props) {
   const { segments, isLoading, isError, isFetchingNextPage, hasNextPage, loadMore } =
     useRecordTranscript(code)
+
+  // IntersectionObserver auto-load: when the sentinel scrolls into view, fire
+  // loadMore(). Falls back gracefully — the explicit button below remains a
+  // clickable target for users on browsers without IO support or who prefer
+  // not to scroll. `loadMore` is a stable arrow over a ref-checked hook so we
+  // can leave it out of the dep array without missing updates.
+  const sentinelRef = useRef<HTMLDivElement | null>(null)
+  useEffect(() => {
+    const node = sentinelRef.current
+    if (!node || !hasNextPage || typeof IntersectionObserver === 'undefined') return
+    const observer = new IntersectionObserver(
+      (entries) => {
+        if (entries[0]?.isIntersecting) {
+          loadMore()
+        }
+      },
+      { rootMargin: '200px 0px' },
+    )
+    observer.observe(node)
+    return () => {
+      observer.disconnect()
+    }
+  }, [hasNextPage, isFetchingNextPage, loadMore])
 
   const speakerMap = useMemo(() => {
     const m = new Map<string, SpeakerInfo>()
@@ -132,14 +155,18 @@ export function TranscriptTimeline({ code, meeting }: Props) {
       })}
 
       {hasNextPage && (
-        <Box sx={{ display: 'flex', justifyContent: 'center', pt: 1 }}>
+        <Box
+          ref={sentinelRef}
+          data-testid="transcript-load-more-sentinel"
+          sx={{ display: 'flex', justifyContent: 'center', pt: 1 }}
+        >
           <Button
             variant="outlined"
             onClick={loadMore}
             disabled={isFetchingNextPage}
             startIcon={isFetchingNextPage ? <CircularProgress size={14} /> : undefined}
           >
-            {isFetchingNextPage ? 'Loading…' : 'Load more'}
+            {isFetchingNextPage ? 'Loading more…' : 'Load more'}
           </Button>
         </Box>
       )}

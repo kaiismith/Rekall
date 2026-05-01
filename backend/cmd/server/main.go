@@ -314,14 +314,18 @@ func main() {
 		katHandler       *handlers.KatHandler
 	)
 	if cfg.Kat.Enabled {
-		foundryClient := foundry.NewClient(foundry.Config{
+		providerClient := foundry.NewClient(foundry.Config{
+			Provider:       foundry.Provider(cfg.Kat.Provider),
 			Endpoint:       cfg.Kat.FoundryEndpoint,
 			Deployment:     cfg.Kat.FoundryDeployment,
 			APIVersion:     cfg.Kat.FoundryAPIVersion,
 			APIKey:         cfg.Kat.FoundryAPIKey,
+			OpenAIAPIKey:   cfg.Kat.OpenAIAPIKey,
+			OpenAIBaseURL:  cfg.Kat.OpenAIBaseURL,
+			OpenAIModel:    cfg.Kat.OpenAIModel,
 			RequestTimeout: cfg.Kat.FoundryRequestTimeout,
 		}, log)
-		katNoteGenerator = foundry.NewNoteGenerator(foundryClient, cfg.Kat.WindowSeconds, log)
+		katNoteGenerator = foundry.NewNoteGenerator(providerClient, cfg.Kat.WindowSeconds, log)
 
 		katBroadcaster := wsHub.NewKatBroadcaster(hubManager, nil, log)
 		katService = services.NewKatNotesService(
@@ -349,7 +353,14 @@ func main() {
 			asrIssuer.SetKatHooks(katService)
 		}
 	}
-	katHandler = handlers.NewKatHandler(katNoteGenerator, cfg.Kat.FoundryEndpoint)
+	// Surface whichever endpoint matches the selected provider through the
+	// /healthz/kat probe. OpenAI with a blank base URL falls back to
+	// "api.openai.com" inside the handler.
+	healthEndpoint := cfg.Kat.FoundryEndpoint
+	if cfg.Kat.Provider == string(foundry.ProviderOpenAI) {
+		healthEndpoint = cfg.Kat.OpenAIBaseURL
+	}
+	katHandler = handlers.NewKatHandler(katNoteGenerator, healthEndpoint)
 
 	// ── Handlers ─────────────────────────────────────────────────────────────
 	healthH := handlers.NewHealthHandler(db)

@@ -61,7 +61,7 @@ func newFakeNoteGenerator(out *ports.NoteGeneratorOutput) *fakeNoteGenerator {
 	}
 }
 
-func (f *fakeNoteGenerator) Generate(ctx context.Context, in ports.NoteGeneratorInput) (*ports.NoteGeneratorOutput, error) {
+func (f *fakeNoteGenerator) Generate(ctx context.Context, in ports.NoteGeneratorInput, _onChunk ports.StreamCallback) (*ports.NoteGeneratorOutput, error) {
 	atomic.AddInt32(&f.calls, 1)
 	cur := atomic.AddInt32(&f.concurrent, 1)
 	defer atomic.AddInt32(&f.concurrent, -1)
@@ -87,6 +87,7 @@ func (f *fakeNoteGenerator) Generate(ctx context.Context, in ports.NoteGenerator
 }
 func (f *fakeNoteGenerator) ModelID() string      { return f.modelID }
 func (f *fakeNoteGenerator) AuthMode() string     { return f.authMode }
+func (f *fakeNoteGenerator) Provider() string     { return "foundry" }
 func (f *fakeNoteGenerator) IsConfigured() bool   { return f.configured }
 func (f *fakeNoteGenerator) Calls() int32         { return atomic.LoadInt32(&f.calls) }
 func (f *fakeNoteGenerator) MaxConcurrent() int32 { return atomic.LoadInt32(&f.maxConcurrent) }

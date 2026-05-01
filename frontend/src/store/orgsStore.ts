@@ -22,13 +22,22 @@ export const useOrgsStore = create<OrgsState>()((set, get) => ({
   error: null,
 
   load: async () => {
-    if (get().isLoading) return
+    // Skip if a load is in flight OR if we've already attempted (orgs is
+    // non-null OR error is set). This prevents the consumer-effect feedback
+    // loop where `if (orgs === null) load()` re-fires hundreds of times per
+    // second when /organizations responds 401 (e.g. expired session) — every
+    // failed load left `orgs === null`, every render saw the gap, every
+    // render re-called load.
+    const { isLoading, orgs, error } = get()
+    if (isLoading || orgs !== null || error !== null) return
     set({ isLoading: true, error: null })
     try {
-      const orgs = await organizationService.list()
-      set({ orgs, isLoading: false })
+      const fetched = await organizationService.list()
+      set({ orgs: fetched, isLoading: false })
     } catch (e) {
       const msg = e instanceof Error ? e.message : 'Failed to load organizations'
+      // Set error so the load-guard above prevents retry storms; consumers
+      // that want to retry must call invalidate() first (which clears error).
       set({ isLoading: false, error: msg })
     }
   },
